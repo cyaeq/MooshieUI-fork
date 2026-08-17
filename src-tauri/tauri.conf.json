@@ -1,0 +1,59 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicerlab/files/main/tauri/tauri.conf.json.schema",
+  "productName": "MooshieUI",
+  "version": "2.1.2",
+  "identifier": "com.mooshieui.desktop",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "MooshieUI",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: thumbnail: gallery: http://asset.localhost https://asset.localhost http://thumbnail.localhost https://thumbnail.localhost http://gallery.localhost https://gallery.localhost https://cdn.mooshieblob.com https://civitai.com https://*.civitai.com https://blobs.animadex.net; connect-src 'self' ipc: http://ipc.localhost https://ipc.localhost http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https://api.github.com https://cdn.mooshieblob.com https://civitai.com https://*.civitai.com https://animadex.net https://thetacursed.github.io https://raw.githubusercontent.com; font-src 'self' data:; media-src 'self' blob: data: gallery: http://gallery.localhost https://gallery.localhost; frame-src https://www.photopea.com"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "frameworks": []
+    },
+    "windows": {
+      "allowDowngrades": true
+    },
+    "category": "Graphics and Design",
+    "createUpdaterArtifacts": true,
+    "shortDescription": "Beginner-friendly AI image generation frontend for ComfyUI",
+    "longDescription": "MooshieUI is a modern desktop frontend that hides ComfyUI's node-graph complexity behind a clean, intuitive interface. Features text-to-image, image-to-image, inpainting, built-in upscaling, and one-click setup."
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Mooshieblob1/MooshieUI/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk2QjY5NzZFRjhDODhFMkYKUldRdmpzajRicGUybGx6Y0V5OWpuZFZSMUZnTnVBdDlwWkZxVURyRGx2d0JZQlI4cVN6OGN2cFcK",
+      "windows": {
+        "installMode": "quiet"
+      }
+    }
+  }
+}

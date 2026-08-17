@@ -1,0 +1,378 @@
+import { generation } from "../stores/generation.svelte.js";
+import { readImageMetadataBytes, readImageMetadataPath } from "./api.js";
+import { gallery } from "../stores/gallery.svelte.js";
+import { locale } from "../stores/locale.svelte.js";
+import { readPngMetadataClientSide } from "./pngMetadata.js";
+import { isBrowserMode } from "./ipc.js";
+import { parseSegmentDetailPrompt } from "./promptSegmentDetail.js";
+
+/** Section IDs that accept metadata drops */
+export type DroppableSectionId =
+  | "prompts"
+  | "sampler"
+  | "dimensions"
+  | "model"
+  | "upscaleHistory"
+  | "facefix";
+
+const DROPPABLE_SECTIONS = new Set<string>([
+  "prompts", "sampler", "dimensions", "model", "upscaleHistory", "facefix",
+]);
+
+export function isDroppableSection(sectionId: string): boolean {
+  return DROPPABLE_SECTIONS.has(sectionId);
+}
+
+/** Human-readable label for what was imported */
+function sectionLabel(sectionId: DroppableSectionId | "all"): string {
+  switch (sectionId) {
+    case "prompts": return "prompts";
+    case "sampler": return "sampler settings";
+    case "dimensions": return "dimensions";
+    case "model": return "model settings";
+    case "upscaleHistory": return "upscale settings";
+    case "facefix": return "face fix settings";
+    case "all": return "all parameters";
+  }
+}
+
+/** Build a set of quality tags from the user's custom quality tag settings.
+ *  This ensures imported prompts have the user's current custom tags stripped to avoid duplication. */
+function buildAutoQualityTagSet(): Set<string> {
+  const all = [
+    generation.customAnimaPositiveQuality,
+    generation.customAnimaNegativeQuality,
+    generation.customIllustriousPositiveQuality,
+    generation.customIllustriousNegativeQuality,
+  ].join(", ");
+  return new Set(
+    all.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean)
+  );
+}
+
+/**
+ * Strip unsupported SwarmUI inline syntax tags from a prompt string.
+ * Matches patterns like `<random:...>`, `<preset:...>`, `<wildcard:...>`, etc.
+ * LoRA tags `<lora:name:strength>` are also stripped since MooshieUI handles LoRAs separately.
+ * Handles URL-encoded values and nested `//` parameters.
+ */
+const SWARMUI_TAG_RE = /<[a-zA-Z_-]+:[^>]*>/g;
+
+/**
+ * Inline syntaxes MooshieUI supports natively — preserved on import so they
+ * keep working (`<segment:...>` refinement, `<from/to/range:...>` scheduling,
+ * `<region:...>` regional prompts). `<fromto[...]:...>` never matched the
+ * strip regex (the `[` breaks the name pattern) and survives on its own.
+ */
+const SUPPORTED_TAG_RE = /^<(?:segment|from|to|range|region):/i;
+
+function stripSwarmUITags(prompt: string): string {
+  return prompt
+    .replace(SWARMUI_TAG_RE, (tag) => (SUPPORTED_TAG_RE.test(tag) ? tag : ""))
+    .replace(/,\s*,/g, ",")
+    .replace(/^\s*,\s*/, "")
+    .replace(/\s*,\s*$/, "")
+    .trim();
+}
+
+function appendCommaSeparatedPromptParts(text: string, parts: string[]): void {
+  for (const part of text.split(",")) {
+    const trimmed = part.trim();
+    if (trimmed) parts.push(trimmed);
+  }
+}
+
+function splitQualityTagCandidates(prompt: string): string[] {
+  const ranges = parseSegmentDetailPrompt(prompt).ranges;
+  if (ranges.length === 0) {
+    return prompt.split(",").map((t) => t.trim()).filter(Boolean);
+  }
+
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const range of ranges) {
+    appendCommaSeparatedPromptParts(prompt.slice(cursor, range.start), parts);
+    const segment = prompt.slice(range.start, range.end).trim();
+    if (segment) parts.push(segment);
+    cursor = range.end;
+  }
+  appendCommaSeparatedPromptParts(prompt.slice(cursor), parts);
+  return parts;
+}
+
+/** Remove auto-applied quality tags and SwarmUI syntax from a prompt string. */
+function stripQualityTags(prompt: string): string {
+  const autoTags = buildAutoQualityTagSet();
+  const cleaned = stripSwarmUITags(prompt);
+  const tags = splitQualityTagCandidates(cleaned);
+  const filtered = tags.filter((t) => !autoTags.has(t.toLowerCase()));
+  return filtered.join(", ");
+}
+
+function applyPrompts(meta: Record<string, string>): boolean {
+  let applied = false;
+  if (meta.positive_prompt !== undefined) {
+    generation.positivePrompt = stripQualityTags(meta.positive_prompt);
+    generation.extraPositiveBoxes = [];
+    applied = true;
+  }
+  if (meta.negative_prompt !== undefined) {
+    generation.negativePrompt = stripQualityTags(meta.negative_prompt);
+    generation.extraNegativeBoxes = [];
+    applied = true;
+  }
+  return applied;
+}
+
+function applySampler(meta: Record<string, string>): boolean {
+  let applied = false;
+  if (meta.sampler) { generation.samplerName = meta.sampler; applied = true; }
+  if (meta.scheduler) { generation.scheduler = meta.scheduler; applied = true; }
+  if (meta.steps) {
+    const v = parseInt(meta.steps, 10);
+    if (!isNaN(v)) { generation.steps = v; applied = true; }
+  }
+  if (meta.cfg) {
+    const v = parseFloat(meta.cfg);
+    if (!isNaN(v)) { generation.cfg = v; applied = true; }
+  }
+  if (meta.denoise) {
+    const v = parseFloat(meta.denoise);
+    if (!isNaN(v)) { generation.denoise = v; applied = true; }
+  }
+  if (meta.seed) {
+    // Keep the seed as a string: parseInt would round 63-bit seeds past 2^53.
+    const trimmed = meta.seed.trim();
+    if (/^\d+$/.test(trimmed)) { generation.seed = trimmed; applied = true; }
+  }
+  return applied;
+}
+
+function applyDimensions(meta: Record<string, string>): boolean {
+  if (!meta.size) return false;
+  const match = meta.size.match(/^(\d+)x(\d+)$/);
+  if (!match) return false;
+  const w = parseInt(match[1], 10);
+  const h = parseInt(match[2], 10);
+  if (isNaN(w) || isNaN(h)) return false;
+  generation.width = w;
+  generation.height = h;
+  return true;
+}
+
+function applyModel(meta: Record<string, string>): boolean {
+  let applied = false;
+  if (meta.model) { generation.checkpoint = meta.model; applied = true; }
+  if (meta.vae) { generation.vae = meta.vae; applied = true; }
+  if (meta.loras) {
+    try {
+      const raw = meta.loras.trim();
+      if (raw.startsWith("[")) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          generation.loras = parsed.map((l: any) => ({
+            name: l.name || "",
+            strength_model: l.strength_model ?? 1.0,
+            strength_clip: l.strength_clip ?? 1.0,
+            enabled: true,
+          }));
+          applied = true;
+        }
+      } else if (raw) {
+        const entries = raw.split(",").map((s) => s.trim()).filter(Boolean);
+        generation.loras = entries.map((entry) => {
+          const [name, str] = entry.split(":");
+          const strength = parseFloat(str) || 1.0;
+          return { name: name.trim(), strength_model: strength, strength_clip: strength, enabled: true };
+        });
+        applied = true;
+      }
+    } catch {
+      // Ignore parse errors for loras
+    }
+  }
+  return applied;
+}
+
+function applyUpscale(meta: Record<string, string>): boolean {
+  let applied = false;
+  
+  if (meta.upscale_model) { 
+    generation.upscaleModel = meta.upscale_model; 
+    applied = true;
+    
+    // Auto-detect scale from model name (e.g., "OmniSR_X4_DIV2K" → 4x)
+    const match = meta.upscale_model.match(/_X(\d+)[_\.]/i) || meta.upscale_model.match(/[_-](\d+)x[_\.]/i);
+    if (match) {
+      generation.upscaleScale = parseInt(match[1], 10);
+    }
+  }
+  
+  if (meta.upscale_scale) {
+    const v = parseFloat(meta.upscale_scale);
+    if (!isNaN(v)) { generation.upscaleScale = v; applied = true; }
+  }
+  if (meta.upscale_denoise) {
+    const v = parseFloat(meta.upscale_denoise);
+    if (!isNaN(v)) { generation.upscaleDenoise = v; applied = true; }
+  }
+  return applied;
+}
+
+/** Apply metadata for a specific section. Returns true if any values were applied. */
+export function applyMetadataToSection(
+  meta: Record<string, string>,
+  sectionId: DroppableSectionId
+): boolean {
+  switch (sectionId) {
+    case "prompts": return applyPrompts(meta);
+    case "sampler": return applySampler(meta);
+    case "dimensions": return applyDimensions(meta);
+    case "model": return applyModel(meta);
+    case "upscaleHistory": return applyUpscale(meta);
+    case "facefix": return false;
+  }
+}
+
+/** Apply all applicable metadata. Returns list of section names that were applied. */
+export function applyAllMetadata(meta: Record<string, string>): string[] {
+  const applied: string[] = [];
+  if (applyPrompts(meta)) applied.push("prompts");
+  if (applySampler(meta)) applied.push("sampler");
+  if (applyDimensions(meta)) applied.push("dimensions");
+  if (applyModel(meta)) applied.push("model");
+  if (applyUpscale(meta)) applied.push("upscale");
+  return applied;
+}
+
+/** Extract PNG bytes from a File or DataTransferItem. */
+async function fileToPngBytes(file: File): Promise<number[]> {
+  const buffer = await file.arrayBuffer();
+  return Array.from(new Uint8Array(buffer));
+}
+
+function isImageFile(file: File): boolean {
+  if (file.type && file.type.startsWith("image/")) return true;
+  // mp4 and avif carry generation parameters too, and neither reports an
+  // image/* MIME type: mp4 is video/mp4 and avif is often reported as empty.
+  return /\.(png|jpe?g|webp|bmp|gif|mp4|avif)$/i.test(file.name);
+}
+
+/** Extract image file from a DragEvent's dataTransfer. */
+function getImageFile(dt: DataTransfer): File | null {
+  for (const file of Array.from(dt.files)) {
+    if (isImageFile(file)) return file;
+  }
+
+  for (const item of Array.from(dt.items || [])) {
+    if (item.kind !== "file") continue;
+    const file = item.getAsFile();
+    if (file && isImageFile(file)) return file;
+  }
+  return null;
+}
+
+/** Extract image file from a ClipboardEvent's clipboardData. */
+function getClipboardImageFile(e: ClipboardEvent): File | null {
+  if (!e.clipboardData) return null;
+  for (const item of Array.from(e.clipboardData.items)) {
+    if (item.type.startsWith("image/")) {
+      const file = item.getAsFile();
+      if (file) return file;
+    }
+  }
+  return null;
+}
+
+/**
+ * Handle a metadata import from a dropped/pasted image file.
+ * @param file The image file
+ * @param target "all" for preview area, or a DroppableSectionId
+ */
+export async function handleMetadataImport(
+  file: File,
+  target: DroppableSectionId | "all"
+): Promise<void> {
+  try {
+    if (isBrowserMode) {
+      // Client-side: read metadata directly from the file without server round-trip
+      const buf = await file.arrayBuffer();
+      const meta = await readPngMetadataClientSide(buf);
+      applyParsedMetadata(meta, target);
+    } else {
+      const bytes = await fileToPngBytes(file);
+      await handleMetadataImportBytes(bytes, target);
+    }
+  } catch (err) {
+    console.error("Metadata import failed:", err);
+    gallery.showToast(locale.t("metadata.toast.read_failed"), "error");
+  }
+}
+
+/** Apply parsed metadata to the appropriate section(s) and show toast feedback. */
+function applyParsedMetadata(
+  meta: Record<string, string> | null,
+  target: DroppableSectionId | "all"
+): void {
+  if (!meta || Object.keys(meta).length === 0) {
+    gallery.showToast(locale.t("metadata.toast.no_metadata"), "info");
+    return;
+  }
+
+  if (target === "all") {
+    const applied = applyAllMetadata(meta);
+    if (applied.length > 0) {
+      gallery.showToast(locale.t("metadata.toast.applied_all", { fields: applied.join(", ") }), "success");
+      generation.saveSettings();
+    } else {
+      gallery.showToast(locale.t("metadata.toast.no_applicable"), "info");
+    }
+  } else {
+    const applied = applyMetadataToSection(meta, target);
+    if (applied) {
+      gallery.showToast(locale.t("metadata.toast.applied_section", { section: sectionLabel(target) }), "success");
+      generation.saveSettings();
+    } else {
+      gallery.showToast(locale.t("metadata.toast.no_section", { section: sectionLabel(target) }), "info");
+    }
+  }
+}
+
+/**
+ * Handle a metadata import from raw image bytes (e.g. from Tauri file read).
+ * @param bytes The image file bytes as number[]
+ * @param target "all" for preview area, or a DroppableSectionId
+ */
+export async function handleMetadataImportBytes(
+  bytes: number[],
+  target: DroppableSectionId | "all"
+): Promise<void> {
+  gallery.showToast(locale.t("metadata.toast.reading"), "info");
+  try {
+    const meta = await readImageMetadataBytes(bytes);
+    applyParsedMetadata(meta, target);
+  } catch (err) {
+    console.error("Metadata import failed:", err);
+    gallery.showToast(locale.t("metadata.toast.read_failed"), "error");
+  }
+}
+
+/**
+ * Handle a metadata import from an OS file path (native drops).
+ * Sends only the path string over IPC — Rust reads the file directly from disk.
+ */
+export async function handleMetadataImportPath(
+  filePath: string,
+  target: DroppableSectionId | "all"
+): Promise<void> {
+  gallery.showToast(locale.t("metadata.toast.reading"), "info");
+  try {
+    const meta = await readImageMetadataPath(filePath);
+    applyParsedMetadata(meta, target);
+  } catch (err) {
+    console.error("Metadata import failed:", err);
+    gallery.showToast(locale.t("metadata.toast.read_failed"), "error");
+  }
+}
+
+export { getImageFile, getClipboardImageFile };

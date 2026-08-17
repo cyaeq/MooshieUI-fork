@@ -1,0 +1,68 @@
+name: PR Guardrails
+
+on:
+  pull_request:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+jobs:
+  guardrails:
+    name: Guardrails (build, i18n, types)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head with base for diffing
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Frontend build
+        run: npm run build
+
+      - name: i18n parity
+        run: node scripts/check-i18n-parity.mjs
+
+      - name: Compute changed files
+        run: |
+          git diff --name-only "origin/${{ github.base_ref }}...HEAD" > changed.txt
+          echo "Changed files:"; cat changed.txt
+
+      - name: svelte-check (diff-scoped, blocking)
+        run: |
+          npx svelte-check --output machine > sc.txt 2>&1 || true
+          node scripts/svelte-check-diff.mjs --machine sc.txt --changed changed.txt
+
+  a11y-advisory:
+    name: a11y advisory (non-blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head with base for diffing
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compute changed files
+        run: git diff --name-only "origin/${{ github.base_ref }}...HEAD" > changed.txt
+
+      - name: svelte-check a11y -> job summary
+        run: |
+          npx svelte-check --output machine > sc.txt 2>&1 || true
+          node scripts/svelte-check-diff.mjs --machine sc.txt --changed changed.txt --summary a11y.md || true
+          cat a11y.md >> "$GITHUB_STEP_SUMMARY" || true

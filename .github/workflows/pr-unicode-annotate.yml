@@ -1,0 +1,104 @@
+name: PR Unicode Annotation
+
+on:
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  annotate-unicode:
+    name: Annotate Unicode Variation Selectors
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Get changed files
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch origin "$BASE_SHA" --depth=1
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/changed_files.txt
+          echo "Changed files:"
+          cat /tmp/changed_files.txt
+
+      - name: Scan and annotate
+        run: |
+          python3 - <<'PYEOF'
+          import os, sys
+
+          TARGET_EXTS = {".py", ".js", ".ts", ".svelte", ".rs"}
+          any_hit = False
+
+          with open("/tmp/changed_files.txt") as fh:
+              changed = [line.strip() for line in fh if line.strip()]
+
+          for path in changed:
+              if not os.path.isfile(path):
+                  continue
+              if os.path.splitext(path)[1].lower() not in TARGET_EXTS:
+                  continue
+              try:
+                  data = open(path, "rb").read()
+              except OSError:
+                  continue
+
+              i = 0
+              while i < len(data):
+                  cp = None
+                  adv = 0
+
+                  # U+FE00–U+FE0F: UTF-8 EF B8 80–EF B8 8F
+                  if (i + 2 < len(data)
+                          and data[i] == 0xEF
+                          and data[i + 1] == 0xB8
+                          and 0x80 <= data[i + 2] <= 0x8F):
+                      cp = 0xFE00 + (data[i + 2] - 0x80)
+                      adv = 3
+
+                  # U+E0100–U+E01EF: UTF-8 F3 A0 84 80–F3 A0 87 AF
+                  elif (i + 3 < len(data)
+                          and data[i] == 0xF3
+                          and data[i + 1] == 0xA0
+                          and 0x84 <= data[i + 2] <= 0x87
+                          and (data[i + 2] != 0x87 or data[i + 3] <= 0xAF)):
+                      cp = 0xE0000 + ((data[i + 2] - 0x80) << 6) + (data[i + 3] - 0x80)
+                      adv = 4
+
+                  if cp is not None:
+                      # Compute 1-based line number and column from byte offset
+                      preceding = data[:i]
+                      line_no = preceding.count(b"\n") + 1
+                      last_nl = preceding.rfind(b"\n")
+                      col = (i - last_nl) if last_nl >= 0 else (i + 1)
+
+                      # GitHub Actions workflow command — renders as inline annotation on the diff
+                      print(
+                          f"::error file={path},line={line_no},col={col}::"
+                          f"GlassWorm: invisible Unicode variation selector "
+                          f"{hex(cp)} at byte offset {i}"
+                      )
+                      any_hit = True
+                      i += adv
+                  else:
+                      i += 1
+
+          if any_hit:
+              # Fail the check so it appears in the PR Checks tab.
+              # This is intentionally NOT a required status check — its role is reviewer
+              # visibility via inline annotations, not a second merge blocker.
+              sys.exit(1)
+          else:
+              print("No Unicode variation selectors found in changed files.")
+          PYEOF

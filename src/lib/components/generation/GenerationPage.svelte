@@ -1,0 +1,2496 @@
+<script lang="ts">
+  import { generation } from "../../stores/generation.svelte.js";
+  import { compare } from "../../stores/compare.svelte.js";
+  import { locale } from "../../stores/locale.svelte.js";
+  import { scrollCapture } from "../../utils/scrollCapture.js";
+  import { wheelScrollLock } from "../../utils/wheelScrollLock.js";
+  import PromptInputs from "./PromptInputs.svelte";
+  import RegionalPromptModal from "./RegionalPromptModal.svelte";
+  import ModelSelector from "./ModelSelector.svelte";
+  import SamplerSettings from "./SamplerSettings.svelte";
+  import DimensionControls from "./DimensionControls.svelte";
+  import GenerateButton from "./GenerateButton.svelte";
+  import UpscaleSettings from "./UpscaleSettings.svelte";
+  import FaceFixSettings from "./FaceFixSettings.svelte";
+  import ControlNetSettings from "./ControlNetSettings.svelte";
+  import StyleTransferSettings from "./StyleTransferSettings.svelte";
+  import ImageEditSettings from "./ImageEditSettings.svelte";
+  import VideoSettingsPanel from "../video/VideoSettingsPanel.svelte";
+  import H3PromptGuidePanel from "../video/H3PromptGuidePanel.svelte";
+  import { h3Guide } from "../../stores/h3Guide.svelte.js";
+  import InfoTip from "../ui/InfoTip.svelte";
+  import EditableValue from "../ui/EditableValue.svelte";
+  import ProgressBar from "../progress/ProgressBar.svelte";
+  import PreviewImage from "../progress/PreviewImage.svelte";
+  import CanvasEditor from "../canvas/CanvasEditor.svelte";
+  import LayerPanel from "../canvas/layers/LayerPanel.svelte";
+  import { canvas } from "../../stores/canvas.svelte.js";
+  import { uploadImage, uploadImageBytes, getOutputImage, readClipboardImageSafe } from "../../utils/api.js";
+  import { uploadOutputImageForGenerationInput } from "../../utils/galleryActions.js";
+  import {
+    normalizeGenerationInputBytes,
+    prepareOutputImageForEditMode,
+    type NormalizedInputImage,
+  } from "../../utils/editImagePreparation.js";
+  import { gallery } from "../../stores/gallery.svelte.js";
+  import { lazyThumbnail } from "../../utils/lazyThumbnail.js";
+  import type { OutputImage, InterrogationResult } from "../../types/index.js";
+  import { onMount, onDestroy, tick } from "svelte";
+  import BottomPanel from "./BottomPanel.svelte";
+  import ContextMenu from "../ui/ContextMenu.svelte";
+  import type { ContextMenuItem } from "../ui/ContextMenu.svelte";
+  import InterrogateModal from "./InterrogateModal.svelte";
+  import { interrogateGalleryImage, interrogateImage } from "../../utils/api.js";
+  import { ipcListen, isTauri } from "../../utils/ipc.js";
+  import { progress } from "../../stores/progress.svelte.js";
+  import {
+    isDroppableSection,
+    handleMetadataImport,
+    handleMetadataImportBytes,
+    handleMetadataImportPath,
+    getImageFile,
+    getClipboardImageFile,
+    type DroppableSectionId,
+  } from "../../utils/metadataImport.js";
+
+  interface Props {
+    mobileFriendly?: boolean;
+  }
+  let { mobileFriendly = false }: Props = $props();
+
+  const storageSuffix = mobileFriendly ? ".mobile" : ".desktop";
+  const DIMENSIONS_LAYOUT_KEY = `mooshieui.generation.dimensions.layout.v1${storageSuffix}`;
+  const SECTION_LAYOUT_KEY = `mooshieui.generation.sections.layout.v1${storageSuffix}`;
+
+  type SectionId =
+    | "dimensions"
+    | "prompts"
+    | "imageInputs"
+    | "imageEdit"
+    | "videoSettings"
+    | "inpaintLayers"
+    | "generationSettings"
+    | "model"
+    | "sampler"
+    | "controlnet"
+    | "styleTransfer"
+    | "facefix"
+    | "upscaleHistory";
+
+  type SectionSide = "left" | "right";
+
+  const modes = [
+    { id: "txt2img" as const, label: () => locale.t('generation.mode.txt2img') },
+    { id: "img2img" as const, label: () => locale.t('generation.mode.img2img') },
+    { id: "inpainting" as const, label: () => locale.t('generation.mode.inpainting') },
+    { id: "image_edit" as const, label: () => locale.t('generation.mode.image_edit') },
+    { id: "video" as const, label: () => locale.t('generation.mode.video') },
+  ];
+
+  let canvasEditorRef: CanvasEditor | undefined = $state();
+  let imagePreviewUrl = $state<string | null>(null);
+  let maskPreviewUrl = $state<string | null>(null);
+  let uploading = $state(false);
+  let imageAspect = $state<{ w: number; h: number } | null>(null);
+  let dragOver = $state(false);
+  let maskDragOver = $state(false);
+  let imagePasteTarget = $state<"input" | "mask" | null>(null);
+  let promptsSectionOpen = $state(true);
+  let regionalPromptModalOpen = $state(false);
+
+  /** Which section (or "preview") currently has an image dragged over it */
+  let metadataDropTarget = $state<string | null>(null);
+  /** Per-target enter/leave counters to handle nested element events */
+  let metadataDropCounters: Record<string, number> = {};
+
+  let sectionSides = $state<Record<SectionId, SectionSide>>({
+    dimensions: "left",
+    prompts: "left",
+    imageInputs: "left",
+    imageEdit: "left",
+    videoSettings: "left",
+    inpaintLayers: "right",
+    generationSettings: "right",
+    model: "right",
+    sampler: "right",
+    controlnet: "right",
+    styleTransfer: "right",
+    facefix: "right",
+    upscaleHistory: "right",
+  });
+
+  let draggingSection = $state<SectionId | null>(null);
+  let pendingDrop = $state<{ side: SectionSide; index: number } | null>(null);
+  let dragMouseX = $state(0);
+  let dragMouseY = $state(0);
+  let dragOffsetX = $state(0);
+  let dragOffsetY = $state(0);
+  let dragWidth = $state(0);
+  let dragHeight = $state(0);
+  let dragCloneHtml = $state("");
+  let sectionRefs: Record<string, HTMLElement | null> = {};
+  let leftColumnRef = $state<HTMLElement | null>(null);
+  let rightColumnRef = $state<HTMLElement | null>(null);
+
+  const SECTION_ORDER: SectionId[] = [
+    "dimensions",
+    "prompts",
+    "imageInputs",
+    "imageEdit",
+    "videoSettings",
+    "inpaintLayers",
+    "generationSettings",
+    "model",
+    "sampler",
+    "controlnet",
+    "styleTransfer",
+    "facefix",
+    "upscaleHistory",
+  ];
+
+  let sectionOrder = $state<SectionId[]>([...SECTION_ORDER]);
+
+  function normalizeSectionOrder(order: unknown): SectionId[] {
+    if (!Array.isArray(order)) return [...SECTION_ORDER];
+    const allowed = new Set<SectionId>(SECTION_ORDER);
+    const seen = new Set<SectionId>();
+    const out: SectionId[] = [];
+    for (const item of order) {
+      if (typeof item !== "string") continue;
+      // Migrate legacy "modelSampler" → "model" + "sampler"
+      if (item === "modelSampler") {
+        for (const replacement of ["model", "sampler"] as SectionId[]) {
+          if (!seen.has(replacement)) {
+            seen.add(replacement);
+            out.push(replacement);
+          }
+        }
+        continue;
+      }
+      const id = item as SectionId;
+      if (!allowed.has(id) || seen.has(id)) continue;
+      seen.add(id);
+      out.push(id);
+    }
+    for (const id of SECTION_ORDER) {
+      if (!seen.has(id)) out.push(id);
+    }
+    return out;
+  }
+
+  function loadSectionPlacement() {
+    try {
+      const raw = localStorage.getItem(SECTION_LAYOUT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as
+          | { sides?: Partial<Record<SectionId, SectionSide>>; order?: SectionId[] }
+          | Partial<Record<SectionId, SectionSide>>;
+
+        const rawSides =
+          parsed && typeof parsed === "object" && "sides" in parsed
+            ? (parsed.sides ?? {})
+            : (parsed as Partial<Record<SectionId, SectionSide>>);
+
+        // Migrate legacy "modelSampler" side to both "model" and "sampler"
+        const entries = Object.entries(rawSides).filter(([, side]) => side === "left" || side === "right");
+        const legacyModelSampler = entries.find(([key]) => key === "modelSampler");
+        if (legacyModelSampler) {
+          const side = legacyModelSampler[1] as SectionSide;
+          entries.push(["model", side], ["sampler", side]);
+        }
+
+        sectionSides = {
+          ...sectionSides,
+          ...Object.fromEntries(
+            entries.filter(([key]) => key !== "modelSampler")
+          ) as Partial<Record<SectionId, SectionSide>>,
+        };
+
+        if (parsed && typeof parsed === "object" && "order" in parsed) {
+          sectionOrder = normalizeSectionOrder(parsed.order);
+        }
+        return;
+      }
+
+      const legacy = localStorage.getItem(DIMENSIONS_LAYOUT_KEY);
+      if (!legacy) return;
+      const parsedLegacy = JSON.parse(legacy) as { side?: SectionSide };
+      if (parsedLegacy.side === "left" || parsedLegacy.side === "right") {
+        sectionSides = { ...sectionSides, dimensions: parsedLegacy.side };
+      }
+    } catch (e) {
+      console.error("Failed to load section layout:", e);
+    }
+  }
+
+  function saveSectionPlacement() {
+    try {
+      localStorage.setItem(
+        SECTION_LAYOUT_KEY,
+        JSON.stringify({ sides: sectionSides, order: sectionOrder })
+      );
+    } catch (e) {
+      console.error("Failed to save section layout:", e);
+    }
+  }
+
+  function swapPanels() {
+    const swapped = { ...sectionSides } as Record<SectionId, SectionSide>;
+    for (const key of SECTION_ORDER) {
+      swapped[key] = sectionSides[key] === "left" ? "right" : "left";
+    }
+    sectionSides = swapped;
+  }
+
+  if (typeof window !== "undefined") {
+    loadSectionPlacement();
+  }
+
+  let layoutSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  $effect(() => {
+    void sectionSides;
+    void sectionOrder;
+    if (layoutSaveTimer) clearTimeout(layoutSaveTimer);
+    layoutSaveTimer = setTimeout(() => saveSectionPlacement(), 300);
+  });
+
+  function startSectionDrag(section: SectionId, e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = sectionRefs[section];
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      dragOffsetX = e.clientX - rect.left;
+      dragOffsetY = e.clientY - rect.top;
+      dragWidth = rect.width;
+      dragHeight = rect.height;
+      dragCloneHtml = el.outerHTML;
+    }
+    draggingSection = section;
+    dragMouseX = e.clientX;
+    dragMouseY = e.clientY;
+    const side = sectionSides[section];
+    const sideSections = sectionsForSide(side);
+    const idx = sideSections.indexOf(section);
+    pendingDrop = { side, index: idx >= 0 ? idx : sideSections.length };
+  }
+
+  function isPendingDrop(side: SectionSide, index: number): boolean {
+    return !!pendingDrop && pendingDrop.side === side && pendingDrop.index === index;
+  }
+
+  function sectionLabel(section: SectionId): string {
+    if (section === "dimensions") return locale.t('generation.dimensions.title');
+    if (section === "prompts") return locale.t('generation.prompts.title');
+    if (section === "imageInputs") return locale.t('generation.image.title');
+    if (section === "imageEdit") return locale.t('generation.image_edit.title');
+    if (section === "videoSettings") return locale.t('generation.video.title');
+    if (section === "inpaintLayers") return locale.t('generation.inpaint.title');
+    if (section === "generationSettings") return locale.t('generation.settings.title');
+    if (section === "model") return locale.t('generation.model.title');
+    if (section === "sampler") return locale.t('generation.sampler.title');
+    if (section === "facefix") return locale.t('generation.facefix.title');
+    if (section === "styleTransfer") return locale.t('generation.style_transfer.title');
+    return locale.t('generation.upscale.title');
+  }
+
+  function sectionVisible(section: SectionId): boolean {
+    // Video carries its own geometry, model trio and sampler settings inside the
+    // video panel, so every image-pipeline section is inapplicable there.
+    if (generation.mode === "video")
+      return section === "prompts" || section === "videoSettings";
+    if (section === "videoSettings") return false;
+    if (section === "imageInputs")
+      return generation.mode === "img2img" || generation.mode === "inpainting";
+    if (section === "imageEdit") return generation.mode === "image_edit";
+    if (section === "inpaintLayers") return generation.mode === "inpainting";
+    if (section === "generationSettings") return generation.mode === "inpainting";
+    if (section === "model") return generation.mode !== "inpainting";
+    if (section === "sampler") return generation.mode !== "inpainting";
+    if (section === "upscaleHistory") return generation.mode !== "inpainting";
+    if (section === "facefix") return generation.mode !== "inpainting";
+    if (section === "styleTransfer") return generation.isAnima && generation.mode === "txt2img";
+    return true;
+  }
+
+  function sectionsForSide(side: SectionSide): SectionId[] {
+    return sectionOrder.filter((id) => sectionVisible(id) && sectionSides[id] === side);
+  }
+
+  const leftSections = $derived(sectionsForSide("left"));
+  const rightSections = $derived(sectionsForSide("right"));
+  const leftHasSections = $derived(leftSections.length > 0);
+  const rightHasSections = $derived(rightSections.length > 0);
+  const controlsSide = $derived(leftHasSections ? "left" : "right");
+
+  // Sections for rendering — excludes the dragged section so drop zone indices match computeDropTarget
+  const leftRenderSections = $derived(leftSections.filter((id) => id !== draggingSection));
+  const rightRenderSections = $derived(rightSections.filter((id) => id !== draggingSection));
+
+  const COLLAPSE_KEY = `mooshieui.generation.sections.collapsed.v1${storageSuffix}`;
+
+  function loadCollapseState(): Record<string, boolean> {
+    try {
+      const raw = localStorage.getItem(COLLAPSE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return {};
+  }
+
+  const savedCollapse = typeof window !== "undefined" ? loadCollapseState() : {};
+
+  let dimensionsSectionOpen = $state(savedCollapse.dimensions !== false);
+  let imageSectionOpen = $state(savedCollapse.imageInputs !== false);
+  let imageEditSectionOpen = $state(savedCollapse.imageEdit !== false);
+  let videoSettingsSectionOpen = $state(savedCollapse.videoSettings !== false);
+  let layersSectionOpen = $state(savedCollapse.inpaintLayers !== false);
+  let controlsSectionOpen = $state(savedCollapse.generationSettings !== false);
+  let modelSectionOpen = $state(savedCollapse.model !== false);
+  let samplerSectionOpen = $state(savedCollapse.sampler !== false);
+  let controlnetSectionOpen = $state(savedCollapse.controlnet !== false);
+  let styleTransferSectionOpen = $state(savedCollapse.styleTransfer !== false);
+  let facefixSectionOpen = $state(savedCollapse.facefix !== false);
+  let postSectionOpen = $state(savedCollapse.upscaleHistory !== false);
+
+  let collapseSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  $effect(() => {
+    const state: Record<string, boolean> = {
+      dimensions: dimensionsSectionOpen,
+      imageInputs: imageSectionOpen,
+      imageEdit: imageEditSectionOpen,
+      videoSettings: videoSettingsSectionOpen,
+      inpaintLayers: layersSectionOpen,
+      generationSettings: controlsSectionOpen,
+      model: modelSectionOpen,
+      sampler: samplerSectionOpen,
+      controlnet: controlnetSectionOpen,
+      styleTransfer: styleTransferSectionOpen,
+      facefix: facefixSectionOpen,
+      upscaleHistory: postSectionOpen,
+    };
+    if (collapseSaveTimer) clearTimeout(collapseSaveTimer);
+    collapseSaveTimer = setTimeout(() => {
+      try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(state)); } catch {}
+    }, 300);
+  });
+
+  function applyImageGeometry(width: number, height: number) {
+    imageAspect = { w: width, h: height };
+    generation.width = width;
+    generation.height = height;
+
+    if (canvas.isCanvasMode && (canvas.canvasWidth !== width || canvas.canvasHeight !== height)) {
+      canvas.initCanvas(width, height);
+    }
+  }
+
+  function applyNormalizedImagePreview(normalized: NormalizedInputImage) {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    imagePreviewUrl = normalized.previewUrl;
+    applyImageGeometry(normalized.width, normalized.height);
+    canvas.setReferenceImage(imagePreviewUrl);
+  }
+
+  function syncInpaintBaseIfNeeded(normalized: NormalizedInputImage, uploadedInputName: string) {
+    if (generation.mode !== "inpainting") return;
+    canvas.setInpaintOriginalSource({
+      previewUrl: normalized.previewUrl,
+      width: normalized.width,
+      height: normalized.height,
+      uploadedInputName,
+    });
+  }
+
+  function resetStagedInputForManualReplacement() {
+    canvas.clearStaging();
+    canvas.clearInpaintSession();
+  }
+
+  function getFilenameFromPath(path: string): string {
+    const name = path.split(/[\\/]/).pop() ?? "input.png";
+    return name.trim() || "input.png";
+  }
+
+  async function browseImage() {
+    let selected: string | null = null;
+    if (isTauri) {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      selected = await open({ multiple: false, filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }] });
+    } else {
+      // Browser fallback: use file input
+      const file = await new Promise<File | null>((resolve) => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/png,image/jpeg,image/webp";
+        input.onchange = () => resolve(input.files?.[0] ?? null);
+        input.click();
+      });
+      if (!file) return;
+      uploading = true;
+      try {
+        const buf = await file.arrayBuffer();
+        const bytes = Array.from(new Uint8Array(buf));
+        const normalized = await normalizeGenerationInputBytes(bytes, file.name);
+        resetStagedInputForManualReplacement();
+        applyNormalizedImagePreview(normalized);
+        const response = await uploadImageBytes(normalized.bytes, normalized.filename);
+        generation.inputImage = response.name;
+        syncInpaintBaseIfNeeded(normalized, response.name);
+      } catch (e) { console.error("Failed to upload image:", e); } finally { uploading = false; }
+      return;
+    }
+    if (!selected) return;
+
+    uploading = true;
+    try {
+      const selectedPath = typeof selected === "string" ? selected : selected[0];
+      if (!selectedPath) return;
+
+      const { readFile } = await import("@tauri-apps/plugin-fs");
+      const bytes = Array.from(await readFile(selectedPath));
+      const normalized = await normalizeGenerationInputBytes(bytes, getFilenameFromPath(selectedPath));
+      resetStagedInputForManualReplacement();
+      applyNormalizedImagePreview(normalized);
+
+      const response = await uploadImageBytes(normalized.bytes, normalized.filename);
+      generation.inputImage = response.name;
+      syncInpaintBaseIfNeeded(normalized, response.name);
+    } catch (e) {
+      console.error("Failed to upload image:", e);
+    } finally {
+      uploading = false;
+    }
+  }
+
+  async function browseMask() {
+    let selected: string | null = null;
+    if (isTauri) {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      selected = await open({ multiple: false, filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }] });
+    } else {
+      // Browser fallback
+      const file = await new Promise<File | null>((resolve) => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/png,image/jpeg,image/webp";
+        input.onchange = () => resolve(input.files?.[0] ?? null);
+        input.click();
+      });
+      if (!file) return;
+      uploading = true;
+      try {
+        const buf = await file.arrayBuffer();
+        const blob = new Blob([buf], { type: "image/png" });
+        if (maskPreviewUrl) URL.revokeObjectURL(maskPreviewUrl);
+        maskPreviewUrl = URL.createObjectURL(blob);
+        canvas.setPersistedMaskPreview(maskPreviewUrl);
+        const response = await uploadImageBytes(Array.from(new Uint8Array(buf)), file.name);
+        generation.maskImage = response.name;
+      } catch (e) { console.error("Failed to upload mask:", e); } finally { uploading = false; }
+      return;
+    }
+    if (!selected) return;
+
+    uploading = true;
+    try {
+      const { readFile } = await import("@tauri-apps/plugin-fs");
+      const bytes = await readFile(selected);
+      const blob = new Blob([bytes], { type: "image/png" });
+      if (maskPreviewUrl) URL.revokeObjectURL(maskPreviewUrl);
+      maskPreviewUrl = URL.createObjectURL(blob);
+      canvas.setPersistedMaskPreview(maskPreviewUrl);
+
+      const response = await uploadImage(selected);
+      generation.maskImage = response.name;
+    } catch (e) {
+      console.error("Failed to upload mask:", e);
+    } finally {
+      uploading = false;
+    }
+  }
+
+  async function handleImageDrop(e: DragEvent) {
+    e.preventDefault();
+    dragOver = false;
+    const file = e.dataTransfer?.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+
+    uploading = true;
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = Array.from(new Uint8Array(buffer));
+      const normalized = await normalizeGenerationInputBytes(bytes, file.name || "dropped_image.png");
+      resetStagedInputForManualReplacement();
+      applyNormalizedImagePreview(normalized);
+
+      const response = await uploadImageBytes(normalized.bytes, normalized.filename);
+      generation.inputImage = response.name;
+      syncInpaintBaseIfNeeded(normalized, response.name);
+    } catch (e) {
+      console.error("Failed to handle dropped image:", e);
+      gallery.showToast(locale.t('generation.toast.failed_drop'), "error");
+    } finally {
+      uploading = false;
+    }
+  }
+
+  async function handleMaskDrop(e: DragEvent) {
+    e.preventDefault();
+    maskDragOver = false;
+    const file = e.dataTransfer?.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+
+    uploading = true;
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = Array.from(new Uint8Array(buffer));
+      const blob = new Blob([new Uint8Array(bytes)], { type: "image/png" });
+      if (maskPreviewUrl) URL.revokeObjectURL(maskPreviewUrl);
+      maskPreviewUrl = URL.createObjectURL(blob);
+      canvas.setPersistedMaskPreview(maskPreviewUrl);
+
+      const response = await uploadImageBytes(bytes, file.name || "dropped_mask.png");
+      generation.maskImage = response.name;
+    } catch (e) {
+      console.error("Failed to handle dropped mask:", e);
+      gallery.showToast(locale.t('generation.toast.failed_drop'), "error");
+    } finally {
+      uploading = false;
+    }
+  }
+
+  /** Paste an image into the img2img/inpaint input. Prefers the image carried by the
+   *  paste event's clipboardData (webkit2gtk populates this on Linux, where the native
+   *  clipboard `read_image` is unreliable), falling back to the system clipboard read. */
+  async function handleImagePaste(file?: File | null) {
+    try {
+      uploading = true;
+      const bytes = file
+        ? Array.from(new Uint8Array(await file.arrayBuffer()))
+        : await readClipboardImageSafe();
+      const normalized = await normalizeGenerationInputBytes(bytes, file?.name || "pasted_image.png");
+      resetStagedInputForManualReplacement();
+      applyNormalizedImagePreview(normalized);
+
+      const response = await uploadImageBytes(normalized.bytes, normalized.filename);
+      generation.inputImage = response.name;
+      syncInpaintBaseIfNeeded(normalized, response.name);
+    } catch (e) {
+      console.error("Failed to paste image:", e);
+    } finally {
+      uploading = false;
+    }
+  }
+
+  async function handleMaskPaste() {
+    try {
+      const bytes = await readClipboardImageSafe();
+      uploading = true;
+      const blob = new Blob([new Uint8Array(bytes)], { type: "image/png" });
+      if (maskPreviewUrl) URL.revokeObjectURL(maskPreviewUrl);
+      maskPreviewUrl = URL.createObjectURL(blob);
+      canvas.setPersistedMaskPreview(maskPreviewUrl);
+
+      const response = await uploadImageBytes(bytes, "pasted_mask.png");
+      generation.maskImage = response.name;
+    } catch (e) {
+      console.error("Failed to paste mask:", e);
+    } finally {
+      uploading = false;
+    }
+  }
+
+  function clearImage() {
+    generation.inputImage = null;
+    imageAspect = null;
+    canvas.clearStaging();
+    canvas.clearInpaintSession();
+    canvas.setReferenceImage(null);
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+      imagePreviewUrl = null;
+    }
+  }
+
+  function clearMask() {
+    canvas.clearMask();
+    if (maskPreviewUrl) {
+      URL.revokeObjectURL(maskPreviewUrl);
+      maskPreviewUrl = null;
+    }
+  }
+
+  /** Open the image-input section and scroll it into view so a "send to img2img"
+   *  action visibly lands somewhere — otherwise switching to img2img mode loads
+   *  the source image into a section the user may not have on screen (#398). */
+  async function revealImageInputSection() {
+    imageSectionOpen = true;
+    await tick();
+    sectionRefs['imageInputs']?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  async function refineImage(image: OutputImage) {
+    try {
+      generation.inputImage = await uploadOutputImageForGenerationInput(image, "img2img_input.png");
+      generation.mode = "img2img";
+      generation.upscaleEnabled = false;
+      gallery.showToast(locale.t('gallery.toast.loaded_img2img'), "success");
+      await revealImageInputSection();
+    } catch (e) {
+      console.error("Failed to set up refine:", e);
+      gallery.showToast(locale.t('gallery.toast.failed_load'), "error");
+    }
+  }
+
+  async function upscaleImage(image: OutputImage) {
+    try {
+      generation.inputImage = await uploadOutputImageForGenerationInput(image, "refine_input.png");
+      generation.mode = "img2img";
+      generation.upscaleEnabled = true;
+      gallery.showToast(locale.t('generation.toast.loaded_upscale'), "success");
+      await revealImageInputSection();
+    } catch (e) {
+      console.error("Failed to set up upscale:", e);
+      gallery.showToast(locale.t('generation.toast.failed_load'), "error");
+    }
+  }
+
+  async function inpaintImage(image: OutputImage) {
+    try {
+      const prepared = await prepareOutputImageForEditMode(image, "inpainting");
+      const normalized = prepared.normalized;
+      if (!normalized) throw new Error("Expected normalized inpaint source");
+      const response = await uploadImageBytes(prepared.uploadBytes, prepared.uploadFilename);
+      generation.inputImage = response.name;
+      canvas.clearMask();
+      canvas.clearStaging();
+      generation.mode = "inpainting";
+      progress.setLastOutputForMode("inpainting", null);
+      canvas.isCanvasMode = true;
+      applyNormalizedImagePreview(normalized);
+      canvas.setInpaintOriginalSource({
+        previewUrl: normalized.previewUrl,
+        width: normalized.width,
+        height: normalized.height,
+        uploadedInputName: response.name,
+      });
+
+      if (canvas.layers.length === 0) {
+        canvas.initCanvas(generation.width, generation.height);
+      }
+
+      gallery.showToast(locale.t('generation.toast.loaded_inpaint'), "success");
+    } catch (e) {
+      console.error("Failed to set up inpainting:", e);
+      gallery.showToast(locale.t('generation.toast.failed_load'), "error");
+    }
+  }
+
+  // Context menu + interrogation for session images
+  let ctxMenuImage = $state<OutputImage | null>(null);
+  let ctxMenuX = $state(0);
+  let ctxMenuY = $state(0);
+  let showCtxMenu = $state(false);
+  let showInterrogateModal = $state(false);
+  let interrogateResult = $state<InterrogationResult | null>(null);
+  let interrogateLoading = $state(false);
+  let interrogateStage = $state<string | null>(null);
+  let interrogateDownloadProgress = $state<{ downloaded: number; total: number; filename: string } | null>(null);
+  let interrogateImageUrl = $state<string | null>(null);
+  let interrogateError = $state<string | null>(null);
+
+  /** Compare entry label: pin the first image, then pick the second (issue #517). */
+  function comparePinLabel(image: OutputImage): string {
+    if (!gallery.comparePin) return locale.t("gallery.compare.pin");
+    if (gallery.comparePin === image) return locale.t("gallery.compare.unpin");
+    return locale.t("gallery.compare.with_pinned");
+  }
+
+  function handleSessionContextMenu(image: OutputImage, x: number, y: number) {
+    ctxMenuImage = image;
+    ctxMenuX = x;
+    ctxMenuY = y;
+    showCtxMenu = true;
+  }
+
+  const sessionCtxMenuItems = $derived.by((): ContextMenuItem[] => {
+    const image = ctxMenuImage;
+    if (!image) return [];
+    return [
+      { label: locale.t('generation.ctx.get_tags'), action: () => interrogateSessionImage(image) },
+      { label: "", action: () => {}, separator: true },
+      { label: locale.t('generation.ctx.upscale'), action: () => upscaleImage(image) },
+      { label: locale.t('generation.ctx.inpaint'), action: () => inpaintImage(image) },
+      { label: "", action: () => {}, separator: true },
+      { label: comparePinLabel(image), action: () => gallery.toggleComparePin(image) },
+      { label: "", action: () => {}, separator: true },
+      { label: locale.t('generation.ctx.save_as'), action: () => gallery.saveImageAs(image) },
+      { label: locale.t('generation.ctx.copy'), action: () => gallery.copyToClipboard(image) },
+      { label: "", action: () => {}, separator: true },
+      { label: locale.t('generation.ctx.delete'), action: () => gallery.deleteImage(image), destructive: true },
+    ];
+  });
+
+  async function interrogateSessionImage(image: OutputImage) {
+    showInterrogateModal = true;
+    interrogateLoading = true;
+    interrogateResult = null;
+    interrogateStage = null;
+    interrogateDownloadProgress = null;
+    interrogateError = null;
+    interrogateImageUrl = image.thumbnailUrl || image.url || null;
+
+    const unlistenDownload = await ipcListen(
+      "interrogator:download_progress",
+      (event) => {
+        if (event.payload.done) {
+          interrogateDownloadProgress = null;
+        } else {
+          interrogateDownloadProgress = event.payload;
+        }
+      }
+    );
+
+    const unlistenStage = await ipcListen("interrogator:stage", (event) => {
+      interrogateStage = event.payload;
+    });
+
+    try {
+      let result: InterrogationResult;
+      if (image.gallery_filename) {
+        // Saved to gallery — use gallery interrogation
+        result = await interrogateGalleryImage(image.gallery_filename);
+      } else {
+        // Session image — fetch bytes from ComfyUI and use base64 interrogation
+        const bytes = await getOutputImage(image.filename, image.subfolder);
+        const uint8 = new Uint8Array(bytes);
+        let binary = "";
+        for (let i = 0; i < uint8.length; i++) {
+          binary += String.fromCharCode(uint8[i]);
+        }
+        result = await interrogateImage(btoa(binary));
+      }
+      interrogateResult = result;
+    } catch (e) {
+      console.error("Interrogation failed:", e);
+      interrogateError = e instanceof Error ? e.message : String(e);
+    } finally {
+      interrogateLoading = false;
+      interrogateStage = null;
+      unlistenDownload();
+      unlistenStage();
+    }
+  }
+
+  const PANEL_LAYOUT_KEY = `mooshieui.panelLayout.v1${storageSuffix}`;
+
+  function loadPanelLayout() {
+    try {
+      const raw = localStorage.getItem(PANEL_LAYOUT_KEY);
+      if (raw) {
+        const s = JSON.parse(raw) as {
+          left?: number; right?: number; bottom?: number;
+          leftCollapsed?: boolean; rightCollapsed?: boolean; bottomCollapsed?: boolean;
+        };
+        return {
+          left: typeof s.left === "number" ? Math.min(LEFT_MAX, Math.max(LEFT_MIN, s.left)) : LEFT_DEFAULT,
+          right: typeof s.right === "number" ? Math.min(RIGHT_MAX, Math.max(RIGHT_MIN, s.right)) : RIGHT_DEFAULT,
+          bottom: typeof s.bottom === "number" ? Math.min(BOTTOM_MAX, Math.max(BOTTOM_MIN, s.bottom)) : BOTTOM_DEFAULT,
+          leftCollapsed: s.leftCollapsed === true,
+          rightCollapsed: s.rightCollapsed === true,
+          bottomCollapsed: s.bottomCollapsed === true,
+        };
+      }
+    } catch {}
+    return { left: LEFT_DEFAULT, right: RIGHT_DEFAULT, bottom: BOTTOM_DEFAULT, leftCollapsed: false, rightCollapsed: false, bottomCollapsed: false };
+  }
+
+  function savePanelLayout() {
+    try {
+      localStorage.setItem(PANEL_LAYOUT_KEY, JSON.stringify({ left: leftWidth, right: rightWidth, bottom: bottomHeight, leftCollapsed, rightCollapsed, bottomCollapsed }));
+    } catch {}
+  }
+
+  const LEFT_DEFAULT = 360;
+  const RIGHT_DEFAULT = 310;
+  const BOTTOM_DEFAULT = 180;
+  const LEFT_MIN = 260;
+  const LEFT_MAX = 520;
+  const RIGHT_MIN = 240;
+  const RIGHT_MAX = 450;
+  const BOTTOM_MIN = 100;
+  const BOTTOM_MAX = 500;
+
+  const _savedLayout = loadPanelLayout();
+  let leftWidth = $state(_savedLayout.left);
+  let rightWidth = $state(_savedLayout.right);
+  let bottomHeight = $state(_savedLayout.bottom);
+
+  // Panel collapse state (restored from persisted layout)
+  let leftCollapsed = $state(_savedLayout.leftCollapsed);
+  let rightCollapsed = $state(_savedLayout.rightCollapsed);
+  let bottomCollapsed = $state(_savedLayout.bottomCollapsed);
+
+  // Store pre-collapse widths/heights so we can restore them. Seed from the saved
+  // sizes so expanding a panel that was restored as collapsed brings back its real size.
+  let leftWidthBeforeCollapse = _savedLayout.left;
+  let rightWidthBeforeCollapse = _savedLayout.right;
+  let bottomHeightBeforeCollapse = _savedLayout.bottom;
+
+  function toggleLeftPanel() {
+    if (mobileFriendly) {
+      setMobilePanel("left", leftCollapsed);
+      mobileLeftPeek = null;
+      return;
+    }
+    if (leftCollapsed) {
+      leftWidth = leftWidthBeforeCollapse;
+      leftCollapsed = false;
+    } else {
+      leftWidthBeforeCollapse = leftWidth;
+      leftCollapsed = true;
+    }
+    savePanelLayout();
+  }
+
+  function toggleRightPanel() {
+    if (mobileFriendly) {
+      setMobilePanel("right", rightCollapsed);
+      mobileRightPeek = null;
+      return;
+    }
+    if (rightCollapsed) {
+      rightWidth = rightWidthBeforeCollapse;
+      rightCollapsed = false;
+    } else {
+      rightWidthBeforeCollapse = rightWidth;
+      rightCollapsed = true;
+    }
+    savePanelLayout();
+  }
+
+  function toggleBottomPanel() {
+    if (mobileFriendly) {
+      setMobilePanel("bottom", bottomCollapsed);
+      mobileBottomPeek = null;
+      return;
+    }
+    if (bottomCollapsed) {
+      bottomHeight = bottomHeightBeforeCollapse;
+      bottomCollapsed = false;
+    } else {
+      bottomHeightBeforeCollapse = bottomHeight;
+      bottomCollapsed = true;
+    }
+    savePanelLayout();
+  }
+
+  let dragging = $state<"left" | "right" | "bottom" | null>(null);
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragStartWidth = 0;
+  let dragStartHeight = 0;
+  let mobileHandleDrag = $state<"left" | "right" | "bottom" | null>(null);
+  let mobileHandleStartX = 0;
+  let mobileHandleStartY = 0;
+  let mobileHandleStartProgress = 0;
+  let mobileLeftPeek = $state<number | null>(null);
+  let mobileRightPeek = $state<number | null>(null);
+  let mobileBottomPeek = $state<number | null>(null);
+  const MOBILE_SNAP_THRESHOLD = 0.38;
+
+  function panelProgress(panel: "left" | "right" | "bottom"): number {
+    if (panel === "left") return mobileLeftPeek ?? (leftCollapsed ? 0 : 1);
+    if (panel === "right") return mobileRightPeek ?? (rightCollapsed ? 0 : 1);
+    return mobileBottomPeek ?? (bottomCollapsed ? 0 : 1);
+  }
+
+  // Pixel width of the visible "peek" portion of a mobile panel handle when the panel is fully closed.
+  // The handle (the thin grab bar with `···`) is rendered inside the panel container, positioned at the
+  // edge that faces the viewport; this is how much of the panel container we leave visible so the user
+  // can grab the handle to drag the panel open.
+  const MOBILE_HANDLE_PEEK_PX = 14;
+
+  function mobilePanelTransform(panel: "left" | "right" | "bottom"): string {
+    // When another panel is actively being dragged, slide this panel fully off-screen so its handle
+    // (the visual indicator) is hidden. This satisfies the "hide the other 2 indicators when sliding
+    // a panel" requirement without adding extra reactive state.
+    const otherDragging = mobileHandleDrag !== null && mobileHandleDrag !== panel;
+    if (otherDragging) {
+      if (panel === "left") return "translateX(-100%)";
+      if (panel === "right") return "translateX(100%)";
+      return "translateY(100%)";
+    }
+    const p = panelProgress(panel);
+    const closed = 1 - p;
+    if (panel === "left") {
+      // Left panel: at progress=0 push container left by (100% - peek) so only the right-edge handle is visible.
+      return `translateX(calc(${(-closed * 100).toFixed(3)}% + ${(closed * MOBILE_HANDLE_PEEK_PX).toFixed(3)}px))`;
+    }
+    if (panel === "right") {
+      // Right panel mirrors the left.
+      return `translateX(calc(${(closed * 100).toFixed(3)}% - ${(closed * MOBILE_HANDLE_PEEK_PX).toFixed(3)}px))`;
+    }
+    // Bottom panel: container is anchored from top=4rem (just under the mode switcher) to bottom=(4rem + safe-area)
+    // so the bottom navigation bar stays visible. At progress=0 we translate the container down by
+    // (containerHeight - handlePeek) so only the top handle peeks above the bottom nav.
+    return `translateY(calc(${(closed * 100).toFixed(3)}% - ${(closed * MOBILE_HANDLE_PEEK_PX).toFixed(3)}px))`;
+  }
+
+  function mobilePanelTransition(panel: "left" | "right" | "bottom"): string {
+    // Disable the CSS transition while the user is actively dragging this panel so the panel tracks
+    // the finger 1:1. After release, snap with a quick ease-out.
+    return mobileHandleDrag === panel ? "none" : "transform 180ms ease-out";
+  }
+
+  function mobilePanelZIndex(panel: "left" | "right" | "bottom"): number {
+    // Whichever panel is being dragged or is open gets stacked above the others so its handle isn't
+    // obscured by a sibling panel's handle layer.
+    if (mobileHandleDrag === panel) return 45;
+    if (panelProgress(panel) > 0.01) return 42;
+    return 40;
+  }
+
+  function setMobilePanel(panel: "left" | "right" | "bottom", open: boolean) {
+    if (panel === "left") {
+      leftCollapsed = !open;
+      if (open) {
+        rightCollapsed = true;
+        bottomCollapsed = true;
+      }
+      return;
+    }
+    if (panel === "right") {
+      rightCollapsed = !open;
+      if (open) {
+        leftCollapsed = true;
+        bottomCollapsed = true;
+      }
+      return;
+    }
+    bottomCollapsed = !open;
+    if (open) {
+      leftCollapsed = true;
+      rightCollapsed = true;
+    }
+  }
+
+  function onMobileHandleDown(panel: "left" | "right" | "bottom", e: PointerEvent) {
+    e.preventDefault();
+    mobileHandleDrag = panel;
+    mobileHandleStartX = e.clientX;
+    mobileHandleStartY = e.clientY;
+    mobileHandleStartProgress = panelProgress(panel);
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  }
+
+  /** Ignore cross-axis movement so a vertical scroll gesture on side handles doesn't drag the panel. */
+  function mobileHandleAxisLocked(panel: "left" | "right" | "bottom", deltaX: number, deltaY: number): boolean {
+    const ax = Math.abs(deltaX);
+    const ay = Math.abs(deltaY);
+    if (panel === "bottom") return ay > 6 && ay >= ax;
+    return ax > 6 && ax >= ay;
+  }
+
+  function onMobileHandleMove(panel: "left" | "right" | "bottom", e: PointerEvent) {
+    if (mobileHandleDrag !== panel) return;
+    const deltaX = e.clientX - mobileHandleStartX;
+    const deltaY = e.clientY - mobileHandleStartY;
+    if (!mobileHandleAxisLocked(panel, deltaX, deltaY)) return;
+    const viewportW = Math.max(window.innerWidth, 1);
+    const viewportH = Math.max(window.innerHeight, 1);
+
+    if (panel === "left") {
+      const progress = Math.min(1, Math.max(0, mobileHandleStartProgress + deltaX / viewportW));
+      mobileLeftPeek = progress;
+      return;
+    }
+    if (panel === "right") {
+      const progress = Math.min(1, Math.max(0, mobileHandleStartProgress - deltaX / viewportW));
+      mobileRightPeek = progress;
+      return;
+    }
+    const progress = Math.min(1, Math.max(0, mobileHandleStartProgress - deltaY / viewportH));
+    mobileBottomPeek = progress;
+  }
+
+  function onMobileHandleUp(panel: "left" | "right" | "bottom", _e: PointerEvent) {
+    if (mobileHandleDrag !== panel) return;
+    const progress = panelProgress(panel);
+    mobileHandleDrag = null;
+    setMobilePanel(panel, progress >= MOBILE_SNAP_THRESHOLD);
+    mobileLeftPeek = null;
+    mobileRightPeek = null;
+    mobileBottomPeek = null;
+  }
+
+  function onMobileHandleCancel(panel: "left" | "right" | "bottom") {
+    if (mobileHandleDrag !== panel) return;
+    const progress = panelProgress(panel);
+    mobileHandleDrag = null;
+    setMobilePanel(panel, progress >= MOBILE_SNAP_THRESHOLD);
+    mobileLeftPeek = null;
+    mobileRightPeek = null;
+    mobileBottomPeek = null;
+  }
+
+  function onDividerDown(side: "left" | "right" | "bottom", e: MouseEvent) {
+    if (mobileFriendly) return;
+    dragging = side;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragStartWidth = side === "left" ? leftWidth : rightWidth;
+    dragStartHeight = bottomHeight;
+    e.preventDefault();
+  }
+
+  function computeDropTarget(mx: number, my: number): { side: SectionSide; index: number } | null {
+    // Determine which column the cursor is over
+    let side: SectionSide | null = null;
+
+    if (leftColumnRef) {
+      const r = leftColumnRef.getBoundingClientRect();
+      if (mx >= r.left && mx <= r.right) side = "left";
+    }
+    if (!side && rightColumnRef) {
+      const r = rightColumnRef.getBoundingClientRect();
+      if (mx >= r.left && mx <= r.right) side = "right";
+    }
+    if (!side) {
+      // Fallback: pick the closer column
+      const lc = leftColumnRef?.getBoundingClientRect();
+      const rc = rightColumnRef?.getBoundingClientRect();
+      if (lc && rc) {
+        const lDist = Math.abs(mx - (lc.left + lc.width / 2));
+        const rDist = Math.abs(mx - (rc.left + rc.width / 2));
+        side = lDist < rDist ? "left" : "right";
+      } else {
+        side = lc ? "left" : "right";
+      }
+    }
+
+    // Use only non-dragged sections for midpoint calculation
+    const allSections = side === "left" ? leftSections : rightSections;
+    const sections = allSections.filter((id) => id !== draggingSection);
+
+    let index = sections.length;
+    for (let i = 0; i < sections.length; i++) {
+      const el = sectionRefs[sections[i]];
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      if (my < midY) {
+        index = i;
+        break;
+      }
+    }
+
+    return { side, index };
+  }
+
+  function onPointerMove(e: MouseEvent) {
+    if (draggingSection) {
+      dragMouseX = e.clientX;
+      dragMouseY = e.clientY;
+      pendingDrop = computeDropTarget(e.clientX, e.clientY);
+      return;
+    }
+
+    if (!dragging) return;
+    if (dragging === "bottom") {
+      const delta = e.clientY - dragStartY;
+      bottomHeight = Math.min(BOTTOM_MAX, Math.max(BOTTOM_MIN, dragStartHeight - delta));
+    } else {
+      const delta = e.clientX - dragStartX;
+      if (dragging === "left") {
+        leftWidth = Math.min(LEFT_MAX, Math.max(LEFT_MIN, dragStartWidth + delta));
+      } else if (dragging === "right") {
+        rightWidth = Math.min(RIGHT_MAX, Math.max(RIGHT_MIN, dragStartWidth - delta));
+      }
+    }
+  }
+
+  function onPointerUp() {
+    if (draggingSection && pendingDrop) {
+      const targetSide = pendingDrop.side;
+      const targetIndex = Math.max(0, pendingDrop.index);
+
+      sectionSides = {
+        ...sectionSides,
+        [draggingSection]: targetSide,
+      };
+
+      const remaining = sectionOrder.filter((id) => id !== draggingSection);
+      // Use only visible sections to match computeDropTarget's index calculation
+      const sideSections = remaining.filter((id) => sectionSides[id] === targetSide && sectionVisible(id));
+
+      let insertAt = remaining.length;
+      if (sideSections.length > 0) {
+        if (targetIndex <= 0) {
+          insertAt = remaining.indexOf(sideSections[0]);
+        } else if (targetIndex >= sideSections.length) {
+          insertAt = remaining.indexOf(sideSections[sideSections.length - 1]) + 1;
+        } else {
+          insertAt = remaining.indexOf(sideSections[targetIndex]);
+        }
+      }
+
+      const next = [...remaining];
+      next.splice(Math.max(0, insertAt), 0, draggingSection);
+      sectionOrder = normalizeSectionOrder(next);
+    }
+    draggingSection = null;
+    pendingDrop = null;
+    dragMouseX = 0;
+    dragMouseY = 0;
+    dragCloneHtml = "";
+    if (dragging) {
+      savePanelLayout();
+    }
+    dragging = null;
+  }
+
+  function resetLeftWidth() {
+    leftWidth = LEFT_DEFAULT;
+  }
+
+  function resetRightWidth() {
+    rightWidth = RIGHT_DEFAULT;
+  }
+
+  function resetBottomHeight() {
+    bottomHeight = BOTTOM_DEFAULT;
+  }
+
+  let prevInpaintMode: boolean | null = $state(null);
+  $effect(() => {
+    const isInpainting = generation.mode === "inpainting";
+    // Auto-open the canvas on entering inpainting; auto-close on leaving.
+    // Only act on the transition so a manual toggle within inpainting isn't overridden.
+    if (isInpainting && prevInpaintMode !== true) {
+      canvas.isCanvasMode = true;
+    } else if (!isInpainting && canvas.isCanvasMode) {
+      canvas.isCanvasMode = false;
+    }
+    prevInpaintMode = isInpainting;
+  });
+
+  function hasFilePayload(dt: DataTransfer | null): boolean {
+    if (!dt) return false;
+    if (dt.files && dt.files.length > 0) return true;
+    if (dt.items && Array.from(dt.items).some((item) => item.kind === "file")) return true;
+    const types = Array.from(dt.types || []);
+    return types.includes("Files") || types.includes("application/x-moz-file");
+  }
+
+  function onMetadataDragEnter(e: DragEvent, targetId: string) {
+    if (!hasFilePayload(e.dataTransfer)) return;
+    if (!isDroppableSection(targetId)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (metadataDropTarget && metadataDropTarget !== targetId) {
+      metadataDropCounters[metadataDropTarget] = 0;
+    }
+    metadataDropCounters[targetId] = (metadataDropCounters[targetId] || 0) + 1;
+    metadataDropTarget = targetId;
+  }
+
+  function onMetadataDragOver(e: DragEvent, targetId: string) {
+    if (!hasFilePayload(e.dataTransfer)) return;
+    if (!isDroppableSection(targetId)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+  }
+
+  function onMetadataDragLeave(e: DragEvent, targetId: string) {
+    if (!isDroppableSection(targetId)) return;
+    metadataDropCounters[targetId] = (metadataDropCounters[targetId] || 0) - 1;
+    if (metadataDropCounters[targetId] <= 0) {
+      metadataDropCounters[targetId] = 0;
+      if (metadataDropTarget === targetId) {
+        metadataDropTarget = null;
+      }
+    }
+  }
+
+  async function onMetadataDrop(e: DragEvent, targetId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    metadataDropTarget = null;
+    metadataDropCounters = {};
+    if (!e.dataTransfer) return;
+    // Only import metadata on specific param sections, not the preview area
+    if (!isDroppableSection(targetId)) return;
+    const file = getImageFile(e.dataTransfer);
+    if (!file) return;
+    await handleMetadataImport(file, targetId as DroppableSectionId);
+  }
+
+  let pasteHandler: ((e: ClipboardEvent) => void) | null = null;
+  let unlistenDragDrop: (() => void) | null = null;
+
+  /** Find the metadata drop section under the given CSS-pixel coordinates.
+   *  Only returns actual parameter sections — preview area is excluded. */
+  function findDropSection(cssX: number, cssY: number): string | null {
+    const el = document.elementFromPoint(cssX, cssY);
+    if (!el) return null;
+    const sectionEl = (el as HTMLElement).closest?.("[data-drop-section]") as HTMLElement | null;
+    if (!sectionEl) return null;
+    const id = sectionEl.dataset.dropSection!;
+    if (isDroppableSection(id)) return id;
+    return null;
+  }
+
+  /** Check whether a file path looks like an image. */
+  function isImagePath(p: string): boolean {
+    return /\.(png|jpe?g|webp|bmp|gif)$/i.test(p);
+  }
+
+  async function setupTauriDragDrop() {
+    if (!isTauri) return;
+    const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
+    const webview = getCurrentWebview();
+    const appWindow = getCurrentWindow();
+    const scaleFactor = await appWindow.scaleFactor();
+
+    unlistenDragDrop = await webview.onDragDropEvent(async (event) => {
+      const payload = event.payload;
+
+      if (payload.type === "enter" || payload.type === "over") {
+        // Convert physical pixels to CSS pixels for elementFromPoint
+        const cssX = payload.position.x / scaleFactor;
+        const cssY = payload.position.y / scaleFactor;
+        const section = findDropSection(cssX, cssY);
+
+        if (section && section !== metadataDropTarget) {
+          metadataDropTarget = section;
+        } else if (!section && metadataDropTarget) {
+          metadataDropTarget = null;
+        }
+      } else if (payload.type === "drop") {
+        const cssX = payload.position.x / scaleFactor;
+        const cssY = payload.position.y / scaleFactor;
+        const section = findDropSection(cssX, cssY);
+
+        metadataDropTarget = null;
+        metadataDropCounters = {};
+
+        const imgPath = payload.paths.find(isImagePath);
+        if (!imgPath) return;
+
+        if (section) {
+          // Metadata import — send just the path, Rust reads from disk
+          try {
+            const importTarget = section === "preview" ? "all" : section as DroppableSectionId;
+            await handleMetadataImportPath(imgPath, importTarget);
+          } catch (err) {
+            console.error("Tauri drag-drop metadata import failed:", err);
+            gallery.showToast(locale.t('generation.toast.failed_drop'), "error");
+          }
+          return;
+        }
+
+        // Check for image input / mask drop zones
+        const el = document.elementFromPoint(cssX, cssY);
+        const zoneEl = (el as HTMLElement)?.closest?.("[data-drop-zone]") as HTMLElement | null;
+        if (zoneEl) {
+          const zone = zoneEl.dataset.dropZone;
+          try {
+            const filename = getFilenameFromPath(imgPath);
+            if (zone === "img-input") {
+              await handleImageDropPath(imgPath, filename);
+            } else if (zone === "mask-input") {
+              await handleMaskDropPath(imgPath, filename);
+            } else {
+              // Dispatch custom event for child components with file path
+              zoneEl.dispatchEvent(new CustomEvent("tauri-file-drop", {
+                bubbles: false,
+                detail: { path: imgPath, filename },
+              }));
+            }
+          } catch (err) {
+            console.error("Tauri drag-drop image upload failed:", err);
+            gallery.showToast(locale.t('generation.toast.failed_drop'), "error");
+          }
+        }
+      } else if (payload.type === "leave") {
+        metadataDropTarget = null;
+        metadataDropCounters = {};
+      }
+    });
+  }
+
+  /** Handle image input drop in Tauri mode. The file is read locally only for
+   *  the preview; the ComfyUI upload uses the path-based command so the full
+   *  byte array never crosses the IPC boundary, which could fail silently for
+   *  large files and leave the preview set without an input image (#273). */
+  async function handleImageDropPath(path: string, filename: string) {
+    uploading = true;
+    dragOver = false;
+    try {
+      const { readFile } = await import("@tauri-apps/plugin-fs");
+      const bytes = Array.from(await readFile(path));
+      const normalized = await normalizeGenerationInputBytes(bytes, filename);
+      resetStagedInputForManualReplacement();
+      applyNormalizedImagePreview(normalized);
+      const response = await uploadImage(path);
+      generation.inputImage = response.name;
+      syncInpaintBaseIfNeeded(normalized, response.name);
+    } catch (e) {
+      console.error("Failed to handle dropped image:", e);
+      // Don't leave a preview visible when the upload never registered.
+      generation.inputImage = null;
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
+        imagePreviewUrl = null;
+      }
+      canvas.setReferenceImage(null);
+      gallery.showToast(locale.t('generation.toast.failed_drop'), "error");
+    } finally {
+      uploading = false;
+    }
+  }
+
+  /** Handle mask drop in Tauri mode (path-based upload, see handleImageDropPath). */
+  async function handleMaskDropPath(path: string, _filename: string) {
+    uploading = true;
+    maskDragOver = false;
+    try {
+      const { readFile } = await import("@tauri-apps/plugin-fs");
+      const bytes = await readFile(path);
+      const blob = new Blob([bytes], { type: "image/png" });
+      if (maskPreviewUrl) URL.revokeObjectURL(maskPreviewUrl);
+      maskPreviewUrl = URL.createObjectURL(blob);
+      canvas.setPersistedMaskPreview(maskPreviewUrl);
+      const response = await uploadImage(path);
+      generation.maskImage = response.name;
+    } catch (e) {
+      console.error("Failed to handle dropped mask:", e);
+      generation.maskImage = null;
+      if (maskPreviewUrl) {
+        URL.revokeObjectURL(maskPreviewUrl);
+        maskPreviewUrl = null;
+      }
+      gallery.showToast(locale.t('generation.toast.failed_drop'), "error");
+    } finally {
+      uploading = false;
+    }
+  }
+
+  onMount(() => {
+    if (mobileFriendly) {
+      // Mobile starts with side panels collapsed, but keeps full desktop controls available.
+      leftCollapsed = true;
+      rightCollapsed = true;
+      bottomCollapsed = true;
+    }
+
+    pasteHandler = async (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+
+      if (imagePasteTarget === "input") {
+        e.preventDefault();
+        e.stopPropagation();
+        await handleImagePaste(getClipboardImageFile(e));
+        return;
+      }
+
+      if (imagePasteTarget === "mask") {
+        e.preventDefault();
+        e.stopPropagation();
+        await handleMaskPaste();
+        return;
+      }
+
+      // No drop zone hovered. In a mode that consumes an input image, treat Ctrl+V
+      // as pasting into the image input so the advertised "Ctrl+V Paste" works without
+      // hovering the field first. Prefer the image in the paste event (works on Linux
+      // where the native clipboard read is unreliable), else read the system clipboard (#396).
+      if (generation.mode === "img2img" || generation.mode === "inpainting") {
+        e.preventDefault();
+        e.stopPropagation();
+        await handleImagePaste(getClipboardImageFile(e));
+        return;
+      }
+
+      const file = getClipboardImageFile(e);
+      if (!file) return;
+      e.preventDefault();
+      const targetSection = metadataDropTarget && isDroppableSection(metadataDropTarget)
+        ? metadataDropTarget as DroppableSectionId
+        : "all";
+      await handleMetadataImport(file, targetSection);
+    };
+    window.addEventListener("paste", pasteHandler);
+    setupTauriDragDrop();
+  });
+
+  onDestroy(() => {
+    if (pasteHandler) window.removeEventListener("paste", pasteHandler);
+    if (unlistenDragDrop) unlistenDragDrop();
+  });
+</script>
+
+  {#snippet dragHandle(section: SectionId)}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      onmousedown={(e) => startSectionDrag(section, e)}
+      class="flex items-center px-3 cursor-grab active:cursor-grabbing text-neutral-600 hover:text-neutral-400"
+      title={locale.t('generation.drag_to_move')}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+    </div>
+  {/snippet}
+
+  {#snippet sectionDropZone(side: SectionSide, index: number)}
+    {#if draggingSection}
+      <div class="relative">
+        <div
+          class="h-0.5 rounded-full transition-[background-color,transform] duration-150 mx-2 {isPendingDrop(side, index)
+            ? 'bg-indigo-400 shadow-[0_0_8px_rgba(99,102,241,0.5)] scale-y-[3]'
+            : 'bg-transparent'}"
+        ></div>
+      </div>
+    {/if}
+  {/snippet}
+
+  {#snippet dimensionsSection()}
+    <div bind:this={sectionRefs['dimensions']} data-drop-section="dimensions" class="relative rounded-lg bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'dimensions' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'} border {metadataDropTarget === 'dimensions' ? 'border-indigo-500/70 ring-2 ring-indigo-500/40' : 'border-neutral-800'} transition-colors"
+      ondragenter={(e) => onMetadataDragEnter(e, "dimensions")}
+      ondragover={(e) => onMetadataDragOver(e, "dimensions")}
+      ondragleave={(e) => onMetadataDragLeave(e, "dimensions")}
+      ondrop={(e) => onMetadataDrop(e, "dimensions")}
+    >
+      <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
+        {@render dragHandle("dimensions")}
+        <button
+          class="flex-1 flex items-center justify-between py-2 pr-3 text-xs text-neutral-300 hover:text-neutral-100 focus:outline-none"
+          onclick={() => (dimensionsSectionOpen = !dimensionsSectionOpen)}
+          title={dimensionsSectionOpen ? locale.t('common.collapse', { section: locale.t('generation.dimensions.title') }) : locale.t('common.expand', { section: locale.t('generation.dimensions.title') })}
+        >
+          <span class="font-medium">{locale.t('generation.dimensions.title')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform {dimensionsSectionOpen ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if dimensionsSectionOpen}
+        <div class="px-3 pb-2 pt-0.5 cursor-default">
+          <DimensionControls suggestedAspect={imageAspect} />
+        </div>
+      {/if}
+      {#if metadataDropTarget === "dimensions"}
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10 rounded-lg bg-indigo-500/10 border-2 border-dashed border-indigo-400/60">
+          <span class="text-xs font-medium text-indigo-300 bg-neutral-900/80 px-3 py-1.5 rounded-full">
+            {locale.t('common.drop_to_import', { section: locale.t('generation.dimensions.title') })}
+          </span>
+        </div>
+      {/if}
+    </div>
+  {/snippet}
+
+  {#snippet promptsSection()}
+    <div bind:this={sectionRefs['prompts']} data-drop-section="prompts" class="relative rounded-lg bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'prompts' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'} border {metadataDropTarget === 'prompts' ? 'border-indigo-500/70 ring-2 ring-indigo-500/40' : 'border-neutral-800'} transition-colors"
+      ondragenter={(e) => onMetadataDragEnter(e, "prompts")}
+      ondragover={(e) => onMetadataDragOver(e, "prompts")}
+      ondragleave={(e) => onMetadataDragLeave(e, "prompts")}
+      ondrop={(e) => onMetadataDrop(e, "prompts")}
+    >
+      <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
+        {@render dragHandle("prompts")}
+        <button
+          class="flex-1 px-3 py-2 flex items-center justify-between text-xs text-neutral-300 hover:text-neutral-100 transition-colors"
+          onclick={() => (promptsSectionOpen = !promptsSectionOpen)}
+          title={promptsSectionOpen ? locale.t('common.collapse', { section: locale.t('generation.prompts.title') }) : locale.t('common.expand', { section: locale.t('generation.prompts.title') })}
+        >
+          <span class="font-medium">{locale.t('generation.prompts.title')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform {promptsSectionOpen ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if promptsSectionOpen}
+        <div class="px-3 pb-2 pt-0.5">
+          <PromptInputs
+            showHistory={false}
+            onOpenRegionalPrompt={() => (regionalPromptModalOpen = true)}
+          />
+        </div>
+      {/if}
+      {#if metadataDropTarget === "prompts"}
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10 rounded-lg bg-indigo-500/10 border-2 border-dashed border-indigo-400/60">
+          <span class="text-xs font-medium text-indigo-300 bg-neutral-900/80 px-3 py-1.5 rounded-full">
+            {locale.t('common.drop_to_import', { section: locale.t('generation.prompts.title') })}
+          </span>
+        </div>
+      {/if}
+    </div>
+  {/snippet}
+
+  {#snippet imageInputsSection()}
+    <div bind:this={sectionRefs['imageInputs']} class="rounded-lg border border-neutral-800 bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'imageInputs' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'}">
+      <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
+        {@render dragHandle("imageInputs")}
+        <button
+          class="flex-1 px-3 py-2 flex items-center justify-between text-xs text-neutral-300 hover:text-neutral-100 transition-colors"
+          onclick={() => (imageSectionOpen = !imageSectionOpen)}
+          title={imageSectionOpen ? locale.t('common.collapse', { section: locale.t('generation.image.title') }) : locale.t('common.expand', { section: locale.t('generation.image.title') })}
+        >
+          <span class="font-medium">{locale.t('generation.image.title')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform {imageSectionOpen ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if imageSectionOpen}
+        <div class="px-3 pb-2 pt-0.5 space-y-2">
+          {#if canvas.currentPreparedInputImage}
+            <div class="rounded-md border border-amber-700/50 bg-amber-900/20 p-2 flex items-center justify-between gap-2">
+              <span class="text-[11px] text-amber-300">{locale.t('generation.image.staged_active')}</span>
+              <button
+                class="px-2 py-1 text-[11px] rounded border border-amber-600/60 text-amber-200 hover:border-amber-400 hover:text-amber-100 transition-colors"
+                onclick={() => canvas.dismissPreparedInput()}
+                title={locale.t('generation.image.remove_staged')}
+              >
+                {locale.t('generation.image.remove_staged')}
+              </button>
+            </div>
+          {/if}
+
+          <div class="{canvas.currentPreparedInputImage ? 'opacity-50 pointer-events-none' : ''}">
+            <p class="text-xs text-neutral-400 mb-1">{locale.t('generation.image.input')}</p>
+            {#if imagePreviewUrl}
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                class="relative group"
+                data-drop-zone="img-input"
+                ondragenter={(e) => { e.preventDefault(); }}
+                ondragover={(e) => { e.preventDefault(); }}
+                ondrop={handleImageDrop}
+              >
+                <img
+                  src={imagePreviewUrl}
+                  alt={locale.t('generation.image.input')}
+                  class="w-full rounded-lg border border-neutral-700 object-contain max-h-40"
+                />
+                <button
+                  class="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded bg-neutral-900/80 hover:bg-red-800 text-neutral-300 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                  onclick={clearImage}
+                  title={locale.t('common.remove')}
+                >
+                  &times;
+                </button>
+              </div>
+            {:else}
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                data-drop-zone="img-input"
+                class="border-2 border-dashed rounded-lg p-4 text-center transition-colors {dragOver ? 'border-indigo-500 bg-indigo-500/10' : 'border-neutral-700 hover:border-neutral-600'}"
+                onmouseenter={() => (imagePasteTarget = "input")}
+                onmouseleave={() => { if (imagePasteTarget === "input") imagePasteTarget = null; }}
+                ondragenter={(e) => { e.preventDefault(); dragOver = true; }}
+                ondragover={(e) => { e.preventDefault(); dragOver = true; }}
+                ondragleave={() => { dragOver = false; }}
+                ondrop={handleImageDrop}
+              >
+                {#if uploading}
+                  <div class="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p class="text-xs text-neutral-300">{locale.t('generation.image.uploading')}</p>
+                {:else}
+                  <div class="flex items-center justify-center gap-3 flex-wrap">
+                    <p class="text-[10px] text-neutral-600">{locale.t('generation.image.drag_drop_or')}</p>
+                    <button
+                      type="button"
+                      onclick={() => handleImagePaste()}
+                      class="flex items-center gap-1 text-xs text-emerald-500/70 transition-colors hover:text-emerald-400"
+                    >
+                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                      {locale.t('generation.image.ctrl_v_paste')}
+                    </button>
+                    <span class="text-neutral-700">|</span>
+                    <button
+                      type="button"
+                      onclick={browseImage}
+                      class="text-xs text-neutral-500 hover:text-neutral-300 transition-colors flex items-center gap-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      {locale.t('generation.image.select_image')}
+                    </button>
+                  </div>
+                  <p class="text-[10px] text-neutral-600 mt-2">{locale.t('generation.image.drop_paste_browse')}</p>
+                {/if}
+              </div>
+            {/if}
+          </div>
+
+          <div use:scrollCapture>
+            <label class="flex items-center justify-between text-xs text-neutral-400 mb-1">
+              <span>{locale.t('generation.image.denoise')}<InfoTip text={locale.t('generation.image.denoise_tip')} /></span>
+              <EditableValue value={generation.denoise} min={0} max={1} step={0.01} decimals={2} onchange={(v) => generation.denoise = v} />
+            </label>
+            <input
+              type="range"
+              bind:value={generation.denoise}
+              min="0"
+              max="1"
+              step="0.01"
+              class="w-full accent-indigo-500"
+            />
+          </div>
+
+          {#if generation.mode === "inpainting"}
+            <div class="rounded-md border border-neutral-800 bg-neutral-900/70 p-2.5">
+              <label class="flex items-center justify-between gap-3 text-xs text-neutral-300">
+                <span class="leading-tight">{locale.t('generation.inpaint.differential_diffusion')}<InfoTip text={locale.t('generation.inpaint.differential_tip')} /></span>
+                <input
+                  type="checkbox"
+                  bind:checked={generation.differentialDiffusion}
+                  class="accent-indigo-500 w-4 h-4 shrink-0"
+                />
+              </label>
+            </div>
+          {/if}
+
+          {#if generation.mode === "inpainting"}
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <p class="text-xs text-neutral-400">{locale.t('generation.inpaint.mask')}</p>
+                <button
+                  class="px-2 py-1 text-[10px] rounded border border-neutral-700 text-neutral-300 hover:border-red-500 hover:text-red-300 transition-colors"
+                  onclick={clearMask}
+                  title={locale.t('generation.image.remove_mask')}
+                >
+                  {locale.t('generation.image.remove_mask')}
+                </button>
+              </div>
+              {#if maskPreviewUrl}
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div
+                  class="relative group"
+                  data-drop-zone="mask-input"
+                  ondragenter={(e) => { e.preventDefault(); }}
+                  ondragover={(e) => { e.preventDefault(); }}
+                  ondrop={handleMaskDrop}
+                >
+                  <img
+                    src={maskPreviewUrl}
+                    alt={locale.t('generation.inpaint.mask')}
+                    class="w-full rounded-lg border border-neutral-700 object-contain max-h-40"
+                  />
+                  <button
+                    class="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded bg-neutral-900/80 hover:bg-red-800 text-neutral-300 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                    onclick={clearMask}
+                    title={locale.t('common.remove')}
+                  >
+                    &times;
+                  </button>
+                </div>
+              {:else}
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div
+                  data-drop-zone="mask-input"
+                  class="border-2 border-dashed rounded-lg p-4 text-center transition-colors {maskDragOver ? 'border-indigo-500 bg-indigo-500/10' : 'border-neutral-700 hover:border-neutral-600'}"
+                  onmouseenter={() => (imagePasteTarget = "mask")}
+                  onmouseleave={() => { if (imagePasteTarget === "mask") imagePasteTarget = null; }}
+                  ondragenter={(e) => { e.preventDefault(); maskDragOver = true; }}
+                  ondragover={(e) => { e.preventDefault(); maskDragOver = true; }}
+                  ondragleave={() => { maskDragOver = false; }}
+                  ondrop={handleMaskDrop}
+                >
+                  {#if uploading}
+                    <div class="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                    <p class="text-xs text-neutral-300">{locale.t('generation.image.uploading')}</p>
+                  {:else}
+                    <div class="flex items-center justify-center gap-3 flex-wrap">
+                      <p class="text-[10px] text-neutral-600">{locale.t('generation.image.drag_drop_or')}</p>
+                      <button
+                        type="button"
+                        onclick={handleMaskPaste}
+                        class="flex items-center gap-1 text-xs text-emerald-500/70 transition-colors hover:text-emerald-400"
+                      >
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                        {locale.t('generation.image.ctrl_v_paste')}
+                      </button>
+                      <span class="text-neutral-700">|</span>
+                      <button
+                        type="button"
+                        onclick={browseMask}
+                        class="text-xs text-neutral-500 hover:text-neutral-300 transition-colors flex items-center gap-1"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        {locale.t('generation.image.select_mask')}
+                      </button>
+                    </div>
+                    <p class="text-[10px] text-neutral-600 mt-2">{locale.t('generation.image.drop_paste_browse_mask')}</p>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+
+            <div use:scrollCapture>
+              <div class="flex items-center justify-between text-xs mb-0.5">
+                <span class="text-neutral-400">{locale.t('generation.inpaint.grow_mask')}<InfoTip text={locale.t('generation.inpaint.grow_mask_tip')} /></span>
+                <span class="text-neutral-300 tabular-nums">{generation.growMaskBy}px</span>
+              </div>
+              <input
+                type="range"
+                bind:value={generation.growMaskBy}
+                min="0"
+                max="64"
+                step="1"
+                class="w-full accent-indigo-500"
+              />
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/snippet}
+
+  {#snippet inpaintLayersSection()}
+    <div bind:this={sectionRefs['inpaintLayers']} class="rounded-lg border border-neutral-800 bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'inpaintLayers' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'}">
+      <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
+        {@render dragHandle("inpaintLayers")}
+        <button
+          class="flex-1 px-3 py-2 flex items-center justify-between text-xs text-neutral-300 hover:text-neutral-100 transition-colors"
+          onclick={() => (layersSectionOpen = !layersSectionOpen)}
+          title={layersSectionOpen ? locale.t('common.collapse', { section: locale.t('generation.inpaint.title') }) : locale.t('common.expand', { section: locale.t('generation.inpaint.title') })}
+        >
+          <span class="font-medium">{locale.t('generation.inpaint.title')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform {layersSectionOpen ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if layersSectionOpen}
+        <div class="px-3 pb-2 pt-0.5 space-y-2">
+          <div class="grid grid-cols-2 gap-1">
+            <button
+              onclick={() => canvas.setInpaintDrawMode("mask")}
+              class="px-2 py-1 text-[10px] rounded border transition-colors {canvas.inpaintDrawMode === 'mask'
+                ? 'border-indigo-500 text-indigo-300 bg-indigo-500/10'
+                : 'border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-200'}"
+              title={locale.t('generation.inpaint.inpaint_mask')}
+            >
+              {locale.t('generation.inpaint.inpaint_mask')}
+            </button>
+            <button
+              onclick={() => canvas.setInpaintDrawMode("regular")}
+              class="px-2 py-1 text-[10px] rounded border transition-colors {canvas.inpaintDrawMode === 'regular'
+                ? 'border-indigo-500 text-indigo-300 bg-indigo-500/10'
+                : 'border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-200'}"
+              title={locale.t('generation.inpaint.regular_inpaint')}
+            >
+              {locale.t('generation.inpaint.regular_inpaint')}
+            </button>
+          </div>
+
+          {#if canvas.isCanvasMode}
+            <LayerPanel />
+          {:else}
+            <div class="space-y-2">
+              <p class="text-[11px] text-neutral-500">{locale.t('generation.inpaint.canvas_off')}</p>
+              <button
+                onclick={() => {
+                  canvas.isCanvasMode = true;
+                  if (canvas.layers.length === 0) {
+                    canvas.initCanvas(generation.width, generation.height);
+                  }
+                }}
+                class="w-full px-2 py-1.5 text-[11px] rounded border border-neutral-700 text-neutral-300 hover:border-indigo-500 hover:text-indigo-300 transition-colors"
+                title={locale.t('generation.inpaint.enable_canvas')}
+              >
+                {locale.t('generation.inpaint.enable_canvas')}
+              </button>
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/snippet}
+
+  {#snippet generationSettingsSection()}
+    <div bind:this={sectionRefs['generationSettings']} class="rounded-lg border border-neutral-800 bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'generationSettings' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'}">
+      <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
+        {@render dragHandle("generationSettings")}
+        <button
+          class="flex-1 px-3 py-2 flex items-center justify-between text-xs text-neutral-300 hover:text-neutral-100 transition-colors"
+          onclick={() => (controlsSectionOpen = !controlsSectionOpen)}
+          title={controlsSectionOpen ? locale.t('common.collapse', { section: locale.t('generation.settings.title') }) : locale.t('common.expand', { section: locale.t('generation.settings.title') })}
+        >
+          <span class="font-medium">{locale.t('generation.settings.title')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform {controlsSectionOpen ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if controlsSectionOpen}
+        <div class="px-3 pb-2 pt-0.5 space-y-3">
+          <ModelSelector />
+
+          <div class="border-t border-neutral-800 pt-3">
+            <SamplerSettings />
+          </div>
+
+          <div class="border-t border-neutral-800 pt-3">
+            <UpscaleSettings />
+          </div>
+        </div>
+      {/if}
+    </div>
+  {/snippet}
+
+  {#snippet modelSection()}
+    <div bind:this={sectionRefs['model']} data-drop-section="model" class="relative rounded-lg bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'model' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'} border {metadataDropTarget === 'model' ? 'border-indigo-500/70 ring-2 ring-indigo-500/40' : 'border-neutral-800'} transition-colors"
+      ondragenter={(e) => onMetadataDragEnter(e, "model")}
+      ondragover={(e) => onMetadataDragOver(e, "model")}
+      ondragleave={(e) => onMetadataDragLeave(e, "model")}
+      ondrop={(e) => onMetadataDrop(e, "model")}
+    >
+      <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
+        {@render dragHandle("model")}
+        <button
+          class="flex-1 px-3 py-2 flex items-center justify-between text-xs text-neutral-300 hover:text-neutral-100 transition-colors"
+          onclick={() => (modelSectionOpen = !modelSectionOpen)}
+          title={modelSectionOpen ? locale.t('common.collapse', { section: locale.t('generation.model.title') }) : locale.t('common.expand', { section: locale.t('generation.model.title') })}
+        >
+          <span class="font-medium">{locale.t('generation.model.title')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform {modelSectionOpen ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if modelSectionOpen}
+        <div class="px-3 pb-2 pt-0.5 space-y-3">
+          <ModelSelector />
+        </div>
+      {/if}
+      {#if metadataDropTarget === "model"}
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10 rounded-lg bg-indigo-500/10 border-2 border-dashed border-indigo-400/60">
+          <span class="text-xs font-medium text-indigo-300 bg-neutral-900/80 px-3 py-1.5 rounded-full">
+            {locale.t('common.drop_to_import', { section: locale.t('generation.model.title') })}
+          </span>
+        </div>
+      {/if}
+    </div>
+  {/snippet}
+
+  {#snippet samplerSection()}
+    <div bind:this={sectionRefs['sampler']} data-drop-section="sampler" class="relative rounded-lg bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'sampler' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'} border {metadataDropTarget === 'sampler' ? 'border-indigo-500/70 ring-2 ring-indigo-500/40' : 'border-neutral-800'} transition-colors"
+      ondragenter={(e) => onMetadataDragEnter(e, "sampler")}
+      ondragover={(e) => onMetadataDragOver(e, "sampler")}
+      ondragleave={(e) => onMetadataDragLeave(e, "sampler")}
+      ondrop={(e) => onMetadataDrop(e, "sampler")}
+    >
+      <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
+        {@render dragHandle("sampler")}
+        <button
+          class="flex-1 px-3 py-2 flex items-center justify-between text-xs text-neutral-300 hover:text-neutral-100 transition-colors"
+          onclick={() => (samplerSectionOpen = !samplerSectionOpen)}
+          title={samplerSectionOpen ? locale.t('common.collapse', { section: locale.t('generation.sampler.title') }) : locale.t('common.expand', { section: locale.t('generation.sampler.title') })}
+        >
+          <span class="font-medium">{locale.t('generation.sampler.title')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform {samplerSectionOpen ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if samplerSectionOpen}
+        <div class="px-3 pb-2 pt-0.5 space-y-3">
+          <SamplerSettings />
+        </div>
+      {/if}
+      {#if metadataDropTarget === "sampler"}
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10 rounded-lg bg-indigo-500/10 border-2 border-dashed border-indigo-400/60">
+          <span class="text-xs font-medium text-indigo-300 bg-neutral-900/80 px-3 py-1.5 rounded-full">
+            {locale.t('common.drop_to_import', { section: locale.t('generation.sampler.title') })}
+          </span>
+        </div>
+      {/if}
+    </div>
+  {/snippet}
+
+  {#snippet controlnetSection()}
+    <div bind:this={sectionRefs['controlnet']} class="rounded-lg border border-neutral-800 bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'controlnet' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'}">
+      <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
+        {@render dragHandle("controlnet")}
+        <button
+          class="flex-1 px-3 py-2 flex items-center justify-between text-xs text-neutral-300 hover:text-neutral-100 transition-colors"
+          onclick={() => (controlnetSectionOpen = !controlnetSectionOpen)}
+          title={controlnetSectionOpen ? locale.t('common.collapse', { section: locale.t('generation.controlnet.title') }) : locale.t('common.expand', { section: locale.t('generation.controlnet.title') })}
+        >
+          <span class="font-medium">{locale.t('generation.controlnet.title')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform {controlnetSectionOpen ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if controlnetSectionOpen}
+        <div class="px-3 pb-2 pt-0.5 space-y-3">
+          <ControlNetSettings />
+        </div>
+      {/if}
+    </div>
+  {/snippet}
+
+  {#snippet styleTransferSection()}
+    <div bind:this={sectionRefs['styleTransfer']} class="rounded-lg border border-neutral-800 bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'styleTransfer' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'}">
+      <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
+        {@render dragHandle("styleTransfer")}
+        <button
+          class="flex-1 px-3 py-2 flex items-center justify-between text-xs text-neutral-300 hover:text-neutral-100 transition-colors"
+          onclick={() => (styleTransferSectionOpen = !styleTransferSectionOpen)}
+          title={styleTransferSectionOpen ? locale.t('common.collapse', { section: locale.t('generation.style_transfer.title') }) : locale.t('common.expand', { section: locale.t('generation.style_transfer.title') })}
+        >
+          <span class="font-medium">{locale.t('generation.style_transfer.title')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform {styleTransferSectionOpen ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if styleTransferSectionOpen}
+        <div class="px-3 pb-2 pt-0.5 space-y-3">
+          <StyleTransferSettings />
+        </div>
+      {/if}
+    </div>
+  {/snippet}
+
+  {#snippet imageEditSection()}
+    <div bind:this={sectionRefs['imageEdit']} class="rounded-lg border border-neutral-800 bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'imageEdit' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'}">
+      <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
+        {@render dragHandle("imageEdit")}
+        <button
+          class="flex-1 px-3 py-2 flex items-center justify-between text-xs text-neutral-300 hover:text-neutral-100 transition-colors"
+          onclick={() => (imageEditSectionOpen = !imageEditSectionOpen)}
+          title={imageEditSectionOpen ? locale.t('common.collapse', { section: locale.t('generation.image_edit.title') }) : locale.t('common.expand', { section: locale.t('generation.image_edit.title') })}
+        >
+          <span class="font-medium">{locale.t('generation.image_edit.title')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform {imageEditSectionOpen ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if imageEditSectionOpen}
+        <div class="px-3 pb-2 pt-0.5 space-y-3">
+          <ImageEditSettings />
+        </div>
+      {/if}
+    </div>
+  {/snippet}
+
+  {#snippet videoSettingsSection()}
+    <div bind:this={sectionRefs['videoSettings']} class="rounded-lg border border-neutral-800 bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'videoSettings' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'}">
+      <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
+        {@render dragHandle("videoSettings")}
+        <button
+          class="flex-1 px-3 py-2 flex items-center justify-between text-xs text-neutral-300 hover:text-neutral-100 transition-colors"
+          onclick={() => (videoSettingsSectionOpen = !videoSettingsSectionOpen)}
+          title={videoSettingsSectionOpen ? locale.t('common.collapse', { section: locale.t('generation.video.title') }) : locale.t('common.expand', { section: locale.t('generation.video.title') })}
+        >
+          <span class="font-medium">{locale.t('generation.video.title')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform {videoSettingsSectionOpen ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if videoSettingsSectionOpen}
+        <div class="px-3 pb-2 pt-0.5 space-y-3">
+          <VideoSettingsPanel />
+        </div>
+      {/if}
+    </div>
+  {/snippet}
+
+  {#snippet facefixSection()}
+    <div bind:this={sectionRefs['facefix']} data-drop-section="facefix" class="relative rounded-lg bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'facefix' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'} border {metadataDropTarget === 'facefix' ? 'border-indigo-500/70 ring-2 ring-indigo-500/40' : 'border-neutral-800'} transition-colors"
+      ondragenter={(e) => onMetadataDragEnter(e, "facefix")}
+      ondragover={(e) => onMetadataDragOver(e, "facefix")}
+      ondragleave={(e) => onMetadataDragLeave(e, "facefix")}
+      ondrop={(e) => onMetadataDrop(e, "facefix")}
+    >
+      <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
+        {@render dragHandle("facefix")}
+        <button
+          class="flex-1 px-3 py-2 flex items-center justify-between text-xs text-neutral-300 hover:text-neutral-100 transition-colors"
+          onclick={() => (facefixSectionOpen = !facefixSectionOpen)}
+          title={facefixSectionOpen ? locale.t('common.collapse', { section: locale.t('generation.facefix.title') }) : locale.t('common.expand', { section: locale.t('generation.facefix.title') })}
+        >
+          <span class="font-medium">{locale.t('generation.facefix.title')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform {facefixSectionOpen ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if facefixSectionOpen}
+        <div class="px-3 pb-2 pt-0.5 space-y-3">
+          <FaceFixSettings />
+        </div>
+      {/if}
+      {#if metadataDropTarget === "facefix"}
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10 rounded-lg bg-indigo-500/10 border-2 border-dashed border-indigo-400/60">
+          <span class="text-xs font-medium text-indigo-300 bg-neutral-900/80 px-3 py-1.5 rounded-full">
+            {locale.t('common.drop_to_import', { section: locale.t('generation.facefix.title') })}
+          </span>
+        </div>
+      {/if}
+    </div>
+  {/snippet}
+
+  {#snippet upscaleHistorySection()}
+    <div bind:this={sectionRefs['upscaleHistory']} data-drop-section="upscaleHistory" class="relative rounded-lg bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'upscaleHistory' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'} border {metadataDropTarget === 'upscaleHistory' ? 'border-indigo-500/70 ring-2 ring-indigo-500/40' : 'border-neutral-800'} transition-colors"
+      ondragenter={(e) => onMetadataDragEnter(e, "upscaleHistory")}
+      ondragover={(e) => onMetadataDragOver(e, "upscaleHistory")}
+      ondragleave={(e) => onMetadataDragLeave(e, "upscaleHistory")}
+      ondrop={(e) => onMetadataDrop(e, "upscaleHistory")}
+    >
+      <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
+        {@render dragHandle("upscaleHistory")}
+        <button
+          class="flex-1 px-3 py-2 flex items-center justify-between text-xs text-neutral-300 hover:text-neutral-100 transition-colors"
+          onclick={() => (postSectionOpen = !postSectionOpen)}
+          title={postSectionOpen ? locale.t('common.collapse', { section: locale.t('generation.upscale.title') }) : locale.t('common.expand', { section: locale.t('generation.upscale.title') })}
+        >
+          <span class="font-medium">{locale.t('generation.upscale.title')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform {postSectionOpen ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if postSectionOpen}
+        <div class="px-3 pb-2 pt-0.5 space-y-3">
+          <UpscaleSettings />
+        </div>
+      {/if}
+      {#if metadataDropTarget === "upscaleHistory"}
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10 rounded-lg bg-indigo-500/10 border-2 border-dashed border-indigo-400/60">
+          <span class="text-xs font-medium text-indigo-300 bg-neutral-900/80 px-3 py-1.5 rounded-full">
+            {locale.t('common.drop_to_import', { section: locale.t('generation.upscale.title') })}
+          </span>
+        </div>
+      {/if}
+    </div>
+  {/snippet}
+
+  {#snippet renderSection(section: SectionId)}
+    {#if section === "dimensions"}
+      {@render dimensionsSection()}
+    {:else if section === "prompts"}
+      {@render promptsSection()}
+    {:else if section === "imageInputs"}
+      {@render imageInputsSection()}
+    {:else if section === "imageEdit"}
+      {@render imageEditSection()}
+    {:else if section === "videoSettings"}
+      {@render videoSettingsSection()}
+    {:else if section === "inpaintLayers"}
+      {@render inpaintLayersSection()}
+    {:else if section === "generationSettings"}
+      {@render generationSettingsSection()}
+    {:else if section === "model"}
+      {@render modelSection()}
+    {:else if section === "sampler"}
+      {@render samplerSection()}
+    {:else if section === "controlnet"}
+      {@render controlnetSection()}
+    {:else if section === "styleTransfer"}
+      {@render styleTransferSection()}
+    {:else if section === "facefix"}
+      {@render facefixSection()}
+    {:else if section === "upscaleHistory"}
+      {@render upscaleHistorySection()}
+    {/if}
+  {/snippet}
+
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="flex flex-col h-full select-none {draggingSection ? 'cursor-grabbing' : ''}"
+    onmousemove={onPointerMove}
+    onmouseup={onPointerUp}
+    onmouseleave={onPointerUp}
+  >
+    <!-- Main row: side panels + preview. The bottom panel spans the full width below this row. -->
+    <div class="flex flex-1 min-h-0">
+    {#if mobileFriendly}
+      <div class="fixed top-2 left-1/2 -translate-x-1/2 z-50 w-[min(96vw,34rem)] px-2">
+        <div class="w-full flex gap-1 bg-neutral-900 rounded-lg p-1 border border-neutral-700 shadow">
+          {#each modes as mode}
+            <button
+              onclick={() => {
+                generation.mode = mode.id;
+                if (mode.id !== "inpainting") canvas.isCanvasMode = false;
+              }}
+              class="min-w-0 flex-1 whitespace-nowrap text-[11px] leading-none px-2.5 py-2 rounded-md transition-colors {generation.mode === mode.id
+                ? 'bg-neutral-700 text-white'
+                : 'text-neutral-400 hover:text-neutral-200'}"
+            >
+              {mode.label()}
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
+    {#if leftHasSections || controlsSide === "left" || draggingSection}
+      {#if !leftCollapsed || mobileFriendly}
+        <div
+          bind:this={leftColumnRef}
+          use:wheelScrollLock
+          class="{mobileFriendly
+            ? 'fixed left-0 right-0 top-0 bg-neutral-950 flex flex-col overflow-hidden will-change-transform'
+            : 'overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] px-3 pt-2 flex flex-col gap-2 shrink-0 border-r'} {draggingSection && pendingDrop?.side === 'left' ? 'border-indigo-500/50' : 'border-transparent'} {compare.enabled ? 'compare-cell-glow' : ''}"
+          style={mobileFriendly
+            ? `bottom: calc(env(safe-area-inset-bottom) + 4rem); transform: ${mobilePanelTransform("left")}; transition: ${mobilePanelTransition("left")}; z-index: ${mobilePanelZIndex("left")};${compare.enabled ? ` --compare-color: ${compare.activeColor};` : ""}`
+            : `width: ${leftWidth}px${compare.enabled ? `; --compare-color: ${compare.activeColor}` : ""}`}
+        >
+        {#if mobileFriendly}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            role="button"
+            tabindex="0"
+            onpointerdown={(e) => onMobileHandleDown("left", e)}
+            onpointermove={(e) => onMobileHandleMove("left", e)}
+            onpointerup={(e) => onMobileHandleUp("left", e)}
+            onpointercancel={() => onMobileHandleCancel("left")}
+            ondblclick={toggleLeftPanel}
+            class="absolute right-0 top-24 bottom-4 z-20 w-3.5 rounded-l-full border border-neutral-700/80 bg-neutral-800/90 hover:bg-indigo-700/70 transition-colors touch-none flex items-center justify-center"
+            title={leftCollapsed ? locale.t('generation.panel.expand_left') : locale.t('generation.panel.collapse_left')}
+            aria-label={leftCollapsed ? locale.t('generation.panel.expand_left') : locale.t('generation.panel.collapse_left')}
+          >
+            <div class="flex flex-col gap-1 text-neutral-300">
+              <span class="block w-1 h-1 rounded-full bg-current"></span>
+              <span class="block w-1 h-1 rounded-full bg-current"></span>
+              <span class="block w-1 h-1 rounded-full bg-current"></span>
+            </div>
+          </div>
+        {/if}
+        <div class="{mobileFriendly ? 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden pl-3 pr-5 pt-20 pb-6 flex flex-col gap-2' : 'contents'}">
+        {#if controlsSide === "left" && !mobileFriendly}
+          <div class="sticky top-0 z-10 bg-neutral-950 -mx-3 px-3 -mt-2 pt-2 pb-2">
+            <div class="flex gap-1.5 items-center">
+              <div class="flex gap-1 bg-neutral-900 rounded-lg p-1 flex-1">
+                {#each modes as mode}
+                  <button
+                    onclick={() => {
+                      generation.mode = mode.id;
+                      if (mode.id !== "inpainting") canvas.isCanvasMode = false;
+                    }}
+                    class="flex-1 text-xs py-1.5 rounded-md transition-colors {generation.mode === mode.id
+                      ? 'bg-neutral-700 text-white'
+                      : 'text-neutral-400 hover:text-neutral-200'}"
+                  >
+                    {mode.label()}
+                  </button>
+                {/each}
+              </div>
+              <button
+                onclick={swapPanels}
+                class="p-1.5 rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 transition-colors"
+                title={locale.t('generation.swap_panels')}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7H20m0 0l-4-4m4 4l-4 4"/><path d="M16 17H4m0 0l4 4m-4-4l4-4"/></svg>
+              </button>
+            </div>
+
+            {#if generation.mode === "inpainting"}
+              <button
+                onclick={() => {
+                  canvas.isCanvasMode = !canvas.isCanvasMode;
+                  if (canvas.isCanvasMode && canvas.layers.length === 0) {
+                    canvas.initCanvas(generation.width, generation.height);
+                  }
+                }}
+                class="flex items-center justify-between w-full px-3 py-2 mt-2 rounded-lg text-xs transition-colors {canvas.isCanvasMode
+                  ? 'bg-indigo-600/20 border border-indigo-500/50 text-indigo-300'
+                  : 'bg-neutral-800 border border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:border-neutral-600'}"
+              >
+                <span class="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+                  {locale.t('generation.inpaint.canvas_editor')}
+                </span>
+                <span class="text-[10px] {canvas.isCanvasMode ? 'text-indigo-400' : 'text-neutral-500'}">
+                  {canvas.isCanvasMode ? locale.t('common.on') : locale.t('common.off')}
+                </span>
+              </button>
+            {/if}
+          </div>
+        {/if}
+
+        {@render sectionDropZone("left", 0)}
+        {#each leftRenderSections as section, i}
+          {@render renderSection(section)}
+          {@render sectionDropZone("left", i + 1)}
+        {/each}
+
+        {#if controlsSide === "left"}
+          <div class="sticky bottom-0 z-20 mt-auto border-t border-neutral-800 bg-neutral-950 rounded-t-lg px-3 pt-3 pb-5">
+            <h3 class="text-xs text-neutral-400 mb-1.5 font-medium">{locale.t('generation.generate')}</h3>
+            <GenerateButton canvasEditorRef={canvasEditorRef} />
+          </div>
+        {/if}
+        </div>
+        </div>
+      {/if}
+    {/if}
+
+    {#if !mobileFriendly && (leftHasSections || controlsSide === "left" || draggingSection)}
+      <!-- Left divider with collapse button -->
+      <div class="relative shrink-0 flex flex-col items-center group">
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="w-1 flex-1 cursor-col-resize hover:bg-indigo-500/40 transition-colors {dragging === 'left' ? 'bg-indigo-500/60' : 'bg-neutral-800'}"
+          onmousedown={(e) => onDividerDown("left", e)}
+          ondblclick={resetLeftWidth}
+          title={locale.t('generation.drag_to_resize')}
+        ></div>
+        <button
+          onclick={toggleLeftPanel}
+          class="absolute top-1/2 -translate-y-1/2 left-0 z-20 w-6 h-12 flex items-center justify-center rounded-r border border-l-0 transition-colors {leftCollapsed
+            ? 'bg-indigo-600 border-indigo-500/70 text-white hover:bg-indigo-500'
+            : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700'}"
+          title={leftCollapsed ? locale.t('generation.panel.expand_left') : locale.t('generation.panel.collapse_left')}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform {leftCollapsed ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+      </div>
+    {/if}
+
+    {#if canvas.isCanvasMode}
+      <div class="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <CanvasEditor bind:this={canvasEditorRef} />
+      </div>
+    {:else}
+      <div class="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <!-- Preview area -->
+        <div
+          class="relative flex-1 min-h-0 p-6 {mobileFriendly ? 'pt-20' : ''} flex flex-col gap-4 overflow-hidden"
+        >
+          <ProgressBar />
+          <!-- The preview is a square (aspect-square), so it must be sized to the
+               SMALLER of the frame's width/height or it overflows. `max-w`/`max-h`
+               can't do this: clamping one axis of an aspect-ratio box doesn't feed
+               back into the other. `container-type: size` exposes the frame height
+               as `cqh`, so min(100%, 100cqh) picks the fitting side. -->
+          <div class="flex-1 min-h-0 flex items-center justify-center [container-type:size]">
+            <div class="w-[min(100%,100cqh)]">
+              <PreviewImage />
+            </div>
+          </div>
+
+          <!-- The H3 guide covers the preview rather than the screen, on purpose:
+               it is read while writing the prompt, so the side panels must stay
+               lit and clickable. Padding mirrors this container's own. -->
+          {#if h3Guide.open && generation.mode === "video"}
+            <div class="absolute inset-0 z-20 p-6 {mobileFriendly ? 'pt-20' : ''}">
+              <H3PromptGuidePanel onClose={() => h3Guide.hide()} />
+            </div>
+          {/if}
+        </div>
+      </div>
+    {/if}
+
+    {#if !mobileFriendly && (rightHasSections || controlsSide === "right" || draggingSection)}
+      <!-- Right divider with collapse button -->
+      <div class="relative shrink-0 flex flex-col items-center group">
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="w-1 flex-1 cursor-col-resize hover:bg-indigo-500/40 transition-colors {dragging === 'right' ? 'bg-indigo-500/60' : 'bg-neutral-800'}"
+          onmousedown={(e) => onDividerDown("right", e)}
+          ondblclick={resetRightWidth}
+          title={locale.t('generation.drag_to_resize')}
+        ></div>
+        <button
+          onclick={toggleRightPanel}
+          class="absolute top-1/2 -translate-y-1/2 right-0 z-20 w-6 h-12 flex items-center justify-center rounded-l border border-r-0 transition-colors {rightCollapsed
+            ? 'bg-indigo-600 border-indigo-500/70 text-white hover:bg-indigo-500'
+            : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700'}"
+          title={rightCollapsed ? locale.t('generation.panel.expand_right') : locale.t('generation.panel.collapse_right')}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform {rightCollapsed ? '' : 'rotate-180'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+      </div>
+    {/if}
+
+    {#if (rightHasSections || controlsSide === "right" || draggingSection) && (!rightCollapsed || mobileFriendly)}
+      <div
+        bind:this={rightColumnRef}
+        use:wheelScrollLock
+        class="{mobileFriendly
+          ? 'fixed left-0 right-0 top-0 bg-neutral-950 flex flex-col overflow-hidden will-change-transform'
+          : 'overflow-y-auto [scrollbar-gutter:stable] p-3 flex flex-col gap-2 shrink-0 border-l'} {draggingSection && pendingDrop?.side === 'right' ? 'border-indigo-500/50' : 'border-transparent'} {compare.enabled ? 'compare-cell-glow' : ''}"
+        style={mobileFriendly
+          ? `bottom: calc(env(safe-area-inset-bottom) + 4rem); transform: ${mobilePanelTransform("right")}; transition: ${mobilePanelTransition("right")}; z-index: ${mobilePanelZIndex("right")};${compare.enabled ? ` --compare-color: ${compare.activeColor};` : ""}`
+          : `width: ${rightWidth}px${compare.enabled ? `; --compare-color: ${compare.activeColor}` : ""}`}
+      >
+        {#if mobileFriendly}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            role="button"
+            tabindex="0"
+            onpointerdown={(e) => onMobileHandleDown("right", e)}
+            onpointermove={(e) => onMobileHandleMove("right", e)}
+            onpointerup={(e) => onMobileHandleUp("right", e)}
+            onpointercancel={() => onMobileHandleCancel("right")}
+            ondblclick={toggleRightPanel}
+            class="absolute left-0 top-24 bottom-4 z-20 w-3.5 rounded-r-full border border-neutral-700/80 bg-neutral-800/90 hover:bg-indigo-700/70 transition-colors touch-none flex items-center justify-center"
+            title={rightCollapsed ? locale.t('generation.panel.expand_right') : locale.t('generation.panel.collapse_right')}
+            aria-label={rightCollapsed ? locale.t('generation.panel.expand_right') : locale.t('generation.panel.collapse_right')}
+          >
+            <div class="flex flex-col gap-1 text-neutral-300">
+              <span class="block w-1 h-1 rounded-full bg-current"></span>
+              <span class="block w-1 h-1 rounded-full bg-current"></span>
+              <span class="block w-1 h-1 rounded-full bg-current"></span>
+            </div>
+          </div>
+        {/if}
+        <div class="{mobileFriendly ? 'flex-1 min-h-0 overflow-y-auto pl-5 pr-3 pt-20 pb-6 space-y-2' : 'contents'}">
+        {#if controlsSide === "right" && !mobileFriendly}
+          <div class="sticky top-0 z-10 bg-neutral-950 -mx-3 px-3 -mt-3 pt-3 pb-2">
+            <div class="flex gap-1.5 items-center">
+              <div class="flex gap-1 bg-neutral-900 rounded-lg p-1 flex-1">
+                {#each modes as mode}
+                  <button
+                    onclick={() => {
+                      generation.mode = mode.id;
+                      if (mode.id !== "inpainting") canvas.isCanvasMode = false;
+                    }}
+                    class="flex-1 text-xs py-1.5 rounded-md transition-colors {generation.mode === mode.id
+                      ? 'bg-neutral-700 text-white'
+                      : 'text-neutral-400 hover:text-neutral-200'}"
+                  >
+                    {mode.label()}
+                  </button>
+                {/each}
+              </div>
+              <button
+                onclick={swapPanels}
+                class="p-1.5 rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 transition-colors"
+                title={locale.t('generation.swap_panels')}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7H20m0 0l-4-4m4 4l-4 4"/><path d="M16 17H4m0 0l4 4m-4-4l4-4"/></svg>
+              </button>
+            </div>
+
+            {#if generation.mode === "inpainting"}
+              <button
+                onclick={() => {
+                  canvas.isCanvasMode = !canvas.isCanvasMode;
+                  if (canvas.isCanvasMode && canvas.layers.length === 0) {
+                    canvas.initCanvas(generation.width, generation.height);
+                  }
+                }}
+                class="flex items-center justify-between w-full px-3 py-2 mt-2 rounded-lg text-xs transition-colors {canvas.isCanvasMode
+                  ? 'bg-indigo-600/20 border border-indigo-500/50 text-indigo-300'
+                  : 'bg-neutral-800 border border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:border-neutral-600'}"
+              >
+                <span class="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+                  {locale.t('generation.inpaint.canvas_editor')}
+                </span>
+                <span class="text-[10px] {canvas.isCanvasMode ? 'text-indigo-400' : 'text-neutral-500'}">
+                  {canvas.isCanvasMode ? locale.t('common.on') : locale.t('common.off')}
+                </span>
+              </button>
+            {/if}
+          </div>
+        {/if}
+
+        {@render sectionDropZone("right", 0)}
+        {#each rightRenderSections as section, i}
+          {@render renderSection(section)}
+          {@render sectionDropZone("right", i + 1)}
+        {/each}
+
+        {#if controlsSide === "right"}
+          <div class="sticky bottom-0 z-20 mt-auto border-t border-neutral-800 bg-neutral-950 rounded-t-lg px-3 pt-3 pb-5">
+            <h3 class="text-xs text-neutral-400 mb-1.5 font-medium">{locale.t('generation.generate')}</h3>
+            <GenerateButton canvasEditorRef={canvasEditorRef} />
+          </div>
+        {/if}
+        </div>
+      </div>
+    {/if}
+    </div>
+
+    <!-- Bottom panel (LoRAs / Images / Prompts) — full width, below the side panels -->
+    {#if !mobileFriendly && !canvas.isCanvasMode}
+      <div class="relative shrink-0 flex items-center group">
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="h-1 flex-1 cursor-row-resize hover:bg-indigo-500/40 transition-colors {dragging === 'bottom' ? 'bg-indigo-500/60' : 'bg-neutral-800'}"
+          onmousedown={(e) => onDividerDown("bottom", e)}
+          ondblclick={resetBottomHeight}
+          title={locale.t('generation.drag_to_resize')}
+        ></div>
+        <button
+          onclick={toggleBottomPanel}
+          class="absolute left-1/2 -translate-x-1/2 bottom-0 z-20 h-6 w-12 flex items-center justify-center rounded-t border border-b-0 transition-colors {bottomCollapsed
+            ? 'bg-indigo-600 border-indigo-500/70 text-white hover:bg-indigo-500'
+            : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700'}"
+          title={bottomCollapsed ? locale.t('generation.panel.expand_bottom') : locale.t('generation.panel.collapse_bottom')}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform {bottomCollapsed ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if !bottomCollapsed}
+        <div
+          class="overflow-hidden shrink-0 min-w-0 border-t border-neutral-800/50"
+          style="height: {bottomHeight}px"
+        >
+          <BottomPanel onupscale={upscaleImage} oninpaint={inpaintImage} onrefine={refineImage} oncontextmenu={handleSessionContextMenu} />
+        </div>
+      {/if}
+    {/if}
+  </div>
+
+  {#if mobileFriendly}
+    <!--
+      Mobile bottom panel — always rendered so the grab handle stays in the DOM throughout a drag.
+      The OUTER mask is a stable, transparent, pointer-events:none clipping region between the mode
+      switcher and the bottom navigation. The INNER content (handle + BottomPanel) is what actually
+      translates: when closed, only the handle peeks at the bottom of the mask area (just above the
+      nav); when open, it slides up to fill the mask. Because the mask itself never moves, the
+      panel's background can't slide over the bottom navigation.
+    -->
+    <div
+      class="fixed left-0 right-0 overflow-hidden pointer-events-none"
+      style="top: 4rem; bottom: calc(env(safe-area-inset-bottom) + 4rem); z-index: {mobilePanelZIndex('bottom')};"
+    >
+      <div
+        class="absolute inset-0 bg-neutral-950 pointer-events-auto flex flex-col will-change-transform shadow-[0_-8px_24px_rgba(0,0,0,0.4)]"
+        style="transform: {mobilePanelTransform('bottom')}; transition: {mobilePanelTransition('bottom')};"
+      >
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          role="button"
+          tabindex="0"
+          onpointerdown={(e) => onMobileHandleDown("bottom", e)}
+          onpointermove={(e) => onMobileHandleMove("bottom", e)}
+          onpointerup={(e) => onMobileHandleUp("bottom", e)}
+          onpointercancel={() => onMobileHandleCancel("bottom")}
+          ondblclick={toggleBottomPanel}
+          class="shrink-0 mx-8 h-3.5 rounded-b-full border border-neutral-700/80 bg-neutral-800/90 hover:bg-indigo-700/70 transition-colors touch-none flex items-center justify-center"
+          title={bottomCollapsed ? locale.t('generation.panel.expand_bottom') : locale.t('generation.panel.collapse_bottom')}
+          aria-label={bottomCollapsed ? locale.t('generation.panel.expand_bottom') : locale.t('generation.panel.collapse_bottom')}
+        >
+          <div class="flex gap-1 text-neutral-300">
+            <span class="block w-1 h-1 rounded-full bg-current"></span>
+            <span class="block w-1 h-1 rounded-full bg-current"></span>
+            <span class="block w-1 h-1 rounded-full bg-current"></span>
+          </div>
+        </div>
+        <div class="flex-1 min-h-0 border-t border-neutral-800/50 overflow-hidden">
+          <BottomPanel onupscale={upscaleImage} oninpaint={inpaintImage} onrefine={refineImage} oncontextmenu={handleSessionContextMenu} />
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  {#if draggingSection && dragCloneHtml}
+    <div
+      class="fixed z-70 pointer-events-none"
+      style="left: {dragMouseX - dragOffsetX}px; top: {dragMouseY - dragOffsetY}px; width: {dragWidth}px;"
+    >
+      <div
+        class="rounded-lg border border-indigo-400/60 shadow-2xl shadow-indigo-900/30 scale-[1.02] opacity-90"
+        style="filter: brightness(1.1);"
+      >
+        {@html dragCloneHtml}
+      </div>
+    </div>
+  {/if}
+
+  <ContextMenu items={sessionCtxMenuItems} x={ctxMenuX} y={ctxMenuY} visible={showCtxMenu} onclose={() => showCtxMenu = false} />
+
+  {#if showInterrogateModal}
+    <InterrogateModal
+      result={interrogateResult}
+      loading={interrogateLoading}
+      stage={interrogateStage}
+      downloadProgress={interrogateDownloadProgress}
+      imagePreviewUrl={interrogateImageUrl}
+      error={interrogateError}
+      onclose={() => { showInterrogateModal = false; interrogateResult = null; interrogateImageUrl = null; interrogateError = null; }}
+    />
+  {/if}
+
+  {#if regionalPromptModalOpen}
+    <RegionalPromptModal onclose={() => (regionalPromptModalOpen = false)} />
+  {/if}

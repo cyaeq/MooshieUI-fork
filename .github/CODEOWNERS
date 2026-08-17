@@ -1,0 +1,12 @@
+# Security-sensitive paths — require owner review on every PR that touches these files.
+# CODEOWNERS enforcement is activated by branch protection (require_code_owner_reviews: true).
+# Run scripts/setup-branch-protection.sh once after cloning to enable it.
+
+/.github/workflows/    @Mooshieblob1
+/.githooks/            @Mooshieblob1
+/scripts/              @Mooshieblob1
+/src-tauri/            @Mooshieblob1
+/package.json          @Mooshieblob1
+/package-lock.json     @Mooshieblob1
+/src-tauri/Cargo.toml  @Mooshieblob1
+/src-tauri/Cargo.lock  @Mooshieblob1

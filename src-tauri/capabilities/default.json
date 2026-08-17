@@ -1,0 +1,17 @@
+{
+  "identifier": "default",
+  "description": "Default permissions for the app",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "store:default",
+    "shell:default",
+    "dialog:default",
+    "fs:default",
+    "clipboard-manager:default",
+    "clipboard-manager:allow-write-image",
+    "clipboard-manager:allow-read-image",
+    "updater:default",
+    "process:default"
+  ]
+}

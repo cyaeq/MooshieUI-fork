@@ -1,0 +1,927 @@
+<script lang="ts">
+  import { generation } from "../../stores/generation.svelte.js";
+  import { models } from "../../stores/models.svelte.js";
+  import { connection } from "../../stores/connection.svelte.js";
+  import { locale } from "../../stores/locale.svelte.js";
+  import {
+    downloadModel,
+    uploadImage,
+    uploadImageBytes,
+    readClipboardImageSafe,
+    checkNodeAvailable,
+    isCustomNodeInstalled,
+    installCustomNode,
+    stopComfyui,
+    startComfyui,
+    generateControlnetPreprocessorPreview,
+    readTempImage,
+  } from "../../utils/api.js";
+  import {
+    CONTROLNET_PRESETS,
+    getPreset,
+    getPresetDefaults,
+    getPresetModel,
+    getPresetPreprocessor,
+    modelCategory,
+    type ControlNetModelEntry,
+  } from "../../config/controlnet-presets.js";
+  import { ipcListen, isTauri, authHeaders } from "../../utils/ipc.js";
+  import { onMount } from "svelte";
+  import InfoTip from "../ui/InfoTip.svelte";
+  import { scrollCapture } from "../../utils/scrollCapture.js";
+
+  let preprocessorAvailable = $state<boolean | null>(null);
+  let animaLlliteAvailable = $state<boolean | null>(null);
+  let installing = $state<"controlnet_aux" | false>(false);
+  let installErrorFor = $state<{ controlnet_aux?: string | null }>({});
+  let installStep = $state("");
+  let installMessage = $state("");
+  let preprocessorPreviewPromptId = $state<string | null>(null);
+  let preprocessorPreviewStatus = $state<"idle" | "preparing" | "ready" | "failed">("idle");
+  let preprocessorPreviewUrl = $state<string | null>(null);
+  let downloading = $state<string | null>(null);
+  let downloadError = $state<string | null>(null);
+  let dlBytes = $state(0);
+  let dlTotal = $state(0);
+  let uploadingImage = $state(false);
+  let imagePreviewUrl = $state<string | null>(null);
+  let controlnetDropZone = $state<HTMLElement | null>(null);
+  let controlnetPasteActive = $state(false);
+  const ANIMA_PRESET_IDS = ["depth", "anytest_2000", "anytest_1000", "inpainting"];
+
+  $effect(() => {
+    const el = controlnetDropZone;
+    if (!el) return;
+    el.addEventListener("tauri-file-drop", handleTauriFileDrop);
+    return () => el.removeEventListener("tauri-file-drop", handleTauriFileDrop);
+  });
+
+  $effect(() => {
+    const handler = async (event: ClipboardEvent) => {
+      if (!controlnetPasteActive || generation.controlnetImage) return;
+      const target = event.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      await handleImagePaste();
+    };
+    window.addEventListener("paste", handler, { capture: true });
+    return () => window.removeEventListener("paste", handler, { capture: true });
+  });
+
+  const dlPercent = $derived(dlTotal > 0 ? Math.round((dlBytes / dlTotal) * 100) : 0);
+  const controlnetStrengthMax = $derived(generation.isAnima ? 4 : 2);
+  const visibleControlNetPresets = $derived(
+    generation.isAnima
+      ? CONTROLNET_PRESETS
+          .filter((preset) => ANIMA_PRESET_IDS.includes(preset.id))
+          .sort((a, b) => ANIMA_PRESET_IDS.indexOf(a.id) - ANIMA_PRESET_IDS.indexOf(b.id))
+      : CONTROLNET_PRESETS,
+  );
+
+  // Anima routes through AnimaLLLiteApply, whose weights ModelPatchLoader reads
+  // from models/model_patches/; every other architecture uses ControlNetLoader.
+  const customModeModels = $derived(
+    generation.isAnima ? models.modelPatches : models.controlnetModels,
+  );
+
+  const selectedPresetPreprocessor = $derived(
+    generation.controlnetMode === "preset" && generation.controlnetPreset
+      ? getPresetPreprocessor(generation.controlnetPreset, generation.modelFamily)
+      : null,
+  );
+  const presetNeedsPreprocessor = $derived(!!selectedPresetPreprocessor);
+
+  let preprocessorPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  function clearPreprocessorPreviewTimeout() {
+    if (preprocessorPreviewTimeout) {
+      clearTimeout(preprocessorPreviewTimeout);
+      preprocessorPreviewTimeout = null;
+    }
+  }
+
+  async function nodePackageAvailable(packageName: string, verifyNode: string): Promise<boolean> {
+    try {
+      const installed = await isCustomNodeInstalled(packageName);
+      if (installed) return true;
+      return await checkNodeAvailable(verifyNode);
+    } catch {
+      return false;
+    }
+  }
+
+  onMount(async () => {
+    await ipcListen("download:progress", (event: any) => {
+      const data = event.payload as {
+        filename: string;
+        downloaded: number;
+        total: number;
+        done: boolean;
+      };
+      if (data.done) {
+        dlBytes = 0;
+        dlTotal = 0;
+      } else {
+        dlBytes = data.downloaded;
+        dlTotal = data.total;
+      }
+    });
+    await ipcListen("install:progress", (event: any) => {
+      const data = event.payload as {
+        node_name: string;
+        step: string;
+        message: string;
+        done: boolean;
+      };
+      installStep = data.step;
+      installMessage = data.message;
+    });
+    // Check the preprocessor package and the core Anima LLLite nodes.
+    // AnimaLLLiteApply is checked by input signature, not just by name: the old
+    // kohya-ss custom node registers the same class name with a `lllite_name`
+    // input instead of `model_patch`, and ComfyUI resolves that collision in
+    // core's favour, so the name alone says nothing about which one is loaded.
+    try {
+      [preprocessorAvailable, animaLlliteAvailable] = await Promise.all([
+        nodePackageAvailable("comfyui_controlnet_aux", "CannyEdgePreprocessor"),
+        checkNodeAvailable("AnimaLLLiteApply", ["model_patch"]).catch(() => false),
+      ]);
+    } catch {
+      preprocessorAvailable = false;
+      animaLlliteAvailable = false;
+    }
+
+    // Register the preprocessor preview listener once for the component lifetime
+    // to avoid leaks and races on repeated previews.
+    await ipcListen("comfyui:controlnet_preprocessor", handlePreprocessorPreviewEvent);
+  });
+
+  function isModelInstalled(entry: ControlNetModelEntry): boolean {
+    const installed =
+      modelCategory(entry) === "model_patches" ? models.modelPatches : models.controlnetModels;
+    return installed.includes(entry.filename);
+  }
+
+  function applyPresetState(presetId: string) {
+    generation.controlnetPreset = presetId;
+    generation.controlnetPreprocessor = getPresetPreprocessor(
+      presetId,
+      generation.modelFamily,
+    );
+
+    const defaults = getPresetDefaults(presetId, generation.modelFamily);
+    if (defaults?.strength !== undefined) generation.controlnetStrength = defaults.strength;
+    if (defaults?.startPercent !== undefined) generation.controlnetStartPercent = defaults.startPercent;
+    if (defaults?.endPercent !== undefined) generation.controlnetEndPercent = defaults.endPercent;
+
+    const model = getPresetModel(presetId, generation.modelFamily);
+    generation.controlnetModel = model?.filename ?? null;
+    return model;
+  }
+
+  async function selectPreset(presetId: string) {
+    const preset = getPreset(presetId);
+    if (!preset) return;
+
+    const model = applyPresetState(presetId);
+    if (model) {
+      if (!isModelInstalled(model)) {
+        downloading = model.filename;
+        downloadError = null;
+        try {
+          await downloadModel(model.url, modelCategory(model), model.filename);
+          await models.refresh();
+        } catch (e) {
+          downloadError = locale.t('generation.controlnet.download_failed', { error: String(e) });
+          generation.controlnetModel = null;
+        } finally {
+          downloading = null;
+        }
+      }
+    }
+    generation.saveSettings();
+  }
+
+  function setPreview(file: File) {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    imagePreviewUrl = URL.createObjectURL(file);
+  }
+
+  function clearPreview() {
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+      imagePreviewUrl = null;
+    }
+  }
+
+  async function handleImageUpload(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    uploadingImage = true;
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = Array.from(new Uint8Array(buffer));
+      const result = await uploadImageBytes(bytes, file.name);
+      generation.controlnetImage = result.name;
+      setPreview(file);
+    } catch (e) {
+      console.error("Failed to upload control image:", e);
+    } finally {
+      uploadingImage = false;
+    }
+  }
+
+  async function handleImagePaste() {
+    try {
+      const bytes = await readClipboardImageSafe();
+      uploadingImage = true;
+      const result = await uploadImageBytes(bytes, "pasted_image.png");
+      generation.controlnetImage = result.name;
+      const blob = new Blob([new Uint8Array(bytes)], { type: "image/png" });
+      const file = new File([blob], "pasted_image.png", { type: "image/png" });
+      setPreview(file);
+    } catch (e) {
+      console.error("Failed to paste image:", e);
+    } finally {
+      uploadingImage = false;
+    }
+  }
+
+  async function handleImageDrop(event: DragEvent) {
+    event.preventDefault();
+    const file = event.dataTransfer?.files?.[0];
+    if (!file) return;
+
+    uploadingImage = true;
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = Array.from(new Uint8Array(buffer));
+      const result = await uploadImageBytes(bytes, file.name);
+      generation.controlnetImage = result.name;
+      setPreview(file);
+    } catch (e) {
+      console.error("Failed to upload control image:", e);
+    } finally {
+      uploadingImage = false;
+    }
+  }
+
+  /** Handle Tauri native drag-drop via custom event dispatched from parent. */
+  async function handleTauriFileDrop(e: Event) {
+    const { path, filename } = (e as CustomEvent).detail as { path: string; filename: string };
+    uploadingImage = true;
+    try {
+      const result = await uploadImage(path);
+      generation.controlnetImage = result.name;
+      if (isTauri) {
+        const { readFile } = await import("@tauri-apps/plugin-fs");
+        const bytes = await readFile(path);
+        const blob = new Blob([bytes], { type: "image/png" });
+        setPreview(new File([blob], filename, { type: "image/png" }));
+      }
+    } catch (e) {
+      console.error("Failed to upload control image from Tauri drop:", e);
+    } finally {
+      uploadingImage = false;
+    }
+  }
+
+  /** Generic node-package installer that handles clone → restart → verify flow */
+  async function installNodePackage(
+    packageId: "controlnet_aux",
+    repoUrl: string,
+    folderName: string,
+    verifyNode: string,
+    onAvailableChange: (available: boolean) => void,
+  ) {
+    installing = packageId;
+    installErrorFor = { ...installErrorFor, [packageId]: null };
+    installStep = "clone";
+    installMessage = locale.t('generation.controlnet.install_starting');
+    try {
+      await installCustomNode(repoUrl, folderName);
+
+      installStep = "restart";
+      installMessage = locale.t('generation.controlnet.install_stopping');
+      connection.connected = false;
+      await stopComfyui();
+
+      installMessage = locale.t('generation.controlnet.install_starting_nodes');
+      await startComfyui();
+
+      installMessage = locale.t('generation.controlnet.install_waiting_ready');
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error(locale.t('generation.controlnet.install_timeout')));
+        }, 120_000);
+
+        const unlistenReady = ipcListen("comfyui:server_ready", () => {
+          clearTimeout(timeout);
+          unlistenReady.then((fn) => fn());
+          unlistenError.then((fn) => fn());
+          resolve();
+        });
+
+        const unlistenError = ipcListen("comfyui:server_error", (event: any) => {
+          clearTimeout(timeout);
+          unlistenReady.then((fn) => fn());
+          unlistenError.then((fn) => fn());
+          reject(new Error(event.payload?.error || locale.t('generation.controlnet.install_start_failed')));
+        });
+      });
+
+      installStep = "verify";
+      installMessage = locale.t('generation.controlnet.install_verifying');
+      try {
+        onAvailableChange(await checkNodeAvailable(verifyNode));
+      } catch {
+        onAvailableChange(false);
+      }
+
+      installing = false;
+      installStep = "";
+      installMessage = "";
+    } catch (e) {
+      installErrorFor = { ...installErrorFor, [packageId]: locale.t('generation.controlnet.install_failed', { error: String(e) }) };
+      installing = false;
+      installStep = "";
+      installMessage = "";
+    }
+  }
+
+  async function installPreprocessors() {
+    await installNodePackage(
+      "controlnet_aux",
+      "https://github.com/Fannovel16/comfyui_controlnet_aux.git",
+      "comfyui_controlnet_aux",
+      "CannyEdgePreprocessor",
+      (available) => { preprocessorAvailable = available; },
+    );
+  }
+
+  /** Extract raw bytes + blob from a controlnet_preprocessor event payload */
+  async function imageBytesFromPreprocessorEvent(data: any): Promise<{ bytes: number[]; blob: Blob } | null> {
+    if (data.temp_filename) {
+      try {
+        if (isTauri) {
+          const rawBytes = await readTempImage(data.temp_filename);
+          return { bytes: rawBytes, blob: new Blob([new Uint8Array(rawBytes)], { type: "image/png" }) };
+        } else {
+          const resp = await fetch(
+            `/internal-api/_temp_image/${encodeURIComponent(data.temp_filename)}`,
+            { headers: authHeaders() },
+          );
+          if (!resp.ok) return null;
+          const ab = await resp.arrayBuffer();
+          return {
+            bytes: Array.from(new Uint8Array(ab)),
+            blob: new Blob([ab], { type: resp.headers.get("content-type") ?? "image/png" }),
+          };
+        }
+      } catch {
+        return null;
+      }
+    } else if (data.image) {
+      const binary = atob(data.image);
+      const bytes = Array.from(binary, (c) => c.charCodeAt(0));
+      return { bytes, blob: new Blob([new Uint8Array(bytes)], { type: "image/png" }) };
+    }
+    return null;
+  }
+
+  /** Buffer for events that arrive before the prompt ID is registered */
+  const pendingPreprocessorEvents = new Map<string, any>();
+
+  /** Apply the preprocessor result: upload it, set as new control image, show preview */
+  async function applyPreparedPreprocessorImage(data: any) {
+    clearPreprocessorPreviewTimeout();
+    try {
+      const result = await imageBytesFromPreprocessorEvent(data);
+      if (!result) throw new Error(locale.t("generation.controlnet.no_image_data"));
+      const filename = `controlnet-preprocessed-${Date.now()}.png`;
+      const uploaded = await uploadImageBytes(result.bytes, filename);
+      generation.controlnetImage = uploaded.name;
+      generation.controlnetPreprocessor = null;
+      // Update control image preview to show the preprocessed output
+      if (imagePreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(imagePreviewUrl);
+      imagePreviewUrl = URL.createObjectURL(result.blob);
+      // Also set the preprocessor preview URL
+      if (preprocessorPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(preprocessorPreviewUrl);
+      preprocessorPreviewUrl = URL.createObjectURL(result.blob);
+      preprocessorPreviewStatus = "ready";
+    } catch {
+      preprocessorPreviewStatus = "failed";
+    } finally {
+      preprocessorPreviewPromptId = null;
+    }
+  }
+
+  async function handlePreprocessorPreviewEvent(event: any) {
+    const data = event.payload;
+    const pid = data?.prompt_id;
+    if (!pid) return;
+    if (preprocessorPreviewPromptId && pid === preprocessorPreviewPromptId) {
+      await applyPreparedPreprocessorImage(data);
+      return;
+    }
+    // Buffer for when the prompt ID arrives later
+    pendingPreprocessorEvents.set(pid, data);
+  }
+
+  async function preparePreprocessorImage() {
+    if (!generation.controlnetImage || !selectedPresetPreprocessor) return;
+    preprocessorPreviewStatus = "preparing";
+    if (preprocessorPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(preprocessorPreviewUrl);
+    preprocessorPreviewUrl = null;
+    preprocessorPreviewPromptId = null;
+    clearPreprocessorPreviewTimeout();
+
+    preprocessorPreviewTimeout = setTimeout(() => {
+      if (preprocessorPreviewStatus === "preparing") {
+        preprocessorPreviewStatus = "failed";
+        preprocessorPreviewPromptId = null;
+      }
+    }, 120_000);
+
+    try {
+      const result = await generateControlnetPreprocessorPreview(
+        generation.controlnetImage,
+        selectedPresetPreprocessor,
+      );
+      preprocessorPreviewPromptId = result.prompt_id;
+      // Check if the event already arrived in the buffer (listener registered in onMount)
+      const buffered = pendingPreprocessorEvents.get(result.prompt_id);
+      if (buffered) {
+        pendingPreprocessorEvents.delete(result.prompt_id);
+        await applyPreparedPreprocessorImage(buffered);
+      }
+    } catch {
+      preprocessorPreviewStatus = "failed";
+      preprocessorPreviewPromptId = null;
+      clearPreprocessorPreviewTimeout();
+    }
+  }
+
+  function presetAvailable(presetId: string): boolean {
+    const preset = getPreset(presetId);
+    if (!preset) return false;
+    if (preset.requiresMode === "inpainting" && generation.mode !== "inpainting") return false;
+    return getPresetModel(presetId, generation.modelFamily) !== null;
+  }
+
+  function presetUnavailableText(presetId: string): string {
+    const preset = getPreset(presetId);
+    if (preset?.requiresMode === "inpainting" && generation.mode !== "inpainting") {
+      return locale.t("generation.controlnet.requires_inpainting");
+    }
+    return locale.t("generation.controlnet.not_available");
+  }
+
+  $effect(() => {
+    if (
+      generation.isAnima &&
+      generation.controlnetMode === "preset" &&
+      generation.controlnetPreset &&
+      !ANIMA_PRESET_IDS.includes(generation.controlnetPreset)
+    ) {
+      applyPresetState("depth");
+      generation.saveSettings();
+    }
+  });
+
+  $effect(() => {
+    if (generation.controlnetMode !== "preset" || !generation.controlnetPreset) return;
+    const presetPreprocessor = getPresetPreprocessor(
+      generation.controlnetPreset,
+      generation.modelFamily,
+    );
+    if (
+      generation.controlnetPreprocessor !== null &&
+      generation.controlnetPreprocessor !== presetPreprocessor
+    ) {
+      generation.controlnetPreprocessor = presetPreprocessor;
+    }
+  });
+
+</script>
+
+<div class="space-y-3">
+  <!-- Enable toggle -->
+  <div class="flex items-center justify-between">
+    <label class="text-xs text-neutral-400"
+      >{locale.t('generation.controlnet.title')}<InfoTip
+        text={locale.t('generation.controlnet.tip')}
+      /></label
+    >
+    <button
+      title={locale.t('generation.controlnet.toggle')}
+      class="relative w-10 h-5 rounded-full transition-colors {generation.controlnetEnabled
+        ? 'bg-indigo-600'
+        : 'bg-neutral-700'}"
+      onclick={() => {
+        const next = !generation.controlnetEnabled;
+        generation.controlnetEnabled = next;
+        if (next) generation.styleTransferEnabled = false;
+        generation.saveSettings();
+      }}
+      role="switch"
+      aria-checked={generation.controlnetEnabled}
+    >
+      <span
+        class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform {generation.controlnetEnabled
+          ? 'translate-x-5'
+          : ''}"
+      ></span>
+    </button>
+  </div>
+
+  {#if generation.controlnetEnabled}
+    <!--
+      Anima LLLite comes from ComfyUI core (ModelPatchLoader + AnimaLLLiteApply),
+      so there is nothing to install: an older ComfyUI simply cannot run it.
+      Shown in custom mode too, since Anima routes through the same node there.
+    -->
+    {#if generation.isAnima && animaLlliteAvailable === false}
+      <div class="bg-amber-900/30 border border-amber-700/50 rounded-lg px-3 py-2 text-xs text-amber-300">
+        {locale.t('generation.controlnet.anima_lllite_unsupported')}
+      </div>
+    {/if}
+
+    <!-- Preprocessor warning / install progress -->
+    {#if preprocessorAvailable === false && generation.controlnetMode === "preset" && presetNeedsPreprocessor}
+      <div
+        class="bg-amber-900/30 border border-amber-700/50 rounded-lg px-3 py-2 text-xs text-amber-300"
+      >
+        {#if installing === "controlnet_aux"}
+          <div class="space-y-2">
+            <div class="flex items-center gap-2">
+              <div class="w-3.5 h-3.5 shrink-0 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+              <span class="font-medium">
+                {#if installStep === "clone"}
+                  {locale.t('generation.controlnet.clone_step')}
+                {:else if installStep === "pip"}
+                  {locale.t('generation.controlnet.pip_step')}
+                {:else if installStep === "restart"}
+                  {locale.t('generation.controlnet.restart_step')}
+                {:else if installStep === "verify"}
+                  {locale.t('generation.controlnet.verify_step')}
+                {:else}
+                  {locale.t('generation.controlnet.installing_step')}
+                {/if}
+              </span>
+            </div>
+            {#if installMessage}
+              <div class="bg-neutral-900/60 rounded px-2 py-1.5 font-mono text-[10px] text-neutral-400 max-h-20 overflow-y-auto break-all">
+                {installMessage}
+              </div>
+            {/if}
+            <div class="w-full bg-amber-900/50 rounded-full h-1.5 overflow-hidden">
+              <div
+                class="bg-amber-400 h-full rounded-full transition-[width] duration-500"
+                style="width: {installStep === 'clone' ? '25' : installStep === 'pip' ? '55' : installStep === 'restart' ? '80' : installStep === 'verify' ? '95' : '10'}%"
+              ></div>
+            </div>
+          </div>
+        {:else}
+          <p class="mb-1.5">
+            {locale.t('generation.controlnet.preprocessor_install')}
+          </p>
+          <button
+            onclick={installPreprocessors}
+            class="px-3 py-1 rounded bg-amber-700 hover:bg-amber-600 text-white text-xs transition-colors"
+          >
+            {locale.t('generation.controlnet.install_restart')}
+          </button>
+        {/if}
+        {#if installErrorFor["controlnet_aux"]}
+          <p class="text-red-400 mt-1">{installErrorFor["controlnet_aux"]}</p>
+        {/if}
+      </div>
+    {/if}
+
+    <!-- Mode tabs -->
+    <div class="flex rounded-lg bg-neutral-800 p-0.5">
+      <button
+        class="flex-1 text-xs py-1.5 rounded-md transition-colors {generation.controlnetMode ===
+        'preset'
+          ? 'bg-neutral-700 text-white'
+          : 'text-neutral-400 hover:text-neutral-300'}"
+        onclick={() => (generation.controlnetMode = "preset")}
+      >
+        {locale.t('generation.controlnet.presets')}
+      </button>
+      <button
+        class="flex-1 text-xs py-1.5 rounded-md transition-colors {generation.controlnetMode ===
+        'custom'
+          ? 'bg-neutral-700 text-white'
+          : 'text-neutral-400 hover:text-neutral-300'}"
+        onclick={() => (generation.controlnetMode = "custom")}
+      >
+        {locale.t('generation.controlnet.custom')}
+      </button>
+    </div>
+
+    {#if generation.controlnetMode === "preset"}
+      <!-- Preset grid -->
+      <div class="grid grid-cols-2 gap-1.5">
+        {#each visibleControlNetPresets as preset}
+          {@const available = presetAvailable(preset.id)}
+          {@const selected = generation.controlnetPreset === preset.id}
+          <button
+            onclick={() => available && selectPreset(preset.id)}
+            disabled={!available || downloading !== null}
+            class="text-left p-2 rounded-lg border transition-colors {selected
+              ? 'border-indigo-500 bg-indigo-500/10'
+              : available
+                ? 'border-neutral-700 bg-neutral-800/50 hover:border-neutral-600'
+                : 'border-neutral-800 bg-neutral-900/30 opacity-40 cursor-not-allowed'}"
+          >
+            <div class="text-xs font-medium {selected ? 'text-indigo-300' : 'text-neutral-200'}">
+              {locale.t('generation.controlnet.preset_' + preset.id)}
+            </div>
+            <div class="text-[10px] text-neutral-500 mt-0.5 leading-tight">
+              {available ? locale.t('generation.controlnet.preset_' + preset.id + '_desc') : presetUnavailableText(preset.id)}
+            </div>
+          </button>
+        {/each}
+      </div>
+
+      <!-- Download progress -->
+      {#if downloading}
+        <div class="bg-neutral-800/80 rounded-lg px-3 py-2">
+          <div
+            class="flex items-center justify-between text-[11px] text-neutral-400 mb-1"
+          >
+            <span class="truncate mr-2">{locale.t('generation.controlnet.downloading', { model: downloading || '' })}</span>
+            {#if dlTotal > 0}
+              <span class="shrink-0 tabular-nums"
+                >{locale.formatBytes(dlBytes)} / {locale.formatBytes(dlTotal)} ({dlPercent}%)</span
+              >
+            {/if}
+          </div>
+          {#if dlTotal > 0}
+            <div
+              class="w-full bg-neutral-700 rounded-full h-1.5 overflow-hidden"
+            >
+              <div
+                class="bg-indigo-400 h-full rounded-full transition-[width] duration-300 ease-out"
+                style="width: {dlPercent}%"
+              ></div>
+            </div>
+          {:else}
+            <div
+              class="w-full bg-neutral-700 rounded-full h-1.5 overflow-hidden"
+            >
+              <div
+                class="bg-indigo-400 h-full rounded-full w-1/3 animate-pulse"
+              ></div>
+            </div>
+          {/if}
+        </div>
+      {/if}
+      {#if downloadError}
+        <p class="text-xs text-red-400">{downloadError}</p>
+      {/if}
+
+      <!-- Preprocessor preview -->
+      {#if presetNeedsPreprocessor && generation.controlnetImage && connection.connected}
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-neutral-400">{locale.t('generation.controlnet.prepare_preprocessor')}<InfoTip text={locale.t('generation.controlnet.prepare_preprocessor_tip')} /></span>
+          {#if preprocessorPreviewStatus === "preparing"}
+            <span class="text-xs text-neutral-400 flex items-center gap-1">
+              <div class="w-3 h-3 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin"></div>
+              {locale.t('generation.controlnet.preprocessor_preparing')}
+            </span>
+          {:else if preprocessorPreviewStatus === "ready"}
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-green-400">{locale.t('generation.controlnet.preprocessor_ready')}</span>
+              <button onclick={preparePreprocessorImage} class="text-xs text-indigo-400 hover:text-indigo-300" title={locale.t('generation.controlnet.preprocessor_rerun')}>↺</button>
+            </div>
+          {:else if preprocessorPreviewStatus === "failed"}
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-red-400">{locale.t('generation.controlnet.preprocessor_preview_failed')}</span>
+              <button onclick={preparePreprocessorImage} class="text-xs text-indigo-400 hover:text-indigo-300" title={locale.t('generation.controlnet.preprocessor_retry')}>↺</button>
+            </div>
+          {:else}
+            <button
+              onclick={preparePreprocessorImage}
+              class="px-2 py-1 text-xs rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition-colors"
+            >
+              {locale.t('generation.controlnet.prepare_preprocessor')}
+            </button>
+          {/if}
+        </div>
+        {#if preprocessorPreviewUrl && preprocessorPreviewStatus === "ready"}
+          <div class="relative rounded-lg overflow-hidden bg-neutral-800 border border-neutral-700">
+            <img src={preprocessorPreviewUrl} alt={locale.t("controlnet.preprocessor_preview_alt")} class="w-full max-h-32 object-contain" />
+          </div>
+        {/if}
+      {/if}
+    {:else}
+      <!-- Custom mode -->
+      <div>
+        <label class="block text-xs text-neutral-400 mb-1"
+          >{locale.t('generation.controlnet.controlnet_model')}<InfoTip
+            text={locale.t('generation.controlnet.model_tip')}
+          /></label
+        >
+        <select
+          bind:value={generation.controlnetModel}
+          class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:border-indigo-500 transition-colors"
+        >
+          <option value={null}>{locale.t('generation.controlnet.select_model')}</option>
+          {#each customModeModels as model}
+            <option value={model}>{model}</option>
+          {/each}
+        </select>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="cn-use-preprocessor"
+          checked={!!generation.controlnetPreprocessor}
+          onchange={(e) => {
+            generation.controlnetPreprocessor = (e.target as HTMLInputElement).checked
+              ? "CannyEdgePreprocessor"
+              : null;
+          }}
+          class="w-4 h-4 accent-indigo-500 rounded"
+        />
+        <label for="cn-use-preprocessor" class="text-xs text-neutral-400">
+          {locale.t('generation.controlnet.use_preprocessor')}
+        </label>
+      </div>
+
+      {#if generation.controlnetPreprocessor !== null}
+        <div>
+          <label class="block text-xs text-neutral-400 mb-1">{locale.t('generation.controlnet.preprocessor_label')}</label>
+          <input
+            type="text"
+            bind:value={generation.controlnetPreprocessor}
+            placeholder={locale.t('generation.controlnet.preprocessor_placeholder')}
+            class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:border-indigo-500 transition-colors"
+          />
+        </div>
+      {/if}
+    {/if}
+
+    <!-- Control image upload -->
+    <div>
+      <label class="block text-xs text-neutral-400 mb-1"
+        >{locale.t('generation.controlnet.control_image_label')}<InfoTip
+          text={locale.t('generation.controlnet.image_tip')}
+        /></label
+      >
+      {#if generation.controlnetImage}
+        <div class="space-y-2">
+          {#if imagePreviewUrl}
+            <div class="relative rounded-lg overflow-hidden bg-neutral-800 border border-neutral-700">
+              <img
+                src={imagePreviewUrl}
+                alt={locale.t('generation.controlnet.control_image_alt')}
+                class="w-full max-h-48 object-contain"
+              />
+              <div class="absolute top-1.5 right-1.5">
+                <button
+                  onclick={() => { generation.controlnetImage = null; clearPreview(); }}
+                  class="p-1 rounded bg-neutral-900/80 text-neutral-400 hover:text-red-400 transition-colors"
+                  title={locale.t('generation.controlnet.remove')}
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          {/if}
+          <div class="flex items-center gap-2 bg-neutral-800 rounded-lg px-3 py-2">
+            <span class="text-xs text-neutral-300 truncate flex-1">{generation.controlnetImage}</span>
+            {#if !imagePreviewUrl}
+              <button
+                onclick={() => { generation.controlnetImage = null; clearPreview(); }}
+                class="text-xs text-red-400 hover:text-red-300 shrink-0"
+              >
+                {locale.t('generation.controlnet.remove')}
+              </button>
+            {/if}
+            <label class="text-xs text-indigo-400 hover:text-indigo-300 cursor-pointer shrink-0">
+              {locale.t('generation.controlnet.replace')}
+              <input
+                type="file"
+                accept="image/*"
+                onchange={handleImageUpload}
+                class="hidden"
+              />
+            </label>
+          </div>
+        </div>
+      {:else}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          bind:this={controlnetDropZone}
+          data-drop-zone="controlnet-image"
+          class="border-2 border-dashed border-neutral-700 rounded-lg p-4 text-center hover:border-neutral-600 transition-colors"
+          onmouseenter={() => (controlnetPasteActive = true)}
+          onmouseleave={() => (controlnetPasteActive = false)}
+          ondragenter={(e) => e.preventDefault()}
+          ondragover={(e) => e.preventDefault()}
+          ondrop={handleImageDrop}
+        >
+          {#if uploadingImage}
+            <p class="text-xs text-neutral-500">{locale.t('generation.controlnet.uploading')}</p>
+          {:else}
+            <div class="flex items-center justify-center gap-3">
+              <label class="cursor-pointer text-xs text-neutral-500 hover:text-neutral-300 transition-colors">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onchange={handleImageUpload}
+                  class="hidden"
+                />
+                {locale.t('generation.controlnet.browse_or_drop')}
+              </label>
+              <span class="text-neutral-700">|</span>
+              <button
+                type="button"
+                onclick={handleImagePaste}
+                class="flex items-center gap-1 text-xs text-neutral-500 transition-colors hover:text-neutral-300"
+              >
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                {locale.t('generation.controlnet.paste')}
+              </button>
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+
+    <!-- Strength & range sliders -->
+    <div use:scrollCapture>
+      <label
+        class="flex items-center justify-between text-xs text-neutral-400 mb-1"
+      >
+        <span>{locale.t('generation.controlnet.strength')}<InfoTip
+          text={locale.t('generation.controlnet.strength_tip')}
+        /></span>
+        <span class="text-neutral-300"
+          >{locale.formatDecimal(generation.controlnetStrength, 2)}</span
+        >
+      </label>
+      <input
+        type="range"
+        bind:value={generation.controlnetStrength}
+        min="0"
+        max={controlnetStrengthMax}
+        step="0.05"
+        class="w-full accent-indigo-500"
+      />
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <div use:scrollCapture>
+        <label
+          class="flex items-center justify-between text-xs text-neutral-400 mb-1"
+        >
+          <span>{locale.t('generation.controlnet.start_percent')}<InfoTip
+            text={locale.t('generation.controlnet.start_percent_tip')}
+          /></span>
+          <span class="text-neutral-300"
+            >{locale.formatPercent(generation.controlnetStartPercent * 100, 0)}</span
+          >
+        </label>
+        <input
+          type="range"
+          bind:value={generation.controlnetStartPercent}
+          min="0"
+          max="1"
+          step="0.05"
+          class="w-full accent-indigo-500"
+        />
+      </div>
+      <div use:scrollCapture>
+        <label
+          class="flex items-center justify-between text-xs text-neutral-400 mb-1"
+        >
+          <span>{locale.t('generation.controlnet.end_percent')}<InfoTip
+            text={locale.t('generation.controlnet.end_percent_tip')}
+          /></span>
+          <span class="text-neutral-300"
+            >{locale.formatPercent(generation.controlnetEndPercent * 100, 0)}</span
+          >
+        </label>
+        <input
+          type="range"
+          bind:value={generation.controlnetEndPercent}
+          min="0"
+          max="1"
+          step="0.05"
+          class="w-full accent-indigo-500"
+        />
+      </div>
+    </div>
+  {/if}
+</div>

@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo check:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(grep -n \"get_history\\\\|getHistory\" /home/blob/Repos/DesktopWebUI/comfyui-desktop/src-tauri/src/commands/*.rs)",
+      "Bash(npx svelte-check:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(gh api:*)",
+      "Bash(cargo test:*)",
+      "Bash(python3:*)",
+      "Read(//tmp/**)",
+      "Bash(gh run:*)",
+      "Bash(git tag:*)",
+      "Bash(gh release:*)",
+      "Bash(cargo generate-lockfile:*)",
+      "Bash(git status:*)",
+      "Bash(grep -n \"download_model_file\\\\|struct AppState\" /home/blob/Repos/DesktopWebUI/comfyui-desktop/src-tauri/src/**/*.rs)",
+      "Bash(grep -l \"setup_complete\\\\|check_setup\" /home/blob/Repos/DesktopWebUI/comfyui-desktop/src-tauri/src/*.rs)",
+      "Bash(find /home/blob/Repos/DesktopWebUI/comfyui-desktop -path *bundle* -name *nsis* -o -path *bundle* -name *wix*)",
+      "Bash(grep -rn \"check_setup\\\\|setup_complete\" /home/blob/Repos/DesktopWebUI/comfyui-desktop/src --include=*.svelte --include=*.ts --include=*.tsx --include=*.js)",
+      "Bash(ls -la /home/blob/Repos/DesktopWebUI/comfyui-desktop/*.md)",
+      "Bash(npm run:*)",
+      "Bash(npx vite:*)",
+      "Bash(find /home/blob/Repos/DesktopWebUI/comfyui-desktop/src -name *.ts)",
+      "WebFetch(domain:blog.novelai.net)",
+      "WebFetch(domain:novelai.medium.com)",
+      "WebFetch(domain:novelai.net)",
+      "WebFetch(domain:docs.novelai.net)",
+      "Bash(git checkout:*)",
+      "Read(//home/blob/.local/share/com.mooshie.ui/**)",
+      "Read(//home/blob/.config/com.mooshie.ui/**)",
+      "Read(//home/blob/**)"
+    ]
+  }
+}

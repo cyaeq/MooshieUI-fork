@@ -1,0 +1,906 @@
+<script lang="ts">
+  import { ipcInvoke, ipcListen, isTauri } from "../../utils/ipc.js";
+  import { onMount } from "svelte";
+  import logo from "../../assets/logo.png";
+  import { locale, LOCALE_OPTIONS } from "../../stores/locale.svelte.js";
+  import { checkAttentionBackend, type BackendSupport } from "../../utils/api.js";
+
+  let {
+    onSetupComplete,
+  }: {
+    onSetupComplete: (mode: "app" | "browser") => void;
+  } = $props();
+
+  let phase = $state<"detecting" | "ready" | "installing" | "validating-remote" | "choose-mode" | "done" | "error">(
+    "detecting"
+  );
+  let chosenMode = $state<"app" | "browser">("app");
+  let setupMode = $state<"local" | "remote">("local");
+  let gpu = $state("cpu");
+  let detectedGpu = $state("cpu");
+  let attentionBackend = $state("default");
+  let showAdvanced = $state(false);
+  // Attention capability gating (fetched once when an NVIDIA GPU is present).
+  let attentionSupport = $state<BackendSupport[]>([]);
+  let attentionCC = $state<number | null>(null);
+  let attentionSupportFetched = $state(false);
+  let showConnection = $state(false);
+  let networkProxy = $state("");
+  let pipIndexUrl = $state("");
+  let remoteServerUrl = $state("");
+  let remoteChecklist = $state<string[]>([]);
+  let gpuLabel = $derived(
+    gpu === "nvidia"
+      ? locale.t("setup.gpu.nvidia")
+      : gpu === "amd"
+        ? locale.t("setup.gpu.amd")
+        : gpu === "intel"
+          ? locale.t("setup.gpu.intel")
+          : gpu === "mps"
+            ? locale.t("setup.gpu.mps")
+            : locale.t("setup.gpu.cpu")
+  );
+  let progressMessage = $state("");
+  let progressPercent = $state(0);
+  let errorMessage = $state("");
+
+  // Install location
+  let defaultInstallPath = $state("");
+  let customInstallPath = $state("");
+  let useCustomPath = $state(false);
+  let installPath = $derived(useCustomPath && customInstallPath.trim() ? customInstallPath.trim() : "");
+
+  // Detected model directories from other AI tools
+  interface DetectedModelDir {
+    path: string;
+    tool: string;
+    has_checkpoints: boolean;
+    has_loras: boolean;
+    has_vae: boolean;
+  }
+  let detectedModelDirs = $state<DetectedModelDir[]>([]);
+  let selectedModelDirs = $state<Set<string>>(new Set());
+  let scanningModels = $state(false);
+
+  // Terminal log lines streamed from backend
+  let logLines = $state<string[]>([]);
+  let logContainer: HTMLDivElement | undefined = $state();
+
+  // Per-step tracking
+  const steps = $derived([
+    { id: "uv", label: locale.t("setup.step.uv") },
+    { id: "python", label: locale.t("setup.step.python") },
+    { id: "comfyui", label: locale.t("setup.step.comfyui") },
+    { id: "venv", label: locale.t("setup.step.venv") },
+    { id: "pytorch", label: locale.t("setup.step.pytorch") },
+    { id: "deps", label: locale.t("setup.step.deps") },
+    { id: "attention", label: locale.t("setup.step.attention") },
+    { id: "nodes", label: locale.t("setup.step.nodes") },
+    { id: "config", label: locale.t("setup.step.config") },
+  ]);
+  const visibleSteps = $derived(
+    attentionBackend !== "default" && gpu === "nvidia"
+      ? steps
+      : steps.filter((s) => s.id !== "attention")
+  );
+  $effect(() => {
+    if (!progressMessage) progressMessage = locale.t("setup.progress_preparing");
+  });
+
+  // Fetch attention capability info once an NVIDIA GPU is selected, so we can
+  // disable radio cards the machine can't actually build/run.
+  $effect(() => {
+    if (gpu === "nvidia" && !attentionSupportFetched) {
+      attentionSupportFetched = true;
+      checkAttentionBackend()
+        .then((status) => {
+          attentionSupport = status.support;
+          attentionCC = status.compute_capability;
+          // Re-running setup over an existing install must not silently downgrade
+          // the attention backend: run_setup persists whatever this wizard submits,
+          // so start from the configured backend rather than from "default".
+          if (status.current && attentionBackend === "default") {
+            attentionBackend = status.current;
+          }
+          // If the pre-selected backend turns out to be unsupported, fall back.
+          if (attentionBackend !== "default" && supportFor(attentionBackend)?.supported === false) {
+            attentionBackend = "default";
+          }
+        })
+        .catch(() => {
+          // Leave everything enabled; the install preflight is the backstop.
+          attentionSupport = [];
+        });
+    }
+  });
+
+  /** Capability record for a backend value from the fetched status. */
+  function supportFor(value: string): BackendSupport | null {
+    return attentionSupport.find((s) => s.backend === value) ?? null;
+  }
+
+  /** Whether a backend radio card should be disabled. */
+  function attentionBlocked(value: string): boolean {
+    if (value === "default") return false;
+    return supportFor(value)?.supported === false;
+  }
+
+  /** Localized reason string for an unsupported backend. */
+  function attentionReason(s: BackendSupport | null): string {
+    if (!s) return "";
+    switch (s.reason) {
+      case "no_nvidia_gpu":
+        return locale.t("settings.performance.attention_requires_nvidia");
+      case "compute_capability":
+        return locale.t("settings.performance.attention_requires_cc", {
+          min: s.min_cc != null ? s.min_cc.toFixed(1) : "?",
+          detected: attentionCC != null ? attentionCC.toFixed(1) : locale.t("settings.performance.attention_not_detected"),
+        });
+      case "nvcc_missing":
+        return locale.t("settings.performance.attention_requires_nvcc");
+      default:
+        return "";
+    }
+  }
+
+  let currentStep = $state("");
+  let completedSteps = $state<Set<string>>(new Set());
+
+  // Download progress
+  let downloadFilename = $state("");
+  let downloadedBytes = $state(0);
+  let downloadTotalBytes = $state(0);
+
+
+  async function finishSetup() {
+    phase = "done";
+    setTimeout(() => onSetupComplete(chosenMode), 1500);
+  }
+
+  const downloadPercent = $derived(
+    downloadTotalBytes > 0
+      ? Math.round((downloadedBytes / downloadTotalBytes) * 100)
+      : 0
+  );
+
+  onMount(async () => {
+    // Detect system language if no saved preference
+    locale.detectSystemLocale();
+
+    // Detect GPU and get default install path in parallel
+    const [detectedGpuResult, installPathResult, configResult] = await Promise.allSettled([
+      ipcInvoke<string>("detect_gpu"),
+      ipcInvoke<string>("get_install_path"),
+      ipcInvoke<any>("get_config"),
+    ]);
+
+    if (detectedGpuResult.status === "fulfilled") {
+      gpu = detectedGpuResult.value;
+      detectedGpu = detectedGpuResult.value;
+    }
+    if (installPathResult.status === "fulfilled") {
+      defaultInstallPath = installPathResult.value;
+    }
+    if (configResult.status === "fulfilled") {
+      remoteServerUrl = configResult.value?.server_url ?? "";
+      if (configResult.value?.server_mode === "remote") {
+        setupMode = "remote";
+      }
+    }
+
+    // Scan for existing model directories in background
+    scanningModels = true;
+    ipcInvoke<DetectedModelDir[]>("detect_model_directories")
+      .then((dirs) => {
+        detectedModelDirs = dirs;
+      })
+      .catch(() => {
+        detectedModelDirs = [];
+      })
+      .finally(() => {
+        scanningModels = false;
+      });
+
+    phase = "ready";
+
+    // Listen for progress events
+    await ipcListen("setup:progress", (event: any) => {
+      const data = event.payload as {
+        step: string;
+        message: string;
+        percent: number;
+      };
+      // Mark previous step as completed
+      if (currentStep && currentStep !== data.step) {
+        completedSteps = new Set([...completedSteps, currentStep]);
+      }
+      currentStep = data.step;
+      progressMessage = data.message;
+      progressPercent = data.percent;
+      if (data.step === "done") {
+        completedSteps = new Set([...completedSteps, "config"]);
+        phase = "choose-mode";
+      }
+    });
+
+    // Listen for terminal log lines
+    interface LogPayload {
+      text: string;
+      is_update: boolean;
+    }
+    await ipcListen("setup:log", (event: any) => {
+      const payload = event.payload as LogPayload;
+      if (payload.is_update && logLines.length > 0) {
+        logLines[logLines.length - 1] = payload.text;
+      } else {
+        logLines = [...logLines, payload.text];
+      }
+      // Auto-scroll
+      requestAnimationFrame(() => {
+        if (logContainer) {
+          logContainer.scrollTop = logContainer.scrollHeight;
+        }
+      });
+    });
+
+    // Listen for download progress
+    await ipcListen("download:progress", (event: any) => {
+      const data = event.payload as {
+        filename: string;
+        downloaded: number;
+        total: number;
+        done: boolean;
+      };
+      if (data.done) {
+        downloadFilename = "";
+        downloadedBytes = 0;
+        downloadTotalBytes = 0;
+      } else {
+        downloadFilename = data.filename;
+        downloadedBytes = data.downloaded;
+        downloadTotalBytes = data.total;
+      }
+    });
+  });
+
+  const gpuOptions = $derived([
+    { value: "nvidia", label: locale.t("setup.gpu.nvidia"), icon: "🟢", color: "bg-green-900/50 text-green-400" },
+    { value: "amd", label: locale.t("setup.gpu.amd"), icon: "🔴", color: "bg-red-900/50 text-red-400" },
+    { value: "intel", label: locale.t("setup.gpu.intel"), icon: "🔵", color: "bg-blue-900/50 text-blue-400" },
+    { value: "cpu", label: locale.t("setup.gpu.cpu"), icon: "⚪", color: "bg-neutral-700 text-neutral-400" },
+  ]);
+
+  async function browseInstallPath() {
+    if (!isTauri) return;
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: locale.t("setup.install_location"),
+    });
+    if (selected && typeof selected === "string") {
+      customInstallPath = selected;
+      useCustomPath = true;
+    }
+  }
+
+  function toggleModelDir(path: string) {
+    const next = new Set(selectedModelDirs);
+    if (next.has(path)) {
+      next.delete(path);
+    } else {
+      next.add(path);
+    }
+    selectedModelDirs = next;
+  }
+
+  function normalizeRemoteServerUrl(value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      throw new Error(locale.t("settings.connection.server_url"));
+    }
+    const normalized = new URL(trimmed).toString();
+    return normalized.replace(/\/+$/, "");
+  }
+
+  async function startInstall() {
+    phase = "installing";
+    progressPercent = 0;
+    progressMessage = locale.t("setup.progress_starting");
+    logLines = [];
+    completedSteps = new Set();
+    currentStep = "";
+    try {
+      await ipcInvoke("run_setup", {
+        gpuType: gpu,
+        installPath: installPath || null,
+        attentionBackend: gpu === "nvidia" && attentionBackend !== "default" ? attentionBackend : null,
+        networkProxy: networkProxy.trim() || null,
+        pipIndexUrl: pipIndexUrl.trim() || null,
+      });
+
+      // If user selected model directories, save them to config
+      if (selectedModelDirs.size > 0) {
+        try {
+          const modelPaths = [...selectedModelDirs].join("\n");
+          const config = await ipcInvoke<any>("get_config");
+          await ipcInvoke("update_config", {
+            config: { ...config, extra_model_paths: modelPaths },
+          });
+        } catch (e) {
+          // Non-fatal: models can be configured later in settings
+          console.warn("Failed to save model directories:", e);
+        }
+      }
+    } catch (e: any) {
+      phase = "error";
+      errorMessage = typeof e === "string" ? e : e.message || locale.t("app.status.unknown_error");
+    }
+  }
+
+  async function validateRemoteSetup() {
+    phase = "validating-remote";
+    progressPercent = 25;
+    progressMessage = locale.t("setup.remote_validating");
+    errorMessage = "";
+    remoteChecklist = [];
+    let originalConfig: any = null;
+    try {
+      const normalizedUrl = normalizeRemoteServerUrl(remoteServerUrl);
+      originalConfig = await ipcInvoke<any>("get_config");
+      const remoteConfig = {
+        ...originalConfig,
+        server_mode: "remote",
+        server_url: normalizedUrl,
+        setup_complete: true,
+      };
+      await ipcInvoke("update_config", { config: remoteConfig });
+      progressPercent = 60;
+      await ipcInvoke("check_server_health");
+      progressPercent = 85;
+      await ipcInvoke("start_comfyui");
+      progressPercent = 100;
+      phase = "choose-mode";
+    } catch (e: any) {
+      try {
+        if (originalConfig) {
+          await ipcInvoke("update_config", { config: originalConfig });
+        }
+      } catch {
+        // Keep the original validation error if config rollback also fails.
+      }
+      const message = typeof e === "string" ? e : e?.message || locale.t("app.status.unknown_error");
+      errorMessage = message;
+      if (message.includes("has not loaded required MooshieUI custom nodes")) {
+        remoteChecklist = [
+          locale.t("setup.remote_missing_nodes_install"),
+          locale.t("setup.remote_missing_nodes_restart"),
+          locale.t("setup.remote_missing_nodes_retry"),
+        ];
+      }
+      phase = "error";
+    }
+  }
+
+  function retry() {
+    phase = "ready";
+    errorMessage = "";
+    remoteChecklist = [];
+  }
+
+  function stepStatus(stepId: string): "done" | "active" | "pending" {
+    if (completedSteps.has(stepId)) return "done";
+    if (currentStep === stepId) return "active";
+    return "pending";
+  }
+</script>
+
+<div class="relative flex items-center justify-center h-full bg-neutral-950 text-neutral-100 overflow-hidden">
+  <!-- Terminal background overlay (visible during installation) -->
+  {#if phase === "installing" || phase === "validating-remote" || phase === "choose-mode" || phase === "done" || phase === "error"}
+    <div
+      bind:this={logContainer}
+      class="absolute inset-0 overflow-y-auto p-4 pt-6 font-mono text-[11px] leading-relaxed text-indigo-400/20 pointer-events-none select-none"
+      aria-hidden="true"
+    >
+      {#each logLines as line}
+        <div class="whitespace-pre-wrap break-all">{line}</div>
+      {/each}
+    </div>
+    <!-- Darkening overlay so the UI stays readable -->
+    <div class="absolute inset-0 bg-neutral-950/75 backdrop-blur-[1.5px] pointer-events-none"></div>
+  {/if}
+
+  <!-- Main content (on top of terminal) -->
+  <div class="relative z-10 max-w-lg w-full mx-4 max-h-[95vh] overflow-y-auto">
+    <!-- Logo / Title -->
+    <div class="text-center mb-8">
+      <img
+        src={logo}
+        alt={locale.t('setup.logo_alt')}
+        class="w-16 h-16 object-contain mx-auto mb-3 rounded-xl border border-neutral-700 bg-neutral-800/40 p-1"
+      />
+      <h1 class="text-4xl font-bold bg-linear-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+        {locale.t('setup.title')}
+      </h1>
+      <p class="text-neutral-400 mt-2 text-sm">
+        {locale.t('setup.subtitle')}
+      </p>
+    </div>
+
+    <div class="bg-neutral-900 rounded-xl border border-neutral-800 p-6">
+      {#if phase === "detecting"}
+        <div class="text-center py-8">
+          <div
+            class="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"
+          ></div>
+          <p class="text-neutral-400 mt-4">{locale.t('setup.detecting_hardware')}</p>
+        </div>
+      {:else if phase === "ready"}
+        <!-- Language Selector -->
+        <div class="flex items-center justify-end gap-2 mb-4">
+          <svg class="w-4 h-4 text-neutral-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <select
+            value={locale.current}
+            onchange={(e) => { locale.current = (e.target as HTMLSelectElement).value as any; locale.saveSettings(); }}
+            class="bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-neutral-300 cursor-pointer hover:border-neutral-600 transition-colors"
+          >
+            {#each LOCALE_OPTIONS as opt}
+              <option value={opt.value}>{opt.label}</option>
+            {/each}
+          </select>
+        </div>
+
+        <h2 class="text-xl font-semibold mb-4">{locale.t('setup.welcome')}</h2>
+        <p class="text-neutral-400 text-sm mb-6">
+          {locale.t("setup.intro")}
+        </p>
+
+        <div class="mb-6 rounded-lg border border-neutral-800 bg-neutral-950/50 p-2">
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onclick={() => setupMode = "local"}
+              class="rounded-lg border px-3 py-2 text-left text-sm transition-colors cursor-pointer {setupMode === 'local'
+                ? 'border-indigo-500/50 bg-indigo-600/15 text-indigo-300'
+                : 'border-neutral-700 bg-neutral-900/50 text-neutral-300 hover:border-neutral-600'}"
+            >
+              {locale.t('setup.mode_local')}
+            </button>
+            <button
+              type="button"
+              onclick={() => setupMode = "remote"}
+              class="rounded-lg border px-3 py-2 text-left text-sm transition-colors cursor-pointer {setupMode === 'remote'
+                ? 'border-indigo-500/50 bg-indigo-600/15 text-indigo-300'
+                : 'border-neutral-700 bg-neutral-900/50 text-neutral-300 hover:border-neutral-600'}"
+            >
+              {locale.t('setup.mode_remote')}
+            </button>
+          </div>
+        </div>
+
+        {#if setupMode === "remote"}
+          <div class="mb-6 rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 space-y-3">
+            <p class="text-sm text-neutral-200">{locale.t('setup.remote_desc')}</p>
+            <p class="text-xs text-neutral-500">{locale.t('setup.remote_server_build_note')}</p>
+            <div>
+              <label class="block text-xs text-neutral-400 mb-1">{locale.t('settings.connection.server_url')}</label>
+              <input
+                type="text"
+                bind:value={remoteServerUrl}
+                class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 placeholder-neutral-500"
+                placeholder={locale.t('setup.remote_url_placeholder')}
+              />
+              <p class="text-[10px] text-neutral-600 mt-1">{locale.t('setup.remote_url_hint')}</p>
+            </div>
+            <button
+              type="button"
+              onclick={validateRemoteSetup}
+              class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-semibold transition-colors cursor-pointer"
+              disabled={!remoteServerUrl.trim()}
+            >
+              {locale.t('setup.remote_validate')}
+            </button>
+          </div>
+        {:else}
+        <!-- GPU Selection -->
+        <div class="mb-6">
+          {#if gpu === "mps"}
+            <div class="bg-neutral-800 rounded-lg p-4">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm bg-blue-900/50 text-blue-400">🔵</div>
+                <div>
+                  <p class="text-sm font-medium text-neutral-200">{locale.t("setup.gpu.mps")}</p>
+                  <p class="text-xs text-neutral-500">{locale.t('setup.gpu.mps_note')}</p>
+                </div>
+              </div>
+            </div>
+          {:else}
+            <p class="text-xs text-neutral-400 mb-2">{locale.t('setup.gpu_section')}</p>
+            <div class="space-y-1.5">
+              {#each gpuOptions as opt}
+                <button
+                  type="button"
+                  onclick={() => gpu = opt.value}
+                  class="w-full flex items-center gap-3 rounded-lg p-3 text-left transition-colors cursor-pointer {gpu === opt.value
+                    ? 'bg-indigo-600/15 border border-indigo-500/50'
+                    : 'bg-neutral-800 border border-neutral-700/50 hover:border-neutral-600'}"
+                >
+                  <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm {opt.color}">
+                    {opt.icon}
+                  </div>
+                  <div class="flex-1">
+                    <p class="text-sm font-medium {gpu === opt.value ? 'text-indigo-300' : 'text-neutral-200'}">{opt.label}</p>
+                  </div>
+                  {#if opt.value === detectedGpu}
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-neutral-700/50 text-neutral-400">
+                      {locale.t("common.detected")}
+                    </span>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+            {#if gpu === "cpu"}
+              <p class="text-xs text-amber-400/70 mt-2">{locale.t('setup.gpu.cpu_warning')}</p>
+            {/if}
+          {/if}
+        </div>
+
+        <!-- Advanced Options (NVIDIA only — attention backend selection) -->
+        {#if gpu === "nvidia"}
+        <div class="mb-6 rounded-lg border border-neutral-800 bg-neutral-950/50 overflow-hidden">
+          <button
+            type="button"
+            class="w-full flex items-center justify-between p-3 text-xs text-neutral-400 hover:text-neutral-300 transition-colors cursor-pointer"
+            onclick={() => showAdvanced = !showAdvanced}
+          >
+            <span>{locale.t('setup.advanced_options')}</span>
+            <svg class="w-3.5 h-3.5 transition-transform {showAdvanced ? '' : '-rotate-90'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          {#if showAdvanced}
+          <div class="px-3 pb-3 space-y-2">
+            <p class="text-[10px] text-neutral-500">{locale.t('setup.attention_desc')}</p>
+            <div class="space-y-1">
+              {#each [
+                { value: "default", label: locale.t('setup.attention.default'), desc: locale.t('setup.attention.default_desc') },
+                { value: "sage_v1", label: locale.t('setup.attention.sage_v1'), desc: locale.t('setup.attention.sage_v1_desc') },
+                { value: "sage_v2", label: locale.t('setup.attention.sage_v2'), desc: locale.t('setup.attention.sage_v2_desc') },
+                { value: "flash_v1", label: locale.t('setup.attention.flash_v1'), desc: locale.t('setup.attention.flash_v1_desc') },
+                { value: "flash_v2", label: locale.t('setup.attention.flash_v2'), desc: locale.t('setup.attention.flash_v2_desc') },
+              ] as opt}
+                {@const blocked = attentionBlocked(opt.value)}
+                <button
+                  type="button"
+                  disabled={blocked}
+                  onclick={() => { if (!blocked) attentionBackend = opt.value; }}
+                  class="w-full flex items-start gap-2.5 rounded-lg p-2.5 text-left transition-colors {blocked
+                    ? 'bg-neutral-800/30 border border-neutral-700/30 opacity-50 cursor-not-allowed'
+                    : attentionBackend === opt.value
+                      ? 'bg-indigo-600/15 border border-indigo-500/50 cursor-pointer'
+                      : 'bg-neutral-800/50 border border-neutral-700/50 hover:border-neutral-600 cursor-pointer'}"
+                >
+                  <div class="mt-0.5 w-3.5 h-3.5 rounded-full border shrink-0 flex items-center justify-center {attentionBackend === opt.value ? 'border-indigo-500 bg-indigo-600' : 'border-neutral-600'}">
+                    {#if attentionBackend === opt.value}
+                      <div class="w-1.5 h-1.5 rounded-full bg-white"></div>
+                    {/if}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs font-medium {attentionBackend === opt.value ? 'text-indigo-300' : 'text-neutral-200'}">{opt.label}</p>
+                    <p class="text-[10px] text-neutral-500">{opt.desc}</p>
+                    {#if blocked}
+                      <p class="text-[10px] text-amber-400/80 mt-0.5">{attentionReason(supportFor(opt.value))}</p>
+                    {/if}
+                  </div>
+                </button>
+              {/each}
+            </div>
+            <div class="rounded-lg border border-neutral-800 bg-neutral-900/50 p-2.5 space-y-1.5">
+              <p class="text-[10px] text-neutral-500">{locale.t('setup.attention.install_target')}</p>
+              <p class="text-[10px] text-neutral-500">{locale.t('setup.attention.external_env')}</p>
+              <p class="text-[10px] text-amber-400/80">{locale.t('setup.attention.compile_warning')}</p>
+            </div>
+          </div>
+          {/if}
+        </div>
+        {/if}
+
+        <!-- Install Location -->
+        <div class="mb-6 rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <p class="text-xs text-neutral-400">{locale.t('setup.install_location')}</p>
+            <button
+              type="button"
+              class="text-[10px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer {useCustomPath
+                ? 'border-indigo-500/50 text-indigo-300'
+                : 'border-neutral-700 text-neutral-500 hover:text-neutral-300 hover:border-neutral-500'}"
+              onclick={() => {
+                useCustomPath = !useCustomPath;
+                if (!useCustomPath) customInstallPath = "";
+              }}
+            >
+              {useCustomPath ? locale.t("setup.use_default") : locale.t("setup.change")}
+            </button>
+          </div>
+
+          {#if useCustomPath}
+            <div class="flex gap-1.5">
+              <input
+                type="text"
+                bind:value={customInstallPath}
+                class="flex-1 bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 placeholder-neutral-500"
+                placeholder={locale.t('setup.choose_folder_placeholder')}
+              />
+              <button
+                type="button"
+                onclick={browseInstallPath}
+                class="px-3 py-2 rounded-lg border border-neutral-700 text-neutral-300 hover:border-indigo-500 hover:text-indigo-300 transition-colors text-xs cursor-pointer"
+              >
+                {locale.t("setup.browse")}
+              </button>
+            </div>
+            <p class="text-[10px] text-neutral-600">{locale.t("setup.install_location_desc")}</p>
+          {:else}
+            <p class="text-xs text-neutral-500 font-mono truncate" title={defaultInstallPath}>{defaultInstallPath || locale.t("common.loading")}</p>
+          {/if}
+        </div>
+
+        <!-- Detected Model Directories -->
+        {#if detectedModelDirs.length > 0}
+          <div class="mb-6 rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 space-y-2">
+            <p class="text-xs text-neutral-400">{locale.t('setup.model_dirs_detected')}</p>
+            <p class="text-[10px] text-neutral-600">{locale.t('setup.model_dirs_desc')}</p>
+            <div class="space-y-1">
+              {#each detectedModelDirs as dir}
+                <button
+                  type="button"
+                  class="w-full flex items-start gap-2 rounded-lg p-2 text-left transition-colors cursor-pointer {selectedModelDirs.has(dir.path)
+                    ? 'bg-indigo-600/15 border border-indigo-500/50'
+                    : 'bg-neutral-800/50 border border-neutral-700/50 hover:border-neutral-600'}"
+                  onclick={() => toggleModelDir(dir.path)}
+                >
+                  <div class="mt-0.5 w-3.5 h-3.5 rounded border shrink-0 flex items-center justify-center {selectedModelDirs.has(dir.path) ? 'border-indigo-500 bg-indigo-600' : 'border-neutral-600'}">
+                    {#if selectedModelDirs.has(dir.path)}
+                      <svg class="w-2.5 h-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    {/if}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs text-neutral-200 truncate" title={dir.path}>{dir.path}</p>
+                    <p class="text-[10px] text-neutral-500">
+                      {dir.tool}
+                      {#if dir.has_checkpoints} · checkpoints{/if}
+                      {#if dir.has_loras} · LoRAs{/if}
+                      {#if dir.has_vae} · VAEs{/if}
+                    </p>
+                  </div>
+                </button>
+              {/each}
+            </div>
+          </div>
+        {:else if scanningModels}
+          <div class="mb-6 rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
+            <p class="text-[10px] text-neutral-600">{locale.t('setup.scanning_model_dirs')}</p>
+          </div>
+        {/if}
+
+        <!-- Connection (optional proxy / PyPI mirror for restricted networks) -->
+        <div class="mb-6 rounded-lg border border-neutral-800 bg-neutral-950/50 overflow-hidden">
+          <button
+            type="button"
+            class="w-full flex items-center justify-between p-3 text-xs text-neutral-400 hover:text-neutral-300 transition-colors cursor-pointer"
+            onclick={() => showConnection = !showConnection}
+          >
+            <span>{locale.t('setup.connection_section')}</span>
+            <svg class="w-3.5 h-3.5 transition-transform {showConnection ? '' : '-rotate-90'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          {#if showConnection}
+          <div class="px-3 pb-3 space-y-3">
+            <p class="text-[10px] text-neutral-500">{locale.t('setup.connection_hint')}</p>
+            <div>
+              <label class="block text-[10px] text-neutral-400 mb-1">{locale.t('settings.connection.network_proxy')}</label>
+              <input
+                type="text"
+                bind:value={networkProxy}
+                class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 placeholder-neutral-500"
+                placeholder={locale.t('settings.connection.proxy_placeholder')}
+              />
+              <p class="text-[10px] text-neutral-600 mt-1">{locale.t('settings.connection.network_proxy_desc')}</p>
+            </div>
+            <div>
+              <label class="block text-[10px] text-neutral-400 mb-1">{locale.t('settings.connection.pip_index_url')}</label>
+              <input
+                type="text"
+                bind:value={pipIndexUrl}
+                class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 placeholder-neutral-500"
+                placeholder={locale.t('settings.connection.pip_index_placeholder')}
+              />
+              <p class="text-[10px] text-neutral-600 mt-1">{locale.t('settings.connection.pip_index_url_desc')}</p>
+            </div>
+          </div>
+          {/if}
+        </div>
+
+        <div class="text-xs text-neutral-500 mb-4 space-y-1">
+          <p>{locale.t('setup.will_install')}</p>
+          <ul class="list-disc list-inside ml-2 space-y-0.5">
+            <li>{locale.t('setup.install_uv')}</li>
+            <li>{locale.t('setup.install_python')}</li>
+            <li>{locale.t('setup.install_comfyui')}</li>
+            <li>{locale.t('setup.install_pytorch', { gpuLabel })}</li>
+            <li>{locale.t('setup.install_nodes')}</li>
+          </ul>
+          <p class="mt-2 text-neutral-600">
+            {locale.t('setup.disk_space_note')}
+          </p>
+        </div>
+
+        <button
+          onclick={startInstall}
+          class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-semibold transition-colors cursor-pointer"
+        >
+          {locale.t('setup.install_button')}
+        </button>
+        {/if}
+      {:else if phase === "installing" || phase === "validating-remote"}
+        <h2 class="text-xl font-semibold mb-4">{locale.t('setup.progress_title')}</h2>
+
+        <!-- Step checklist -->
+        {#if phase === "installing"}
+          <div class="space-y-1.5 mb-5">
+            {#each visibleSteps as step}
+              {@const status = stepStatus(step.id)}
+              <div class="flex items-center gap-2.5 text-xs">
+                {#if status === "done"}
+                  <div class="w-4 h-4 rounded-full bg-green-600 flex items-center justify-center shrink-0">
+                    <svg class="w-2.5 h-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <span class="text-neutral-500 line-through">{step.label}</span>
+                {:else if status === "active"}
+                  <div class="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin shrink-0"></div>
+                  <span class="text-indigo-300 font-medium">{step.label}</span>
+                {:else}
+                  <div class="w-4 h-4 rounded-full border border-neutral-700 shrink-0"></div>
+                  <span class="text-neutral-600">{step.label}</span>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
+
+        <!-- Overall progress bar -->
+        <div class="mb-1">
+          <div class="flex items-center justify-between text-xs text-neutral-500 mb-1">
+            <span>{progressMessage}</span>
+            <span>{progressPercent}%</span>
+          </div>
+          <div class="w-full bg-neutral-800 rounded-full h-2.5 overflow-hidden">
+            <div
+              class="bg-indigo-500 h-full rounded-full transition-[width] duration-500 ease-out"
+              style="width: {progressPercent}%"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Download progress (when actively downloading a file) -->
+        {#if downloadFilename && downloadTotalBytes > 0}
+          <div class="mt-3 bg-neutral-800/80 rounded-lg px-3 py-2">
+            <div class="flex items-center justify-between text-[11px] text-neutral-400 mb-1">
+              <span class="truncate mr-2">{downloadFilename}</span>
+              <span class="shrink-0 tabular-nums">{locale.formatBytes(downloadedBytes)} / {locale.formatBytes(downloadTotalBytes)} ({downloadPercent}%)</span>
+            </div>
+            <div class="w-full bg-neutral-700 rounded-full h-1.5 overflow-hidden">
+              <div
+                class="bg-indigo-400 h-full rounded-full transition-[width] duration-300 ease-out"
+                style="width: {downloadPercent}%"
+              ></div>
+            </div>
+          </div>
+        {/if}
+
+        <p class="text-xs text-neutral-600 mt-4">
+          {locale.t("setup.progress_dont_close")}
+        </p>
+      {:else if phase === "choose-mode"}
+        <div class="text-center py-6">
+          <div class="text-4xl mb-3">&#10003;</div>
+          <h2 class="text-xl font-semibold mb-2">{locale.t("setup.choose_mode.title")}</h2>
+          <p class="text-neutral-400 text-sm mb-6">
+            {locale.t("setup.choose_mode.question")}
+          </p>
+
+          <div class="flex gap-4 justify-center mb-6">
+            <!-- App Mode -->
+            <button
+              class="flex-1 max-w-55 p-4 rounded-xl border-2 transition-all text-left {chosenMode === 'app'
+                ? 'border-indigo-500 bg-indigo-500/10'
+                : 'border-neutral-700 bg-neutral-800/50 hover:border-neutral-600'}"
+              onclick={() => (chosenMode = "app")}
+            >
+              <div class="text-2xl mb-2">&#128421;</div>
+              <h3 class="text-sm font-medium text-neutral-200">{locale.t("setup.choose_mode.app_title")}</h3>
+              <p class="text-xs text-neutral-500 mt-1">
+                {locale.t("setup.choose_mode.app_desc")}
+              </p>
+            </button>
+
+            <!-- Browser Mode -->
+            <button
+              class="flex-1 max-w-55 p-4 rounded-xl border-2 transition-all text-left {chosenMode === 'browser'
+                ? 'border-indigo-500 bg-indigo-500/10'
+                : 'border-neutral-700 bg-neutral-800/50 hover:border-neutral-600'}"
+              onclick={() => (chosenMode = "browser")}
+            >
+              <div class="text-2xl mb-2">&#127760;</div>
+              <h3 class="text-sm font-medium text-neutral-200">{locale.t("setup.choose_mode.browser_title")}</h3>
+              <p class="text-xs text-neutral-500 mt-1">
+                {locale.t("setup.choose_mode.browser_desc")}
+              </p>
+            </button>
+          </div>
+
+          <p class="text-xs text-neutral-600 mb-4">
+            {locale.t("setup.choose_mode.change_later")}
+          </p>
+
+          <button
+            class="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors"
+            onclick={finishSetup}
+          >
+            {locale.t("setup.get_started")}
+          </button>
+        </div>
+      {:else if phase === "done"}
+        <div class="text-center py-8">
+          <div class="text-5xl mb-4">&#10003;</div>
+          <h2 class="text-xl font-semibold">{ locale.t('setup.completion_title') }</h2>
+          <p class="text-neutral-400 text-sm mt-2">
+            {locale.t('setup.starting_server')}
+          </p>
+        </div>
+      {:else if phase === "error"}
+        <div class="text-center py-4">
+          <div class="text-4xl mb-3">&#10007;</div>
+          <h2 class="text-xl font-semibold mb-2">{locale.t('setup.error_title')}</h2>
+          <div
+            class="bg-red-950/50 border border-red-800 rounded-lg p-3 mb-4 text-left"
+          >
+            <p class="text-red-300 text-sm font-mono break-all">
+              {errorMessage}
+            </p>
+          </div>
+
+          {#if remoteChecklist.length > 0}
+            <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-3 mb-4 text-left">
+              <p class="text-sm font-medium text-neutral-100 mb-2">{locale.t('setup.remote_missing_nodes_title')}</p>
+              <ul class="list-disc list-inside space-y-1 text-[11px] text-neutral-300">
+                {#each remoteChecklist as item}
+                  <li>{item}</li>
+                {/each}
+              </ul>
+            </div>
+          {/if}
+
+          <!-- Show last few log lines for context -->
+          {#if logLines.length > 0}
+            <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-3 mb-4 text-left max-h-32 overflow-y-auto">
+              <p class="text-[10px] text-neutral-500 mb-1">{locale.t('setup.error_last_output')}</p>
+              {#each logLines.slice(-10) as line}
+                <p class="text-[11px] text-neutral-400 font-mono break-all">{line}</p>
+              {/each}
+            </div>
+          {/if}
+
+          <button
+            onclick={retry}
+            class="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-sm transition-colors cursor-pointer"
+          >
+            {locale.t('setup.retry')}
+          </button>
+        </div>
+      {/if}
+    </div>
+
+    <p class="text-center text-xs text-neutral-700 mt-4">
+      {locale.t('setup.tagline')}
+    </p>
+  </div>
+</div>

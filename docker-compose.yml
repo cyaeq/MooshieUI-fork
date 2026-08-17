@@ -1,0 +1,35 @@
+services:
+  mooshieui:
+    build: .
+    image: ghcr.io/mooshieblob1/mooshieui:latest
+    ports:
+      - "${MOOSHIEUI_PORT:-3200}:3200"
+    volumes:
+      - mooshie-data:/data
+      - ${MODELS_PATH:-./models}:/data/models
+    environment:
+      - MOOSHIEUI_DATA_DIR=/data
+      - MOOSHIEUI_ADMIN_USER=${MOOSHIEUI_ADMIN_USER:-admin}
+      - MOOSHIEUI_ADMIN_PASS=${MOOSHIEUI_ADMIN_PASS:-changeme}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - RUST_LOG=${RUST_LOG:-info}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # Optional: Cloudflare Tunnel sidecar for secure remote access.
+  # Uncomment and set CLOUDFLARE_TUNNEL_TOKEN in .env to enable.
+  #
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+  #   network_mode: "service:mooshieui"
+  #   restart: unless-stopped
+
+volumes:
+  mooshie-data:

@@ -1,0 +1,557 @@
+import type { PromptSegment } from "../types/index.js";
+import {
+  PROMPT_PRESET_TOKEN_REGEX,
+  PROMPT_REGION_TAG_REGEX,
+  PROMPT_SCHEDULE_REGEX,
+} from "./promptInertRanges.js";
+import { parseSegmentDetailPrompt } from "./promptSegmentDetail.js";
+
+export {
+  findPromptInertRangeContaining,
+  getPromptInertRanges,
+  isInsidePromptInertRange,
+  type PromptTextRange,
+} from "./promptInertRanges.js";
+
+/**
+ * Regex patterns for scheduling tag types:
+ *
+ * MooshieUI XML syntax:
+ * - <from:0.5>text</from>  — apply from 50% to 100%
+ * - <to:0.8>text</to>      — apply from 0% to 80%
+ * - <range:0.2:0.8>text</range> — apply from 20% to 80%
+ *
+ * SwarmUI syntax:
+ * - <fromto[0.5]:before, after>  — "before" from 0% to 50%, "after" from 50% to 100%
+ *   Separators: comma, | or ||
+ */
+const COMBINED_REGEX = PROMPT_SCHEDULE_REGEX;
+
+export interface ParsedPrompt {
+  baseText: string;
+  segments: PromptSegment[];
+}
+
+/**
+ * Split a SwarmUI fromto content string by the most unique separator.
+ * Priority: || > | > ,
+ * Either side may be empty (e.g. `<fromto[0.5]:||after>` is valid and produces
+ * only the "after" segment). Returns null only when BOTH sides are empty.
+ */
+function splitSwarmContent(content: string): [string, string] | null {
+  let parts: string[];
+  if (content.includes("||")) {
+    parts = content.split("||").map((s) => s.trim());
+  } else if (content.includes("|")) {
+    parts = content.split("|").map((s) => s.trim());
+  } else {
+    parts = content.split(",").map((s) => s.trim());
+  }
+  if (parts.length !== 2) return null;
+  if (!parts[0] && !parts[1]) return null;
+  return [parts[0], parts[1]];
+}
+
+/**
+ * Parse a prompt string for timestep scheduling tags (both MooshieUI and SwarmUI syntax).
+ *
+ * Returns the base text (tags stripped, inner text kept) and an array of segments.
+ * Invalid blocks (bad range values, empty text) are left as literal text.
+ */
+export function parseScheduledPrompt(raw: string): ParsedPrompt {
+  const segments: PromptSegment[] = [];
+  let baseText = "";
+  let lastIndex = 0;
+
+  COMBINED_REGEX.lastIndex = 0;
+
+  let match: RegExpExecArray | null;
+  while ((match = COMBINED_REGEX.exec(raw)) !== null) {
+    const fullMatch = match[0];
+    const matchStart = match.index;
+
+    // Append text before this match to baseText
+    baseText += raw.slice(lastIndex, matchStart);
+    lastIndex = matchStart + fullMatch.length;
+
+    // Determine which syntax matched
+    if (match[1]) {
+      // MooshieUI XML syntax: groups 1-4
+      const type = match[1];
+      const val1Str = match[2];
+      const val2Str = match[3];
+      const innerText = match[4];
+
+      const text = innerText.trim();
+      if (!text) {
+        baseText += fullMatch;
+        continue;
+      }
+
+      const val1 = parseFloat(val1Str);
+      let start: number;
+      let end: number;
+
+      if (type === "from") {
+        start = val1;
+        end = 1.0;
+      } else if (type === "to") {
+        start = 0.0;
+        end = val1;
+      } else {
+        start = val1;
+        end = val2Str !== undefined ? parseFloat(val2Str) : 1.0;
+      }
+
+      if (isNaN(start) || isNaN(end) || start < 0 || start > 1 || end < 0 || end > 1 || start >= end) {
+        baseText += fullMatch;
+        continue;
+      }
+
+      segments.push({ text, start, end });
+      // Do NOT add innerText to baseText — it should only apply during [start, end]
+    } else if (match[5]) {
+      // SwarmUI fromto syntax: groups 5-6
+      const timestepStr = match[5];
+      const content = match[6];
+      const timestep = parseFloat(timestepStr);
+
+      if (isNaN(timestep) || timestep <= 0 || timestep >= 1) {
+        baseText += fullMatch;
+        continue;
+      }
+
+      const parts = splitSwarmContent(content);
+      if (!parts) {
+        baseText += fullMatch;
+        continue;
+      }
+
+      const [before, after] = parts;
+      if (before) segments.push({ text: before, start: 0, end: timestep });
+      if (after) segments.push({ text: after, start: timestep, end: 1.0 });
+      // Do NOT add the inner halves to baseText — they should only apply within
+      // their scheduled timestep range. Otherwise both halves would be active
+      // across the full sampling duration (via the base conditioning) AND added
+      // again during their window, which is not what fromto means.
+    }
+  }
+
+  // Append any remaining text after the last match
+  baseText += raw.slice(lastIndex);
+
+  // Clean up extra commas/whitespace from removed blocks
+  baseText = baseText
+    .replace(/,\s*,/g, ",")
+    .replace(/^\s*,\s*/, "")
+    .replace(/\s*,\s*$/, "")
+    .trim();
+
+  return { baseText, segments };
+}
+
+// ---------------------------------------------------------------------------
+// Highlight rendering for the backdrop overlay
+// ---------------------------------------------------------------------------
+
+/** Escape HTML entities to prevent XSS in the backdrop div. */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Color config per tag type — gold/yellow matching --accent (#ffcc00) */
+const TAG_COLORS: Record<string, { bg: string; border: string; glow: string }> = {
+  from: {
+    bg: "rgba(255, 204, 0, 0.10)",
+    border: "rgba(255, 204, 0, 0.40)",
+    glow: "0 0 10px rgba(255, 204, 0, 0.30), 0 0 4px rgba(255, 204, 0, 0.15)",
+  },
+  to: {
+    bg: "rgba(255, 204, 0, 0.10)",
+    border: "rgba(255, 204, 0, 0.40)",
+    glow: "0 0 10px rgba(255, 204, 0, 0.30), 0 0 4px rgba(255, 204, 0, 0.15)",
+  },
+  range: {
+    bg: "rgba(255, 204, 0, 0.10)",
+    border: "rgba(255, 204, 0, 0.40)",
+    glow: "0 0 10px rgba(255, 204, 0, 0.30), 0 0 4px rgba(255, 204, 0, 0.15)",
+  },
+  fromto: {
+    bg: "rgba(255, 204, 0, 0.10)",
+    border: "rgba(255, 204, 0, 0.40)",
+    glow: "0 0 10px rgba(255, 204, 0, 0.30), 0 0 4px rgba(255, 204, 0, 0.15)",
+  },
+};
+
+/**
+ * Open a highlight pill span.
+ *
+ * The backdrop this HTML lands in mirrors a textarea character-for-character,
+ * so a pill must add ZERO horizontal advance width. Any left/right border,
+ * padding or margin pushes every following character right of where the real
+ * text sits, and the error accumulates with each pill until the highlight is
+ * visibly detached; it also moves wrap points, so the mirror can gain a line
+ * the textarea does not have and lose vertical alignment too.
+ *
+ * The outline is therefore an inset box-shadow (painted, never laid out)
+ * instead of a border, and only vertical padding is used — on an inline box
+ * vertical padding paints without affecting line height. Same approach as the
+ * clickable overlay spans in PromptTextarea.svelte.
+ */
+function highlightPill(colors: { bg: string; border: string; glow: string }): string {
+  return (
+    `<span style="display:inline;color:transparent;background:${colors.bg};` +
+    `border-radius:4px;box-shadow:inset 0 0 0 1px ${colors.border},${colors.glow};` +
+    `padding:1px 0;-webkit-box-decoration-break:clone;box-decoration-break:clone;">`
+  );
+}
+
+/**
+ * Render prompt text as HTML with styled highlights for scheduling blocks.
+ * Used by the backdrop overlay behind the textarea.
+ */
+export function renderHighlightedPrompt(
+  raw: string,
+  knownPresetSlugs?: ReadonlySet<string>,
+  loraWords?: ReadonlySet<string>,
+): string {
+  let html = "";
+  let lastIndex = 0;
+
+  COMBINED_REGEX.lastIndex = 0;
+
+  let match: RegExpExecArray | null;
+  while ((match = COMBINED_REGEX.exec(raw)) !== null) {
+    const fullMatch = match[0];
+    const matchStart = match.index;
+
+    html += renderSegmentAwareText(raw.slice(lastIndex, matchStart), knownPresetSlugs, loraWords);
+    lastIndex = matchStart + fullMatch.length;
+
+    let isValid = false;
+    let tagType = "from";
+
+    if (match[1]) {
+      // MooshieUI XML syntax
+      tagType = match[1];
+      const val1 = parseFloat(match[2]);
+      const val2Str = match[3];
+      let start: number, end: number;
+      if (tagType === "from") { start = val1; end = 1.0; }
+      else if (tagType === "to") { start = 0.0; end = val1; }
+      else { start = val1; end = val2Str !== undefined ? parseFloat(val2Str) : 1.0; }
+      isValid = !isNaN(start) && !isNaN(end) && start >= 0 && start <= 1 && end >= 0 && end <= 1 && start < end && (match[4]?.trim().length ?? 0) > 0;
+    } else if (match[5]) {
+      // SwarmUI fromto syntax
+      tagType = "fromto";
+      const ts = parseFloat(match[5]);
+      const parts = splitSwarmContent(match[6]);
+      isValid = !isNaN(ts) && ts > 0 && ts < 1 && parts !== null;
+    }
+
+    if (!isValid) {
+      html += escapeHtml(fullMatch);
+      continue;
+    }
+
+    const colors = TAG_COLORS[tagType] ?? TAG_COLORS.from;
+
+    html += highlightPill(colors);
+    html += escapeHtml(fullMatch);
+    html += `</span>`;
+  }
+
+  html += renderSegmentAwareText(raw.slice(lastIndex), knownPresetSlugs, loraWords);
+  return html;
+}
+
+/** Match `@preset:<slug>` directives. Slug = lowercase alnum + underscore. */
+const PRESET_TOKEN_REGEX = PROMPT_PRESET_TOKEN_REGEX;
+
+/**
+ * Highlight `@preset:<slug>` tokens within an arbitrary plain-text segment.
+ * Indigo pill when the slug is known, red when unknown — gives users instant
+ * feedback for typos. Returns escaped HTML so it can be concatenated into the
+ * larger highlight string.
+ */
+function renderPresetSegment(
+  text: string,
+  knownPresetSlugs?: ReadonlySet<string>,
+  loraWords?: ReadonlySet<string>,
+): string {
+  if (!text) return "";
+  if (!text.includes("@preset:")) return renderLoraWordsInPlainText(text, loraWords);
+  let html = "";
+  let lastIndex = 0;
+  PRESET_TOKEN_REGEX.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = PRESET_TOKEN_REGEX.exec(text)) !== null) {
+    html += renderLoraWordsInPlainText(text.slice(lastIndex, match.index), loraWords);
+    lastIndex = match.index + match[0].length;
+    const slug = match[1].toLowerCase();
+    const known = knownPresetSlugs?.has(slug) ?? false;
+    const bg = known ? "rgba(99, 102, 241, 0.18)" : "rgba(239, 68, 68, 0.16)";
+    const border = known ? "rgba(129, 140, 248, 0.55)" : "rgba(248, 113, 113, 0.55)";
+    const glow = known
+      ? "0 0 8px rgba(99, 102, 241, 0.30)"
+      : "0 0 6px rgba(239, 68, 68, 0.25)";
+    html += highlightPill({ bg, border, glow });
+    html += escapeHtml(match[0]);
+    html += `</span>`;
+  }
+  html += renderLoraWordsInPlainText(text.slice(lastIndex), loraWords);
+  return html;
+}
+
+/** Teal pill for <segment:...> / </segment> tags — distinct from scheduling gold. */
+const SEGMENT_TAG_COLOR = {
+  bg: "rgba(45, 212, 191, 0.12)",
+  border: "rgba(45, 212, 191, 0.45)",
+  glow: "0 0 10px rgba(45, 212, 191, 0.25), 0 0 4px rgba(45, 212, 191, 0.12)",
+};
+
+/** Sky-blue pill for prompt words inserted via a LoRA's trigger-word chip. */
+const LORA_WORD_COLOR = {
+  bg: "rgba(56, 189, 248, 0.14)",
+  border: "rgba(56, 189, 248, 0.50)",
+  glow: "0 0 8px rgba(56, 189, 248, 0.30), 0 0 4px rgba(56, 189, 248, 0.15)",
+};
+
+/**
+ * Highlight comma-delimited segments of `text` that exactly match a known
+ * LoRA-inserted trigger word (case-insensitive). Only whole segments match —
+ * the same "own comma segment" rule `removeInsertedWordsFromPrompt` uses —
+ * so a word that merely appears inside a longer hand-written phrase is left
+ * alone. Escapes and emits the plain (non-matching) HTML itself, so callers
+ * can use this in place of a bare `escapeHtml()` on leaf text runs.
+ */
+function renderLoraWordsInPlainText(text: string, loraWords?: ReadonlySet<string>): string {
+  if (!text) return "";
+  if (!loraWords || loraWords.size === 0) return escapeHtml(text);
+  const parts = text.split(/(,)/);
+  let html = "";
+  for (const part of parts) {
+    if (part === ",") {
+      html += ",";
+      continue;
+    }
+    const trimmed = part.trim();
+    if (trimmed && loraWords.has(trimmed.toLowerCase())) {
+      const start = part.indexOf(trimmed);
+      html += escapeHtml(part.slice(0, start));
+      html += highlightPill(LORA_WORD_COLOR);
+      html += escapeHtml(trimmed);
+      html += `</span>`;
+      html += escapeHtml(part.slice(start + trimmed.length));
+    } else {
+      html += escapeHtml(part);
+    }
+  }
+  return html;
+}
+
+/**
+ * Check whether the prompt has any comma-delimited segment matching a known
+ * LoRA-inserted trigger word. Cheap guard so the backdrop overlay only
+ * mounts when there's actually something to highlight.
+ */
+export function hasLoraWordInPrompt(raw: string, loraWords?: ReadonlySet<string>): boolean {
+  if (!raw || !loraWords || loraWords.size === 0) return false;
+  return raw.split(",").some((segment) => loraWords.has(segment.trim().toLowerCase()));
+}
+
+/**
+ * Highlight <segment:...> regions within a plain-text run, delegating the
+ * remaining text to renderPresetSegment for @preset highlighting.
+ *
+ * The whole region the parser would consume — open tag, refinement prompt and
+ * </segment> closer (or everything to the end for trailing form) — gets one
+ * teal pill, so the highlight mirrors exactly what leaves the base prompt.
+ * Invalid tags and orphan closers stay unhighlighted (they remain literal text).
+ */
+function renderSegmentAwareText(
+  text: string,
+  knownPresetSlugs?: ReadonlySet<string>,
+  loraWords?: ReadonlySet<string>,
+): string {
+  if (!text) return "";
+  if (!text.toLowerCase().includes("<segment:")) {
+    return renderPresetSegment(text, knownPresetSlugs, loraWords);
+  }
+  const { ranges } = parseSegmentDetailPrompt(text);
+  let html = "";
+  let lastIndex = 0;
+  for (const range of ranges) {
+    html += renderPresetSegment(text.slice(lastIndex, range.start), knownPresetSlugs, loraWords);
+    html += highlightPill(SEGMENT_TAG_COLOR);
+    html += escapeHtml(text.slice(range.start, range.end));
+    html += `</span>`;
+    lastIndex = range.end;
+  }
+  html += renderPresetSegment(text.slice(lastIndex), knownPresetSlugs, loraWords);
+  return html;
+}
+
+/**
+ * Check if a prompt string contains any valid scheduling tags.
+ */
+export function hasSchedulingTags(raw: string): boolean {
+  COMBINED_REGEX.lastIndex = 0;
+  return COMBINED_REGEX.test(raw);
+}
+
+/**
+ * Check whether the prompt contains any `@preset:<slug>` directives. Cheap
+ * substring guard first so we don't allocate a regex match on every keystroke.
+ */
+export function hasPresetTokens(raw: string): boolean {
+  if (!raw || !raw.includes("@preset:")) return false;
+  PRESET_TOKEN_REGEX.lastIndex = 0;
+  return PRESET_TOKEN_REGEX.test(raw);
+}
+
+export interface PositiveRegionPrompt {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const REGION_TAG_REGEX = PROMPT_REGION_TAG_REGEX;
+
+/**
+ * Parse syntax-first regional prompt tags:
+ *   <region:x1,y1,x2,y2>text</region>
+ * where coordinates are normalized 0..1 fractions.
+ */
+export function parseRegionalPrompt(raw: string): {
+  baseText: string;
+  regions: PositiveRegionPrompt[];
+} {
+  const regions: PositiveRegionPrompt[] = [];
+  let baseText = "";
+  let lastIndex = 0;
+  REGION_TAG_REGEX.lastIndex = 0;
+
+  let match: RegExpExecArray | null;
+  while ((match = REGION_TAG_REGEX.exec(raw)) !== null) {
+    baseText += raw.slice(lastIndex, match.index);
+    lastIndex = match.index + match[0].length;
+
+    const x1 = parseFloat(match[1]);
+    const y1 = parseFloat(match[2]);
+    const x2 = parseFloat(match[3]);
+    const y2 = parseFloat(match[4]);
+    const text = match[5].trim();
+
+    if (!text) continue;
+    if (
+      !Number.isFinite(x1) ||
+      !Number.isFinite(y1) ||
+      !Number.isFinite(x2) ||
+      !Number.isFinite(y2)
+    ) {
+      continue;
+    }
+    if (x1 < 0 || y1 < 0 || x2 > 1 || y2 > 1 || x2 <= x1 || y2 <= y1) {
+      continue;
+    }
+    regions.push({
+      text,
+      x: x1,
+      y: y1,
+      width: x2 - x1,
+      height: y2 - y1,
+    });
+  }
+
+  baseText += raw.slice(lastIndex);
+  baseText = baseText
+    .replace(/,\s*,/g, ",")
+    .replace(/^\s*,\s*/, "")
+    .replace(/\s*,\s*$/, "")
+    .trim();
+
+  return { baseText, regions };
+}
+
+export function hasRegionalTags(raw: string): boolean {
+  if (!raw || !raw.includes("<region:")) return false;
+  REGION_TAG_REGEX.lastIndex = 0;
+  return REGION_TAG_REGEX.test(raw);
+}
+
+function formatLoraTagStrength(strength: number): string {
+  const s = Number.isFinite(strength) ? Math.max(0, Math.min(2, strength)) : 1;
+  if (Math.abs(s - Math.round(s)) < 1e-6) return String(Math.round(s));
+  return s.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function promptContainsLoraTag(prompt: string, loraName: string): boolean {
+  const trimmed = loraName.trim();
+  if (!trimmed) return false;
+  const re = new RegExp(`<lora:\\s*${escapeRegExp(trimmed)}\\s*:`, "i");
+  return re.test(prompt);
+}
+
+/**
+ * Shared positive context for regional CLIP encodes: main prompt, schedule segments,
+ * and `<lora:name:strength>` tags for enabled LoRAs not already in the prompt.
+ */
+export function buildRegionalContextPrompt(
+  baseText: string,
+  segments: Array<{ text: string }>,
+  loras: Array<{ name: string; enabled?: boolean; strength_clip?: number }>,
+): string {
+  const parts: string[] = [];
+  const seen = new Set<string>();
+
+  const pushPart = (value: string): void => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    parts.push(trimmed);
+  };
+
+  pushPart(baseText);
+  for (const segment of segments) {
+    pushPart(segment.text);
+  }
+
+  let combined = parts.join(", ");
+  for (const lora of loras) {
+    if (lora.enabled === false || !lora.name?.trim()) continue;
+    if (promptContainsLoraTag(combined, lora.name)) continue;
+    const strength = formatLoraTagStrength(lora.strength_clip ?? 1);
+    const tag = `<lora:${lora.name.trim()}:${strength}>`;
+    combined = combined ? `${combined}, ${tag}` : tag;
+  }
+
+  return combined;
+}
+
+/**
+ * Merge global prompt context with a region's local prompt for area conditioning.
+ * Keeps region-only text in the UI; call this when building generation params.
+ */
+export function mergeRegionalPromptText(contextPrompt: string, regionText: string): string {
+  const context = contextPrompt.trim();
+  const local = regionText.trim();
+  if (!local) return context;
+  if (!context) return local;
+  if (local.includes(context) || context.includes(local)) {
+    return local.length >= context.length ? local : `${context}, ${local}`;
+  }
+  return `${context}, ${local}`;
+}

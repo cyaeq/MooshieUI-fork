@@ -1,0 +1,190 @@
+name: GlassWorm Security Scan
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  glassworm-scan:
+    name: GlassWorm Infection Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Run GlassWorm checks
+        run: |
+          python3 - <<'PYEOF'
+          import subprocess, sys, os, re
+
+          PASS = "\033[32mPASS\033[0m"
+          FAIL = "\033[31mFAIL\033[0m"
+          any_failed = False
+          marker = "lzcd" + "rtfxyqiplpd"
+
+          # ── 1. Marker scan ────────────────────────────────────────────────
+          print("── Check 1: Marker variable scan ──────────────────────────")
+          result = subprocess.run(
+              ["grep", "-rn", "--include=*", marker, "."],
+              capture_output=True, text=True
+          )
+          if result.stdout.strip():
+              print(FAIL + ": GlassWorm marker token found:")
+              print(result.stdout.strip())
+              any_failed = True
+          else:
+              print(PASS + ": No marker variable found.")
+
+          # ── 2. Unicode steganography scan ─────────────────────────────────
+          print("\n── Check 2: Unicode variation-selector steganography ───────")
+
+          # UTF-8 byte sequences for U+FE00–U+FE0F  → EF B8 80–EF B8 8F
+          # UTF-8 byte sequences for U+E0100–U+E01EF → F3 A0 84 80–F3 A0 87 AF
+          TARGET_EXTS = {".py", ".js", ".ts", ".svelte", ".rs"}
+
+          hits = []
+          for root, dirs, files in os.walk("."):
+              dirs[:] = [d for d in dirs
+                         if d not in {".git", "node_modules", "__pycache__",
+                                      ".venv", "venv", "target"}]
+              for fname in files:
+                  if os.path.splitext(fname)[1].lower() not in TARGET_EXTS:
+                      continue
+                  path = os.path.join(root, fname)
+                  try:
+                      data = open(path, "rb").read()
+                  except OSError:
+                      continue
+                  i = 0
+                  while i < len(data):
+                      # U+FE00–U+FE0F: EF B8 80–EF B8 8F
+                      if (i + 2 < len(data)
+                              and data[i] == 0xEF
+                              and data[i+1] == 0xB8
+                              and 0x80 <= data[i+2] <= 0x8F):
+                          cp = 0xFE00 + (data[i+2] - 0x80)
+                          hits.append((path, i, hex(cp)))
+                          i += 3
+                          continue
+                      # U+E0100–U+E01EF: F3 A0 84 80–F3 A0 87 AF
+                      if (i + 3 < len(data)
+                              and data[i] == 0xF3
+                              and data[i+1] == 0xA0
+                              and 0x84 <= data[i+2] <= 0x87
+                              and (data[i+2] != 0x87 or data[i+3] <= 0xAF)):
+                          cp = 0xE0000 + ((data[i+2] - 0x80) << 6) + (data[i+3] - 0x80)
+                          hits.append((path, i, hex(cp)))
+                          i += 4
+                          continue
+                      i += 1
+
+          if hits:
+              print(FAIL + ": Invisible Unicode variation selectors found:")
+              for path, offset, cp in hits:
+                  print(f"  {path}  byte offset {offset}  codepoint {cp}")
+              any_failed = True
+          else:
+              print(PASS + ": No Unicode steganography payloads found.")
+
+          # ── 3. Git date-tampering scan ─────────────────────────────────────
+          print("\n── Check 3: Git committer/author date discrepancy ──────────")
+
+          log = subprocess.run(
+              ["git", "log", "--format=%H %ai %ci", "--all"],
+              capture_output=True, text=True
+          )
+
+          from datetime import datetime, timezone, timedelta
+          import re as _re
+
+          DT_RE = _re.compile(
+              r"(\d{4}-\d{2}-\d{2}T?\s?\d{2}:\d{2}:\d{2})\s*([+-]\d{4})"
+          )
+
+          def parse_iso(s):
+              m = DT_RE.search(s)
+              if not m:
+                  return None
+              dt = datetime.strptime(m.group(1).replace("T", " "), "%Y-%m-%d %H:%M:%S")
+              sign = 1 if m.group(2)[0] == "+" else -1
+              h, mn = int(m.group(2)[1:3]), int(m.group(2)[3:5])
+              return dt.replace(tzinfo=timezone.utc) - timedelta(hours=h*sign, minutes=mn*sign)
+
+          tampered = []
+          for line in log.stdout.splitlines():
+              parts = line.strip().split()
+              if len(parts) < 5:
+                  continue
+              sha = parts[0]
+              # git --format="%H %ai %ci" → sha author_date author_tz commit_date commit_tz
+              author_str  = parts[1] + " " + parts[2]
+              commit_str  = parts[3] + " " + parts[4]
+              a = parse_iso(author_str)
+              c = parse_iso(commit_str)
+              if a and c:
+                  diff = (c - a).total_seconds()
+                  if diff > 3600:
+                      tampered.append((sha[:12], diff / 3600))
+
+          if tampered:
+              print(FAIL + ": Suspicious author/committer date gaps found:")
+              for sha, hrs in tampered:
+                  print(f"  {sha}  committer is {hrs:.1f}h ahead of author")
+              any_failed = True
+          else:
+              print(PASS + ": No date-tampering detected in git history.")
+
+          # ── 4. Obfuscated eval scan ────────────────────────────────────────
+          print("\n── Check 4: Obfuscated eval() calls ────────────────────────")
+
+          EVAL_EXTS = {".py", ".js", ".ts", ".svelte"}
+          KEYWORDS = r"decode|atob|fromCharCode|Buffer\.from|base64"
+          # Match eval( followed within 120 chars by one of the keywords
+          EVAL_RE = re.compile(
+              r"eval\s*\((?:.{0,120}?)(?:" + KEYWORDS + r")",
+              re.DOTALL
+          )
+
+          eval_hits = []
+          for root, dirs, files in os.walk("."):
+              dirs[:] = [d for d in dirs
+                         if d not in {".git", "node_modules", "__pycache__",
+                                      ".venv", "venv", "target"}]
+              for fname in files:
+                  if os.path.splitext(fname)[1].lower() not in EVAL_EXTS:
+                      continue
+                  path = os.path.join(root, fname)
+                  try:
+                      lines = open(path, "r", encoding="utf-8", errors="replace").readlines()
+                  except OSError:
+                      continue
+                  for lineno, line in enumerate(lines, 1):
+                      if EVAL_RE.search(line):
+                          eval_hits.append((path, lineno, line.strip()[:120]))
+
+          if eval_hits:
+              print(FAIL + ": Obfuscated eval() calls found:")
+              for path, lineno, snippet in eval_hits:
+                  print(f"  {path}:{lineno}  {snippet}")
+              any_failed = True
+          else:
+              print(PASS + ": No obfuscated eval() calls found.")
+
+          # ── Result ────────────────────────────────────────────────────────
+          print("\n" + "="*60)
+          if any_failed:
+              print("RESULT: \033[31mFAILED\033[0m — one or more checks detected suspicious content.")
+              sys.exit(1)
+          else:
+              print("RESULT: \033[32mALL CHECKS PASSED\033[0m")
+          PYEOF

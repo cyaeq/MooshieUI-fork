@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mooshieui
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mooshieui-data
+  namespace: mooshieui
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+---
+# Optional: separate PVC for models if you want to share across pods
+# or use a larger / different storage class.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mooshieui-models
+  namespace: mooshieui
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Gi

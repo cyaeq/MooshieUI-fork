@@ -1,0 +1,38 @@
+version: 2
+updates:
+  # Bump pinned GitHub Actions SHAs automatically.
+  # Dependabot understands the "@SHA # tag" comment format and updates both together.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    reviewers:
+      - "Mooshieblob1"
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+  # Bump npm dependencies (package-lock.json at repo root).
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    reviewers:
+      - "Mooshieblob1"
+    labels:
+      - "dependencies"
+      - "npm"
+
+  # Bump Cargo dependencies (Cargo.toml lives in src-tauri/, not the repo root).
+  - package-ecosystem: "cargo"
+    directory: "/src-tauri"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    reviewers:
+      - "Mooshieblob1"
+    labels:
+      - "dependencies"
+      - "rust"

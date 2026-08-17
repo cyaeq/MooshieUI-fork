@@ -1,0 +1,2 @@
+[env]
+WEBKIT_DISABLE_DMABUF_RENDERER = { value = "1", force = true }

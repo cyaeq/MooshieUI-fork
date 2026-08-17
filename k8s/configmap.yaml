@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mooshieui-config
+  namespace: mooshieui
+data:
+  config.json: |
+    {
+      "comfyui_path": "/opt/comfyui",
+      "venv_path": "/opt/comfyui/.venv",
+      "auto_start": true,
+      "setup_complete": true,
+      "browser_mode": true,
+      "ui_server_port": 3200,
+      "lan_enabled": true,
+      "server_mode": "autolaunch",
+      "vram_mode": "normal",
+      "default_sampler": "euler_cfg_pp",
+      "default_scheduler": "sgm_uniform",
+      "default_steps": 20,
+      "default_cfg": 1.4,
+      "default_width": 1024,
+      "default_height": 1024
+    }

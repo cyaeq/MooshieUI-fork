@@ -1,0 +1,512 @@
+<script lang="ts">
+  import { progress } from "../../stores/progress.svelte.js";
+  import { gallery } from "../../stores/gallery.svelte.js";
+  import { generation } from "../../stores/generation.svelte.js";
+  import { canvas } from "../../stores/canvas.svelte.js";
+  import { models } from "../../stores/models.svelte.js";
+  import { locale } from "../../stores/locale.svelte.js";
+  import { generate, uploadImageBytes, downloadModel } from "../../utils/api.js";
+  import { loadOutputImageForGenerationInput, uploadImageUrlForGenerationInput } from "../../utils/galleryActions.js";
+  import { formatGenerationTime } from "../../utils/localeFormat.js";
+  import {
+    DEFAULT_REFINE_UPSCALER,
+    DEFAULT_REFINE_UPSCALER_SCALE,
+    recommendedUpscaleModels,
+  } from "../../utils/upscalers.js";
+  import ContextMenu, { type ContextMenuItem } from "../ui/ContextMenu.svelte";
+  import VideoPlayer from "../video/VideoPlayer.svelte";
+  import type { GenerationParams } from "../../types/index.js";
+
+  let currentTipIndex = $state(0);
+  let progressPercent = $state(0);
+  let autoPlayInterval: ReturnType<typeof setInterval> | null = null;
+  let suppressOpenUntil = 0;
+
+  // Right-click context menu for the output preview. Restores right-click-to-save
+  // that the global native-menu suppressor (#392) removed, in desktop and browser.
+  let ctxMenuItems = $state<ContextMenuItem[]>([]);
+  let ctxMenuX = $state(0);
+  let ctxMenuY = $state(0);
+  let ctxMenuVisible = $state(false);
+
+  const TIP_DISPLAY_TIME = 6500; // 6.5 seconds per tip
+  const TIP_UPDATE_INTERVAL = 50; // Update progress bar every 50ms
+
+  const baseTips = [
+    // Prompt tips
+    { category: "preview.tips.prompts", text: "preview.tip.prompt_clear" },
+    { category: "preview.tips.prompts", text: "preview.tip.prompt_reuse" },
+    { category: "preview.tips.prompts", text: "preview.tip.prompt_refine" },
+
+    // Parameter tips
+    { category: "preview.tips.parameters", text: "preview.tip.cfg" },
+    { category: "preview.tips.parameters", text: "preview.tip.sampler" },
+    { category: "preview.tips.parameters", text: "preview.tip.seed" },
+    { category: "preview.tips.parameters", text: "preview.tip.hover" },
+
+    // Workflow tips
+    { category: "preview.tips.workflow", text: "preview.tip.lower_res" },
+    { category: "preview.tips.workflow", text: "preview.tip.saved" },
+    { category: "preview.tips.workflow", text: "preview.tip.simple" },
+    { category: "preview.tips.workflow", text: "preview.tip.drag" },
+  ];
+
+  let tips = $derived(
+    generation.autoQualityTags
+      ? baseTips
+      : [...baseTips, { category: "preview.tips.quality", text: "preview.tip.quality_tags" }]
+  );
+
+  function startAutoPlay() {
+    progressPercent = 0;
+    let elapsedTime = 0;
+    autoPlayInterval = setInterval(() => {
+      elapsedTime += TIP_UPDATE_INTERVAL;
+      progressPercent = (elapsedTime / TIP_DISPLAY_TIME) * 100;
+      
+      if (elapsedTime >= TIP_DISPLAY_TIME) {
+        nextTip();
+        elapsedTime = 0;
+        progressPercent = 0;
+      }
+    }, TIP_UPDATE_INTERVAL);
+  }
+
+  function stopAutoPlay() {
+    if (autoPlayInterval) {
+      clearInterval(autoPlayInterval);
+      autoPlayInterval = null;
+    }
+  }
+
+  function resetAutoPlay() {
+    stopAutoPlay();
+    progressPercent = 0;
+    startAutoPlay();
+  }
+
+  function nextTip() {
+    currentTipIndex = (currentTipIndex + 1) % tips.length;
+    resetAutoPlay();
+  }
+
+  function prevTip() {
+    currentTipIndex = (currentTipIndex - 1 + tips.length) % tips.length;
+    resetAutoPlay();
+  }
+
+  function handleWheel(e: WheelEvent) {
+    e.preventDefault();
+    if (e.deltaY > 0) {
+      nextTip();
+    } else {
+      prevTip();
+    }
+  }
+
+  $effect(() => {
+    // Start auto-play when component mounts or when not generating
+    if (!progress.isGenerating && !progress.displayImage && !progress.lastOutputVideo) {
+      startAutoPlay();
+    } else {
+      stopAutoPlay();
+    }
+    return () => stopAutoPlay();
+  });
+
+  /** Make sure the default refine upscale model is installed, downloading it
+   *  on first use (~1.6 MB). Returns false if it can't be made available. */
+  async function ensureDefaultRefineUpscaler(): Promise<boolean> {
+    if (models.upscaleModels.includes(DEFAULT_REFINE_UPSCALER)) return true;
+    const rec = recommendedUpscaleModels.find((r) => r.filename === DEFAULT_REFINE_UPSCALER);
+    if (!rec) return false;
+    try {
+      await downloadModel(rec.url, "upscale_models", rec.filename);
+      await models.refresh();
+      return true;
+    } catch (e) {
+      console.warn("Default refine upscaler download failed; keeping current upscale settings:", e);
+      return false;
+    }
+  }
+
+  /** Resolve the current preview image to a ComfyUI input/ filename, uploading the
+   *  client-held bytes (saved gallery image) or the preview URL (browser-mode blob:)
+   *  as needed. Returns null (and toasts) when there is no usable image. Shared by
+   *  Refine and the send-to-img2img / send-to-inpaint buttons. */
+  async function resolvePreviewUploadName(prefix: string): Promise<string | null> {
+    const savedImage = getActiveSavedImage();
+    if (!savedImage && !progress.lastOutputImage) {
+      gallery.showToast(locale.t("preview.not_available"), "info");
+      return null;
+    }
+    if (savedImage) {
+      const source = await loadOutputImageForGenerationInput(savedImage, `${prefix}_${Date.now()}.png`);
+      const upload = await uploadImageBytes(source.bytes, source.filename);
+      return upload.name;
+    }
+    const sourceUrl = previewSrc ?? progress.lastOutputImage;
+    if (!sourceUrl) {
+      gallery.showToast(locale.t("preview.not_available"), "info");
+      return null;
+    }
+    return uploadImageUrlForGenerationInput(sourceUrl, `${prefix}_${Date.now()}.png`);
+  }
+
+  /** Load the current preview into img2img mode without starting a generation (#391). */
+  async function sendToImg2img() {
+    try {
+      const uploadName = await resolvePreviewUploadName("img2img");
+      if (!uploadName) return;
+      generation.inputImage = uploadName;
+      generation.mode = "img2img";
+      generation.refineOnly = false;
+      generation.upscaleEnabled = false;
+      gallery.showToast(locale.t("gallery.toast.loaded_img2img"), "success");
+    } catch (e) {
+      console.error("Send to img2img failed:", e);
+      gallery.showToast(locale.t("gallery.toast.failed_load"), "error");
+    }
+  }
+
+  /** Load the current preview into inpainting mode (with canvas) without generating (#391). */
+  async function sendToInpaint() {
+    try {
+      const uploadName = await resolvePreviewUploadName("inpaint");
+      if (!uploadName) return;
+      generation.inputImage = uploadName;
+      generation.mode = "inpainting";
+      canvas.clearMask();
+      canvas.isCanvasMode = true;
+      const refUrl = previewSrc ?? progress.lastOutputImage;
+      if (refUrl) canvas.setReferenceImage(refUrl);
+      if (canvas.layers.length === 0) canvas.initCanvas(generation.width, generation.height);
+      gallery.showToast(locale.t("generation.toast.loaded_inpaint"), "success");
+    } catch (e) {
+      console.error("Send to inpaint failed:", e);
+      gallery.showToast(locale.t("gallery.toast.failed_load"), "error");
+    }
+  }
+
+  async function upscaleImage() {
+    // The Refine button takes the most-recent output and runs it back through
+    // the upscale chain (MooshieUI's "refiner") at low denoise — analogous to
+    // SwarmUI's "Refine Image" button.
+    //
+    // ComfyUI needs a real input/ filename here. Browser-mode preview URLs can
+    // be blob: URLs, so resolve the client-held bytes first and upload them.
+    try {
+      const uploadName = await resolvePreviewUploadName("refine");
+      if (!uploadName) return;
+
+      const params = generation.toParams() as GenerationParams;
+      params.mode = "img2img";
+      params.input_image = uploadName;
+      // Force refine-only mode so we don't re-do the main img2img sampler —
+      // the upscale chain alone is the refiner pass.
+      params.refine_only = true;
+      params.upscale_enabled = true;
+      // Default the refiner to the OmniSR 2x model upscaler unless the user
+      // has explicitly chosen a model upscaler in the Upscale settings.
+      let appliedDefaultUpscaler = false;
+      if (generation.upscaleMethod !== "model" || !generation.upscaleModel) {
+        if (await ensureDefaultRefineUpscaler()) {
+          params.upscale_method = "model";
+          params.upscale_model = DEFAULT_REFINE_UPSCALER;
+          params.upscale_scale = DEFAULT_REFINE_UPSCALER_SCALE;
+          appliedDefaultUpscaler = true;
+        }
+      }
+      // ControlNet on a refine pass would re-condition the existing image
+      // against the original control input, which is rarely what the user
+      // wants. Disable it for this pass.
+      params.controlnet = null;
+
+      const result = await generate(params);
+      params.seed = result.seed;
+      progress.enqueue(result.prompt_id, true, "img2img", params);
+
+      // Reflect the upload in the UI so a follow-up Generate also works.
+      generation.mode = "img2img";
+      generation.inputImage = uploadName;
+      generation.upscaleEnabled = true;
+      generation.refineOnly = true;
+      if (appliedDefaultUpscaler) {
+        generation.upscaleMethod = "model";
+        generation.upscaleModel = DEFAULT_REFINE_UPSCALER;
+        generation.upscaleScale = DEFAULT_REFINE_UPSCALER_SCALE;
+      }
+    } catch (e) {
+      console.error("Refine failed:", e);
+      gallery.showToast(`${locale.t("preview.refine_failed")}: ${e}`, "error");
+    }
+  }
+
+  $effect(() => {
+    progress.setActiveMode(generation.mode);
+  });
+
+  function getSavedImageForUrl(url: string | null) {
+    if (!url || url.startsWith("data:image/")) return null;
+    return gallery.sessionImages.find((image) => image.url === url) ?? null;
+  }
+
+  function getActiveSavedImage() {
+    return getSavedImageForUrl(progress.lastOutputImage);
+  }
+
+  /** Prefer the real backend URL (supports right-click → Save with metadata)
+   *  once persistence completes — fall back to the blob URL for previews.
+   *  For JXL gallery files, always use the blob URL: WebView2 cannot natively
+   *  decode JXL so the gallery:// URL would render nothing. */
+  const previewSrc = $derived.by(() => {
+    const saved = getActiveSavedImage();
+    const isJxlGallery = saved?.gallery_filename?.endsWith(".jxl") ?? false;
+    if (saved?.fullImageUrl && !isJxlGallery) return saved.fullImageUrl;
+    return progress.displayImage;
+  });
+
+  /** Total generation time for the currently shown output, ms (badge). */
+  const activeGenerationTimeMs = $derived.by(() => {
+    if (progress.isGenerating || !progress.lastOutputImage) return null;
+    return getActiveSavedImage()?.generationTimeMs ?? null;
+  });
+
+  function openPreviewLightbox() {
+    if (Date.now() < suppressOpenUntil) return;
+
+    const url = progress.displayImage;
+    if (!url) return;
+
+    const savedImage = getSavedImageForUrl(url);
+    if (savedImage) {
+      gallery.openLightbox(savedImage);
+      return;
+    }
+
+    gallery.openLightboxUrl(url);
+  }
+
+  function handleSave() {
+    const savedImage = getActiveSavedImage();
+    if (savedImage) {
+      void gallery.saveImageAs(savedImage);
+      return;
+    }
+    // Fall back to saving the visible preview/output image directly
+    const url = progress.displayImage;
+    if (url) {
+      void gallery.saveBlobAs(url, `preview_${Date.now()}.png`);
+      return;
+    }
+    gallery.showToast(locale.t('preview.not_available'), "info");
+  }
+
+  function handleCopy() {
+    const savedImage = getActiveSavedImage();
+    if (savedImage) {
+      void gallery.copyToClipboard(savedImage);
+      return;
+    }
+    // Fall back to copying the visible preview/output image directly
+    const url = progress.displayImage;
+    if (url) {
+      void gallery.copyBlobToClipboard(url);
+      return;
+    }
+    gallery.showToast(locale.t('preview.not_available'), "info");
+  }
+
+  function hasFilePayload(e: DragEvent): boolean {
+    const dt = e.dataTransfer;
+    if (!dt) return false;
+    if (dt.files && dt.files.length > 0) return true;
+    if (dt.items && Array.from(dt.items).some((item) => item.kind === "file")) return true;
+    return false;
+  }
+
+  function suppressPreviewOpenOnFileDrop(e: DragEvent) {
+    if (!hasFilePayload(e)) return;
+    suppressOpenUntil = Date.now() + 500;
+  }
+
+  function openPreviewContextMenu(e: MouseEvent) {
+    if (!progress.displayImage) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const items: ContextMenuItem[] = [
+      { label: locale.t("gallery.save_as"), action: () => void handleSave() },
+      { label: locale.t("gallery.copy"), action: () => void handleCopy() },
+      { label: "", action: () => {}, separator: true },
+      { label: locale.t("gallery.send_to_img2img"), action: () => void sendToImg2img() },
+      { label: locale.t("gallery.send_to_inpaint"), action: () => void sendToInpaint() },
+    ];
+    if (!progress.wasUpscaled) {
+      items.push({ label: locale.t("gallery.upscale"), action: () => void upscaleImage() });
+    }
+
+    ctxMenuItems = items;
+    ctxMenuX = e.clientX;
+    ctxMenuY = e.clientY;
+    ctxMenuVisible = true;
+  }
+</script>
+
+<div class="relative w-full aspect-square bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 flex items-center justify-center overflow-hidden group">
+  {#if progress.lastOutputVideo}
+    <!-- A finished video wins over the last sampled still frame. No context
+         menu: openPreviewContextMenu is image-scoped, and the player's own
+         Export button covers save and copy for video. -->
+    <VideoPlayer
+      src={progress.lastOutputVideo}
+      fps={progress.lastOutputVideoFps ?? 24}
+      density="compact"
+      filename={progress.lastOutputVideoFilename ?? undefined}
+    />
+  {:else if progress.displayImage}
+    <button
+      class="w-full h-full cursor-pointer"
+      onclick={openPreviewLightbox}
+      oncontextmenu={openPreviewContextMenu}
+      ondragenter={suppressPreviewOpenOnFileDrop}
+      ondragover={suppressPreviewOpenOnFileDrop}
+      ondrop={suppressPreviewOpenOnFileDrop}
+    >
+      <img
+        src={previewSrc}
+        alt={locale.t("preview.alt")}
+        class="w-full h-full object-contain"
+      />
+    </button>
+    {#if activeGenerationTimeMs != null}
+      <div
+        class="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 text-white text-xs font-medium px-2.5 py-1 rounded-lg shadow-lg backdrop-blur-sm pointer-events-none"
+        title={locale.t("generation.gen_time_label")}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+        </svg>
+        {formatGenerationTime(activeGenerationTimeMs, locale.current)}
+      </div>
+    {/if}
+    {#if !progress.isGenerating && progress.lastOutputImage}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
+        onmousedown={(e) => e.stopPropagation()}
+        onclick={(e) => e.stopPropagation()}
+      >
+        {#if !progress.wasUpscaled}
+          <button
+            onclick={upscaleImage}
+            class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-lg transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 110-2h4a1 1 0 011 1v4a1 1 0 11-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12zm-9 7a1 1 0 112 0v1.586l2.293-2.293a1 1 0 011.414 1.414L6.414 15H8a1 1 0 110 2H4a1 1 0 01-1-1v-4zm13 3a1 1 0 01-1 1h-4a1 1 0 110-2h1.586l-2.293-2.293a1 1 0 011.414-1.414L15 13.586V12a1 1 0 112 0v4z" clip-rule="evenodd"/>
+            </svg>
+            {locale.t('preview.upscale')}
+          </button>
+        {/if}
+        <button
+          onclick={sendToImg2img}
+          class="flex items-center justify-center w-8 h-8 bg-neutral-700 hover:bg-neutral-600 text-white rounded-lg shadow-lg transition-colors"
+          title={locale.t('gallery.send_to_img2img')}
+          aria-label={locale.t('gallery.send_to_img2img')}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </button>
+        <button
+          onclick={sendToInpaint}
+          class="flex items-center justify-center w-8 h-8 bg-neutral-700 hover:bg-neutral-600 text-white rounded-lg shadow-lg transition-colors"
+          title={locale.t('gallery.send_to_inpaint')}
+          aria-label={locale.t('gallery.send_to_inpaint')}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+        </button>
+        <button
+          onclick={handleSave}
+          class="flex items-center gap-1.5 bg-neutral-700 hover:bg-neutral-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={gallery.saving}
+          title={locale.t('preview.save_as')}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          {locale.t('preview.save')}
+        </button>
+        <button
+          onclick={handleCopy}
+          class="flex items-center gap-1.5 bg-neutral-700 hover:bg-neutral-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-lg transition-colors"
+          title={locale.t('preview.copy_clipboard')}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          {locale.t('preview.copy')}
+        </button>
+      </div>
+    {/if}
+  {:else if progress.isGenerating}
+    <div class="text-neutral-400 dark:text-neutral-600 text-sm">{locale.t('progress.generating')}</div>
+  {:else}
+    <!-- Tips Carousel -->
+    <div class="flex flex-col items-center justify-center w-full h-full p-8 gap-6" onwheel={handleWheel}>
+      <div class="flex flex-col items-center gap-3 max-w-md w-full">
+        <span class="text-xs font-semibold text-indigo-600 dark:text-indigo-500 uppercase tracking-wide">
+          {locale.t(tips[currentTipIndex].category)}
+        </span>
+        <p class="text-neutral-700 dark:text-neutral-300 text-sm text-center leading-relaxed">
+          {locale.t(tips[currentTipIndex].text)}
+        </p>
+        
+        <!-- Progress Bar -->
+        <div class="w-full h-0.5 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden mt-2">
+          <div 
+            class="h-full bg-indigo-600 dark:bg-indigo-500 transition-all ease-linear"
+            style="width: {progressPercent}%"
+          />
+        </div>
+      </div>
+      
+      <!-- Navigation Controls -->
+      <div class="flex items-center gap-3">
+        <button
+          onclick={prevTip}
+          class="p-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors"
+          title={locale.t('preview.previous_tip')}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+        
+        <div class="flex gap-1.5">
+          {#each tips as _, index}
+            <div
+              class="w-1.5 h-1.5 rounded-full transition-colors {index === currentTipIndex ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-neutral-300 dark:bg-neutral-700'}"
+            />
+          {/each}
+        </div>
+        
+        <button
+          onclick={nextTip}
+          class="p-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors"
+          title={locale.t('preview.next_tip')}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+      </div>
+      
+      <span class="text-xs text-neutral-500 dark:text-neutral-600">
+        {currentTipIndex + 1} / {tips.length}
+      </span>
+    </div>
+  {/if}
+</div>
+
+<ContextMenu
+  items={ctxMenuItems}
+  x={ctxMenuX}
+  y={ctxMenuY}
+  visible={ctxMenuVisible}
+  onclose={() => (ctxMenuVisible = false)}
+/>

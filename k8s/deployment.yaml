@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mooshieui
+  namespace: mooshieui
+  labels:
+    app: mooshieui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mooshieui
+  strategy:
+    type: Recreate          # GPU workload — no rolling update
+  template:
+    metadata:
+      labels:
+        app: mooshieui
+    spec:
+      containers:
+        # ── MooshieUI server ──
+        - name: mooshieui
+          image: ghcr.io/mooshieblob1/mooshieui:latest
+          ports:
+            - containerPort: 3200
+              name: http
+          env:
+            - name: MOOSHIEUI_DATA_DIR
+              value: /data
+            - name: MOOSHIEUI_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mooshieui-admin
+                  key: username
+            - name: MOOSHIEUI_ADMIN_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: mooshieui-admin
+                  key: password
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: all
+            - name: RUST_LOG
+              value: info
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: models
+              mountPath: /data/models
+            - name: config
+              mountPath: /data/config.json
+              subPath: config.json
+          resources:
+            limits:
+              nvidia.com/gpu.shared: "1"
+            requests:
+              memory: "4Gi"
+              cpu: "2"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3200
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3200
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+
+        # ── Cloudflare Tunnel sidecar (optional — remove if not needed) ──
+        - name: cloudflared
+          image: cloudflare/cloudflared:latest
+          args:
+            - tunnel
+            - --no-autoupdate
+            - run
+            - --token
+            - $(TUNNEL_TOKEN)
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflare-tunnel
+                  key: token
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mooshieui-data
+        - name: models
+          persistentVolumeClaim:
+            claimName: mooshieui-models
+        - name: config
+          configMap:
+            name: mooshieui-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mooshieui
+  namespace: mooshieui
+spec:
+  selector:
+    app: mooshieui
+  ports:
+    - port: 3200
+      targetPort: 3200
+      name: http
+  type: ClusterIP

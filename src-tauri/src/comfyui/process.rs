@@ -1,0 +1,2045 @@
+use std::time::Duration;
+
+use crate::config::{AppConfig, ServerMode};
+use crate::error::AppError;
+use crate::state::AppState;
+
+/// True when ComfyUI's `/system_stats` endpoint responds with HTTP 2xx.
+pub async fn comfyui_health_ok(http_client: &reqwest::Client, health_url: &str) -> bool {
+    match http_client.get(health_url).send().await {
+        Ok(resp) => resp.status().is_success(),
+        Err(_) => false,
+    }
+}
+
+/// Parse a Windows `netstat -ano` line and return the PID when it is a TCP socket, the local port matches exactly, and it is in a listening state (foreign port is 0 or *).
+#[cfg(target_os = "windows")]
+pub(crate) fn parse_netstat_listening_pid(line: &str, port: u16) -> Option<u32> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    if parts.len() < 5 {
+        return None;
+    }
+    if !parts[0].eq_ignore_ascii_case("TCP") {
+        return None;
+    }
+    let local_addr = parts[1];
+    let port_str = local_addr.rsplit(':').next()?;
+    if port_str.parse::<u16>().ok()? != port {
+        return None;
+    }
+    // Verify it is a listening socket by checking that the foreign port is 0 or *
+    let foreign_addr = parts[2];
+    let foreign_port = foreign_addr.rsplit(':').next()?;
+    if foreign_port != "0" && foreign_port != "*" {
+        return None;
+    }
+    parts.last()?.parse().ok()
+}
+
+/// `std::process::Command` that does not flash a console window on Windows.
+///
+/// On Linux, also strips AppImage env leakage — see [`tokio_command_no_window`].
+pub(crate) fn std_command_no_window(program: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    #[cfg(target_os = "linux")]
+    strip_appimage_env_std(&mut cmd);
+    cmd
+}
+
+/// `tokio::process::Command` that does not flash a console window on Windows.
+///
+/// On Linux, when running inside an AppImage, also strips the AppImage's
+/// bundled `LD_LIBRARY_PATH`/`LD_PRELOAD` (and the AppImage-internal `PATH`
+/// entries) so spawned tools like `git`, `pip`, and `uv` link against the
+/// system's native libraries instead of the bundle's — a mismatch otherwise
+/// breaks `git clone` (`git-remote-https` fails to resolve `libssl`/`libcurl`
+/// symbols) for every custom-node install.
+pub(crate) fn tokio_command_no_window(
+    program: impl AsRef<std::ffi::OsStr>,
+) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        // `tokio::process::Command` exposes `creation_flags` inherently, so the
+        // `CommandExt` import is unused on Windows — kept to mirror the std twin.
+        #[allow(unused_imports)]
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    #[cfg(target_os = "linux")]
+    strip_appimage_env(&mut cmd);
+    cmd
+}
+
+/// Remove AppImage-bundled library/env leakage from a child process's
+/// environment. See [`tokio_command_no_window`] for why this matters.
+#[cfg(target_os = "linux")]
+pub(crate) fn strip_appimage_env(cmd: &mut tokio::process::Command) {
+    let Some(filtered_path) = appimage_env_overrides() else {
+        return;
+    };
+    cmd.env_remove("LD_LIBRARY_PATH");
+    cmd.env_remove("LD_PRELOAD");
+    cmd.env_remove("PYTHONHOME");
+    cmd.env_remove("PYTHONPATH");
+    cmd.env_remove("PYTHONDONTWRITEBYTECODE");
+    cmd.env_remove("GDK_BACKEND");
+    cmd.env("PATH", filtered_path);
+}
+
+/// [`strip_appimage_env`] twin for `std::process::Command` — used by blocking
+/// spawns like `nvidia-smi`/`rocm-smi` probes.
+#[cfg(target_os = "linux")]
+fn strip_appimage_env_std(cmd: &mut std::process::Command) {
+    let Some(filtered_path) = appimage_env_overrides() else {
+        return;
+    };
+    cmd.env_remove("LD_LIBRARY_PATH");
+    cmd.env_remove("LD_PRELOAD");
+    cmd.env_remove("PYTHONHOME");
+    cmd.env_remove("PYTHONPATH");
+    cmd.env_remove("PYTHONDONTWRITEBYTECODE");
+    cmd.env_remove("GDK_BACKEND");
+    cmd.env("PATH", filtered_path);
+}
+
+/// `None` when not running under an AppImage; otherwise the current `PATH`
+/// with AppImage-internal mount entries filtered out.
+#[cfg(target_os = "linux")]
+fn appimage_env_overrides() -> Option<String> {
+    if std::env::var("APPIMAGE").is_err() {
+        return None;
+    }
+    let path = std::env::var("PATH").unwrap_or_default();
+    Some(
+        path.split(':')
+            .filter(|p| !p.contains("/tmp/.mount_"))
+            .collect::<Vec<_>>()
+            .join(":"),
+    )
+}
+
+/// Detect whether the system has a Blackwell (compute capability 12.x) NVIDIA GPU.
+/// Returns `true` if any installed GPU has compute capability >= 12.0.
+fn has_blackwell_gpu() -> bool {
+    let output = std_command_no_window("nvidia-smi")
+        .args(["--query-gpu=compute_cap", "--format=csv,noheader,nounits"])
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => {
+            let stdout = String::from_utf8_lossy(&o.stdout);
+            for line in stdout.lines() {
+                let trimmed = line.trim();
+                if let Some((major_str, _)) = trimmed.split_once('.') {
+                    if let Ok(major) = major_str.parse::<u32>() {
+                        if major >= 12 {
+                            log::info!("Detected Blackwell GPU (compute capability {})", trimmed);
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+/// Fraction of card VRAM above which pinning a whole diffusion model resident
+/// does more harm than good.
+const HIGHVRAM_HEADROOM_FRACTION: f64 = 0.9;
+
+/// How many directory levels deep to look for an H3 diffusion model. Enough for
+/// a `diffusion_models/<vendor>/<file>` layout without walking a whole drive.
+const H3_SCAN_DEPTH: u32 = 3;
+
+/// Largest total VRAM across installed NVIDIA GPUs, in bytes. `None` when
+/// nvidia-smi is absent or unreadable (AMD, Apple, headless CI).
+fn detect_max_vram_bytes() -> Option<u64> {
+    let output = std_command_no_window("nvidia-smi")
+        .args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let max_mib = stdout
+        .lines()
+        .filter_map(|line| line.trim().parse::<u64>().ok())
+        .max()?;
+    if max_mib == 0 {
+        None
+    } else {
+        Some(max_mib * 1024 * 1024)
+    }
+}
+
+/// Walk `dir` up to `depth` levels, keeping the largest MiniMax H3 weight file found.
+fn scan_h3_dits(dir: &std::path::Path, depth: u32, best_bytes: &mut u64, best_name: &mut String) {
+    if depth == 0 {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_dir() {
+            scan_h3_dits(&entry.path(), depth - 1, best_bytes, best_name);
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        let lower = name.to_lowercase();
+        if !lower.ends_with(".safetensors") && !lower.ends_with(".sft") && !lower.ends_with(".gguf")
+        {
+            continue;
+        }
+        if !crate::templates::video::H3_DIFFUSION_MARKERS
+            .iter()
+            .any(|marker| lower.contains(marker))
+        {
+            continue;
+        }
+        let Ok(meta) = entry.metadata() else {
+            continue;
+        };
+        if meta.len() > *best_bytes {
+            *best_bytes = meta.len();
+            *best_name = name;
+        }
+    }
+}
+
+/// Filename and size of the largest MiniMax H3 diffusion model installed, across
+/// the primary ComfyUI models directory and every configured extra model path.
+fn largest_h3_dit(config: &AppConfig) -> Option<(String, u64)> {
+    let mut best_bytes = 0u64;
+    let mut best_name = String::new();
+
+    if !config.comfyui_path.is_empty() {
+        let primary = std::path::Path::new(&config.comfyui_path)
+            .join("models")
+            .join("diffusion_models");
+        scan_h3_dits(&primary, H3_SCAN_DEPTH, &mut best_bytes, &mut best_name);
+    }
+
+    if let Some(ref extra) = config.extra_model_paths {
+        let subdirs = crate::commands::api::category_subdirs("diffusion_models");
+        for dir in extra.lines().map(str::trim).filter(|d| !d.is_empty()) {
+            let base = crate::commands::api::resolve_extra_model_root(std::path::Path::new(dir));
+            for subdir in subdirs {
+                scan_h3_dits(
+                    &base.join(subdir),
+                    H3_SCAN_DEPTH,
+                    &mut best_bytes,
+                    &mut best_name,
+                );
+            }
+            // Flat directory: weights sit directly in the root, no category subdir.
+            scan_h3_dits(&base, 1, &mut best_bytes, &mut best_name);
+        }
+    }
+
+    if best_bytes == 0 {
+        None
+    } else {
+        Some((best_name, best_bytes))
+    }
+}
+
+/// An installed H3 model too large for `--highvram` to be survivable on this card.
+struct HighVramConflict {
+    model: String,
+    model_bytes: u64,
+    vram_bytes: u64,
+}
+
+/// Whether `--highvram` would starve a MiniMax H3 pass of activation headroom.
+///
+/// `--highvram` force-loads a model instead of staging it dynamically, so a DiT
+/// that nearly fills the card leaves nothing for activations and every sampler
+/// step spills over PCIe. Measured on a 12 GB RTX 5070 with the 12.5 GB NVFP4
+/// DiT: 176 s/it under `--highvram` against 4.2 s/it with dynamic loading, and
+/// no out-of-memory error to explain the difference.
+///
+/// `None` whenever VRAM cannot be read or no H3 model is installed — this only
+/// ever drops the flag on evidence, never on a guess.
+fn h3_highvram_conflict(config: &AppConfig) -> Option<HighVramConflict> {
+    let vram_bytes = detect_max_vram_bytes()?;
+    let (model, model_bytes) = largest_h3_dit(config)?;
+    if (model_bytes as f64) > (vram_bytes as f64) * HIGHVRAM_HEADROOM_FRACTION {
+        Some(HighVramConflict {
+            model,
+            model_bytes,
+            vram_bytes,
+        })
+    } else {
+        None
+    }
+}
+
+/// Add `--highvram`, unless an installed H3 model makes it a 40x slowdown.
+/// Self-heal in the same shape as the attention-backend fallback below: drop the
+/// flag and log why, rather than letting a config setting silently cost an hour
+/// per clip.
+fn apply_highvram_flag(cmd: &mut tokio::process::Command, config: &AppConfig) {
+    const GB: f64 = 1024.0 * 1024.0 * 1024.0;
+    match h3_highvram_conflict(config) {
+        Some(conflict) => {
+            log::warn!(
+                "vram_mode='high' but the installed MiniMax H3 model '{}' ({:.1} GB) fills \
+                 {:.0}% of this GPU's {:.1} GB of VRAM; --highvram would pin it resident with \
+                 no room for activations (measured ~40x slower per step, with no out-of-memory \
+                 error). Launching ComfyUI without --highvram.",
+                conflict.model,
+                conflict.model_bytes as f64 / GB,
+                100.0 * conflict.model_bytes as f64 / conflict.vram_bytes as f64,
+                conflict.vram_bytes as f64 / GB,
+            );
+        }
+        None => {
+            cmd.arg("--highvram");
+        }
+    }
+}
+
+/// Returns true if the directory has at least one known model-category subdirectory.
+/// If false, the directory is flat and needs per-category classification instead.
+fn is_structured_model_dir(path: &std::path::Path) -> bool {
+    const KNOWN_SUBDIRS: &[&str] = &[
+        "checkpoints",
+        "Stable-diffusion",
+        "Stable-Diffusion",
+        "StableDiffusion", // StabilityMatrix
+        "loras",
+        "lora",
+        "Lora",
+        "LoRA",
+        "LoRAs",
+        "LORA",
+        "Loras",
+        "LyCORIS",
+        "lycoris",
+        "vae",
+        "VAE",
+        "upscale_models",
+        "ESRGAN",
+        "embeddings",
+        "controlnet",
+        "ControlNet", // StabilityMatrix
+        "clip",
+        "unet",
+        "diffusion_models",
+        "DiffusionModels", // StabilityMatrix
+        "text_encoders",
+        "TextEncoders", // StabilityMatrix
+    ];
+    KNOWN_SUBDIRS.iter().any(|sub| path.join(sub).is_dir())
+}
+
+/// Infer the ComfyUI model category for a flat directory (no known subdirs)
+/// by inspecting the directory name. Defaults to "loras" since that is the
+/// most common fringe case (users pointing at a standalone LoRA collection).
+fn classify_flat_model_dir(path: &std::path::Path) -> &'static str {
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if name.contains("lora") || name.contains("lycoris") {
+        "loras"
+    } else if name.contains("checkpoint")
+        || name.contains("ckpt")
+        || name.contains("stable-diffusion")
+        || name.contains("stablediffusion")
+    {
+        "checkpoints"
+    } else if name.contains("vae") {
+        "vae"
+    } else if name.contains("upscale") || name.contains("esrgan") {
+        "upscale_models"
+    } else if name.contains("controlnet") || name.contains("control_net") {
+        "controlnet"
+    } else if name.contains("embed") || name.contains("textual") {
+        "embeddings"
+    } else if name.contains("clip") {
+        "clip"
+    } else if name.contains("unet") || name.contains("diffusion") {
+        "diffusion_models"
+    } else if name.contains("model_patch") || name.contains("modelpatch") {
+        "model_patches"
+    } else {
+        // Unknown flat directory — default to loras (most common fringe case)
+        "loras"
+    }
+}
+
+/// Relocate Anima ControlNet-LLLite weights from `models/controlnet/` to
+/// `models/model_patches/`.
+///
+/// Releases up to v1.9.0 downloaded these into `models/controlnet/` because the
+/// third-party `AnimaLLLiteApply` took a `lllite_name` from that folder. Core
+/// ComfyUI now owns that class name and loads the weights through
+/// `ModelPatchLoader`, which only lists `models/model_patches/` (#522). Existing
+/// installs would otherwise show an empty model dropdown after upgrading.
+///
+/// Best-effort and non-fatal: a file already present at the destination is left
+/// alone (not deleted), and any IO failure is logged and skipped.
+fn migrate_anima_lllite_weights(comfyui_path: &str) {
+    let models = std::path::Path::new(comfyui_path).join("models");
+    let src_dir = models.join("controlnet");
+    let dest_dir = models.join("model_patches");
+
+    let entries = match std::fs::read_dir(&src_dir) {
+        Ok(entries) => entries,
+        // No controlnet dir yet (fresh install) — nothing to migrate.
+        Err(_) => return,
+    };
+
+    let mut moved = 0usize;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !name.to_lowercase().starts_with("anima-lllite-") {
+            continue;
+        }
+        if !entry.path().is_file() {
+            continue;
+        }
+        let dest = dest_dir.join(&name);
+        if dest.exists() {
+            log::debug!("Anima LLLite weight {} already migrated, skipping", name);
+            continue;
+        }
+        if let Err(e) = std::fs::create_dir_all(&dest_dir) {
+            log::warn!("Failed to create {:?}: {}", dest_dir, e);
+            return;
+        }
+        match std::fs::rename(entry.path(), &dest) {
+            Ok(()) => moved += 1,
+            Err(e) => log::warn!("Failed to move Anima LLLite weight {}: {}", name, e),
+        }
+    }
+
+    if moved > 0 {
+        log::info!(
+            "Migrated {} Anima LLLite weight(s) from models/controlnet to models/model_patches",
+            moved
+        );
+    }
+}
+
+/// Possible outcomes of starting the ComfyUI process.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StartResult {
+    /// Server was already running (external instance).
+    AlreadyRunning,
+    /// Process was spawned; the caller should poll for readiness.
+    Spawned,
+    /// Server mode is Remote — nothing to do.
+    Skipped,
+}
+
+/// A non-empty `gpu_workers` config means the user opted into explicit worker
+/// launching, even if only one worker is enabled.
+pub fn uses_configured_gpu_workers(config: &AppConfig) -> bool {
+    !config.gpu_workers.is_empty()
+}
+
+/// After killing a stale ComfyUI listener, wait until `/system_stats` stops responding.
+async fn wait_for_port_free(state: &AppState, health_url: &str, port: u16) {
+    kill_process_on_port(port).await;
+    for _ in 0..20 {
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        if !comfyui_health_ok(&state.http_client, health_url).await {
+            return;
+        }
+    }
+    log::warn!("Port {} still in use after kill attempts", port);
+}
+
+/// Mark the legacy single-worker (the auto-created default worker when
+/// `gpu_workers` is empty, or any worker whose port matches the legacy
+/// `server_port`) as `Idle` so `GpuManager::submit_prompt` can dispatch to
+/// it. Safe to call multiple times.
+pub async fn mark_legacy_worker_idle(state: &AppState) {
+    use super::gpu_manager::WorkerStatus;
+    let port = state.config.read().await.server_port;
+    for worker in &state.gpu_manager.workers {
+        if worker.port != port {
+            continue;
+        }
+        let mut status = worker.status.write().await;
+        if matches!(*status, WorkerStatus::Stopped | WorkerStatus::Error) {
+            *status = WorkerStatus::Idle;
+        }
+        state.gpu_manager.worker_available.notify_one();
+    }
+}
+
+/// The venv site-packages directories to scan for an installed attention backend.
+/// Windows has a single `Lib/site-packages`; Unix nests under `lib/pythonX.Y/`.
+fn venv_site_packages(venv_path: &str) -> Vec<std::path::PathBuf> {
+    let base = std::path::Path::new(venv_path);
+    #[cfg(target_os = "windows")]
+    {
+        vec![base.join("Lib").join("site-packages")]
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mut dirs = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(base.join("lib")) {
+            for entry in entries.flatten() {
+                if entry.file_name().to_string_lossy().starts_with("python") {
+                    dirs.push(entry.path().join("site-packages"));
+                }
+            }
+        }
+        dirs
+    }
+}
+
+/// Cheap filesystem check that the package backing `attention_backend` is actually
+/// present in the venv. Used to skip the ComfyUI launch flag when config points at a
+/// backend whose package is missing (failed/rolled-back install, manual uninstall),
+/// so ComfyUI falls back to default SDPA instead of crashing at startup. Also repairs
+/// configs corrupted by an earlier install-failure that persisted a broken backend.
+fn attention_package_present(venv_path: &str, backend: &str) -> bool {
+    // Import-dir name to look for under site-packages.
+    let needle = match backend {
+        "sage_v1" | "sage_v2" => "sageattention",
+        "flash_v1" | "flash_v2" => "flash_attn",
+        _ => return true, // "default"/unknown: nothing to check
+    };
+    for site in venv_site_packages(venv_path) {
+        if let Ok(entries) = std::fs::read_dir(&site) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_lowercase();
+                // Matches the package dir ("sageattention", "flash_attn") or its
+                // dist-info ("flash_attn-2.5.8.dist-info").
+                if name == needle || name.starts_with(&format!("{}-", needle)) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// (env var, target directory) pairs for persisted GPU kernel/compiler
+/// caches, given the shared cache base directory. MIOpen vars are no-ops
+/// off ROCm, the inductor/Triton vars are harmless on platforms that don't
+/// use them, and SYCL_CACHE_DIR/NEO_CACHE_DIR are the Intel XPU equivalents.
+/// Callers skip entries the user has already set explicitly.
+fn kernel_cache_targets(cache_base: &std::path::Path) -> [(&'static str, std::path::PathBuf); 6] {
+    [
+        ("TORCHINDUCTOR_CACHE_DIR", cache_base.join("torchinductor")),
+        ("TRITON_CACHE_DIR", cache_base.join("triton")),
+        ("MIOPEN_USER_DB_PATH", cache_base.join("miopen")),
+        ("MIOPEN_CUSTOM_CACHE_DIR", cache_base.join("miopen")),
+        ("SYCL_CACHE_DIR", cache_base.join("sycl")),
+        ("NEO_CACHE_DIR", cache_base.join("neo")),
+    ]
+}
+
+/// Spawn the ComfyUI process (or detect an already-running one).
+/// Returns immediately — does NOT wait for the server to become ready.
+pub async fn start_comfyui_process(state: &AppState) -> Result<StartResult, AppError> {
+    let config = state.config.read().await.clone();
+
+    // Deploy bundled custom nodes whenever we have a valid ComfyUI path,
+    // regardless of server mode — the user may have started ComfyUI externally
+    // but still needs our nodes installed.
+    if !config.comfyui_path.is_empty() {
+        let main_exists = std::path::Path::new(&config.comfyui_path)
+            .join("main.py")
+            .exists();
+        if main_exists {
+            // Must run before launch: ComfyUI caches its model file lists at startup.
+            migrate_anima_lllite_weights(&config.comfyui_path);
+            super::nodes::ensure_mooshie_nodes(&config.comfyui_path)
+                .map_err(AppError::ProcessSpawnFailed)?;
+            // Non-fatal: logs a warning on failure rather than blocking startup.
+            super::nodes::ensure_mooshie_node_requirements(
+                &config.comfyui_path,
+                &config.venv_path,
+                config.network_proxy.as_deref(),
+                config.pip_index_url.as_deref(),
+            )
+            .await
+            .map_err(AppError::ProcessSpawnFailed)?;
+            super::nodes::ensure_required_controlnet_nodes(
+                &config.comfyui_path,
+                &config.venv_path,
+                config.network_proxy.as_deref(),
+                config.pip_index_url.as_deref(),
+            )
+            .await
+            .map_err(AppError::ProcessSpawnFailed)?;
+            super::nodes::ensure_required_style_transfer_nodes(
+                &config.comfyui_path,
+                &config.venv_path,
+                config.network_proxy.as_deref(),
+                config.pip_index_url.as_deref(),
+            )
+            .await
+            .map_err(AppError::ProcessSpawnFailed)?;
+            super::nodes::ensure_required_gguf_nodes(
+                &config.comfyui_path,
+                &config.venv_path,
+                config.network_proxy.as_deref(),
+                config.pip_index_url.as_deref(),
+            )
+            .await
+            .map_err(AppError::ProcessSpawnFailed)?;
+        }
+    }
+
+    if config.server_mode != ServerMode::AutoLaunch {
+        // Remote mode: assume the configured worker is reachable and mark it
+        // idle so `submit_prompt` can dispatch to it.  If the server is
+        // actually down, the POST /prompt will surface the error. If it is
+        // reachable, verify the MooshieUI node required by every workflow now.
+        let health_url = format!("{}/system_stats", config.server_url);
+        if comfyui_health_ok(&state.http_client, &health_url).await {
+            super::nodes::verify_required_mooshie_nodes(&state.http_client, &config.server_url)
+                .await
+                .map_err(AppError::ProcessSpawnFailed)?;
+        }
+        mark_legacy_worker_idle(state).await;
+        return Ok(StartResult::Skipped);
+    }
+
+    if uses_configured_gpu_workers(&config) {
+        let mut started_any = false;
+        let mut first_error: Option<AppError> = None;
+        for (_worker_id, result) in start_all_workers(state).await {
+            match result {
+                Ok(()) => started_any = true,
+                Err(err) => {
+                    if first_error.is_none() {
+                        first_error = Some(err);
+                    }
+                }
+            }
+        }
+        if !started_any {
+            if let Some(err) = first_error {
+                return Err(err);
+            }
+            return Err(AppError::ProcessSpawnFailed(
+                "No enabled GPU workers could be started".to_string(),
+            ));
+        }
+        // Multi-worker mode: start_comfyui command still waits for the primary
+        // server_url worker readiness and then WS connects as usual.
+        return Ok(StartResult::Spawned);
+    }
+
+    // Check if something is already listening on the target port (e.g. a container)
+    let health_url = format!("{}/system_stats", config.server_url);
+    if comfyui_health_ok(&state.http_client, &health_url).await {
+        let mooshie_ok =
+            super::nodes::verify_required_mooshie_nodes(&state.http_client, &config.server_url)
+                .await;
+        let controlnet_ok =
+            super::nodes::verify_required_controlnet_nodes(&state.http_client, &config.server_url)
+                .await;
+        let style_transfer_ok = super::nodes::verify_required_style_transfer_nodes(
+            &state.http_client,
+            &config.server_url,
+        )
+        .await;
+        let gguf_ok =
+            super::nodes::verify_required_gguf_nodes(&state.http_client, &config.server_url).await;
+
+        if mooshie_ok.is_ok() {
+            if let Err(e) = controlnet_ok {
+                log::warn!(
+                    "ComfyUI at {} is running but optional ControlNet nodes are missing: {}",
+                    config.server_url,
+                    e
+                );
+            }
+            if let Err(e) = style_transfer_ok {
+                log::warn!(
+                    "ComfyUI at {} is running but optional style transfer nodes are missing: {}",
+                    config.server_url,
+                    e
+                );
+            }
+            if let Err(e) = gguf_ok {
+                log::warn!(
+                    "ComfyUI at {} is running but optional GGUF nodes are missing: {}",
+                    config.server_url,
+                    e
+                );
+            }
+            log::info!(
+                "ComfyUI already running at {}, skipping spawn",
+                config.server_url
+            );
+            mark_legacy_worker_idle(state).await;
+            return Ok(StartResult::AlreadyRunning);
+        }
+
+        // Stale external ComfyUI: MooshieUI nodes were deployed to disk but the running
+        // process never loaded them. Kill the listener and spawn a managed instance below.
+        log::warn!(
+            "ComfyUI at {} is missing required MooshieUI nodes — freeing port {} and spawning managed ComfyUI",
+            config.server_url,
+            config.server_port
+        );
+        if let Err(e) = mooshie_ok {
+            log::warn!("Mooshie node verification: {}", e);
+        }
+        if let Err(e) = controlnet_ok {
+            log::warn!("ControlNet node verification (optional): {}", e);
+        }
+        wait_for_port_free(state, &health_url, config.server_port).await;
+    }
+
+    #[cfg(target_os = "windows")]
+    let python_path = format!("{}/Scripts/python.exe", config.venv_path);
+    #[cfg(not(target_os = "windows"))]
+    let python_path = format!("{}/bin/python", config.venv_path);
+    let main_path = format!("{}/main.py", config.comfyui_path);
+
+    // Detect stale venv: the uv trampoline executables and pyvenv.cfg embed
+    // absolute paths to the Python installation.  When the user moves their
+    // data directory (externally, not via the in-app Move feature), these
+    // paths break and uv reports "entity not found (os error 2)".
+    //
+    // We detect this by:
+    //   1. Python binary doesn't exist at all, OR
+    //   2. pyvenv.cfg `home` key points to a non-existent directory
+    // In either case, re-run `uv venv --allow-existing` to fix the paths.
+    if !config.venv_path.is_empty() {
+        let needs_repair = if !std::path::Path::new(&python_path).exists() {
+            true
+        } else {
+            // Check pyvenv.cfg for stale `home` path
+            let pyvenv_cfg = std::path::Path::new(&config.venv_path).join("pyvenv.cfg");
+            if let Ok(content) = std::fs::read_to_string(&pyvenv_cfg) {
+                content.lines().any(|line| {
+                    if let Some(value) = line
+                        .strip_prefix("home")
+                        .and_then(|s| s.strip_prefix('=').or_else(|| s.strip_prefix(" =")))
+                    {
+                        let home_dir = value.trim();
+                        !home_dir.is_empty() && !std::path::Path::new(home_dir).exists()
+                    } else {
+                        false
+                    }
+                })
+            } else {
+                false
+            }
+        };
+
+        if needs_repair {
+            let venv_dir = std::path::Path::new(&config.venv_path);
+            if venv_dir.exists() {
+                log::warn!(
+                    "Stale venv detected (python='{}') — attempting repair",
+                    python_path
+                );
+                if let Some(base) = venv_dir.parent() {
+                    let uv = {
+                        #[cfg(target_os = "windows")]
+                        {
+                            base.join("bin").join("uv.exe")
+                        }
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            base.join("bin").join("uv")
+                        }
+                    };
+                    let python_dir = base.join("python");
+                    if uv.exists() {
+                        let python_dir_str = python_dir.to_string_lossy().to_string();
+                        let venv_str = config.venv_path.clone();
+                        let uv_str = uv.to_string_lossy().to_string();
+                        let mut repair = tokio_command_no_window(&uv_str);
+                        repair
+                            .args(["venv", &venv_str, "--python", "3.11", "--allow-existing"])
+                            .env("UV_PYTHON_INSTALL_DIR", &python_dir_str)
+                            .stdout(std::process::Stdio::null())
+                            .stderr(std::process::Stdio::null());
+                        match repair.status().await {
+                            Ok(s) if s.success() => {
+                                log::info!("Venv repair succeeded");
+                            }
+                            Ok(s) => {
+                                log::warn!("Venv repair: uv exited with {}", s);
+                            }
+                            Err(e) => {
+                                log::warn!("Venv repair failed: {}", e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Validate paths before attempting to spawn
+    if config.venv_path.is_empty() || !std::path::Path::new(&python_path).exists() {
+        return Err(AppError::ProcessSpawnFailed(format!(
+            "Python not found at '{}'. Run setup first or check your venv_path config.",
+            python_path
+        )));
+    }
+    if config.comfyui_path.is_empty() || !std::path::Path::new(&main_path).exists() {
+        return Err(AppError::ProcessSpawnFailed(format!(
+            "ComfyUI main.py not found at '{}'. Run setup first or check your comfyui_path config.",
+            main_path
+        )));
+    }
+
+    log::info!("Spawning ComfyUI: {} {}", python_path, main_path);
+
+    let mut cmd = tokio::process::Command::new(&python_path);
+    cmd.arg(&main_path)
+        .arg("--listen")
+        .arg("127.0.0.1")
+        .arg("--port")
+        .arg(config.server_port.to_string())
+        .arg("--disable-auto-launch"); // MooshieUI is the frontend — no browser needed
+
+    // Enable latent previews over WebSocket
+    cmd.arg("--preview-method").arg("auto");
+
+    // VRAM management flag
+    match config.vram_mode.as_str() {
+        "high" => {
+            apply_highvram_flag(&mut cmd, &config);
+        }
+        "low" => {
+            cmd.arg("--lowvram");
+        }
+        "none" => {
+            cmd.arg("--novram");
+        }
+        // "normal" and "auto" use ComfyUI's default behavior
+        _ => {}
+    }
+
+    // Attention backend flag (mutually exclusive in ComfyUI). Self-heal: only pass
+    // the flag if the backing package is actually installed, else fall back to
+    // default SDPA so a stale/broken config can't crash ComfyUI at startup.
+    match config.attention_backend.as_str() {
+        backend @ ("sage_v1" | "sage_v2") => {
+            if attention_package_present(&config.venv_path, backend) {
+                cmd.arg("--use-sage-attention");
+            } else {
+                log::warn!(
+                    "attention_backend='{}' but sageattention is not installed in the venv; \
+                     launching ComfyUI without --use-sage-attention (default SDPA).",
+                    backend
+                );
+            }
+        }
+        backend @ ("flash_v1" | "flash_v2") => {
+            if attention_package_present(&config.venv_path, backend) {
+                cmd.arg("--use-flash-attention");
+            } else {
+                log::warn!(
+                    "attention_backend='{}' but flash-attn is not installed in the venv; \
+                     launching ComfyUI without --use-flash-attention (default SDPA).",
+                    backend
+                );
+            }
+        }
+        // "default" → PyTorch SDPA, no flag needed
+        _ => {}
+    }
+
+    // Auto-apply --bf16-vae for Blackwell GPUs to prevent NaN/black images
+    // from fp16 VAE overflow, unless the user has already set a VAE precision flag.
+    let has_vae_flag = config.extra_args.iter().any(|a| {
+        matches!(
+            a.as_str(),
+            "--bf16-vae" | "--fp16-vae" | "--fp32-vae" | "--cpu-vae"
+        )
+    });
+    if !has_vae_flag && has_blackwell_gpu() {
+        cmd.arg("--bf16-vae");
+        log::info!("Auto-applied --bf16-vae for Blackwell GPU");
+    }
+
+    // Shared model directory support (newline-separated for multiple directories)
+    // Generates a YAML config for ComfyUI's --extra-model-paths-config flag.
+    //
+    // Two modes per directory:
+    // 1. **Structured** — directory has recognizable model subdirectories
+    //    (e.g. loras/, checkpoints/).  Each category scans named subdirs only.
+    // 2. **Flat** — directory contains .safetensors/.ckpt files directly with
+    //    no recognizable subdirectories.  We infer the category from the
+    //    directory name and add "." ONLY for that category, preventing cross-
+    //    contamination that the old blanket "." caused (fixed in v0.3.4).
+    if let Some(ref model_dirs_str) = config.extra_model_paths {
+        let dirs: Vec<&str> = model_dirs_str
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty())
+            .collect();
+        if !dirs.is_empty() {
+            let yaml_path = std::env::temp_dir().join("mooshieui_extra_model_paths.yaml");
+            let mut yaml_content = String::new();
+            for (i, dir) in dirs.iter().enumerate() {
+                let dir_path =
+                    crate::commands::api::resolve_extra_model_root(std::path::Path::new(dir));
+                // Escape YAML values: quote paths that contain spaces, colons,
+                // backslashes, or other special characters.
+                let quoted_dir = format!(
+                    "\"{}\"",
+                    dir_path
+                        .to_string_lossy()
+                        .replace('\\', "\\\\")
+                        .replace('"', "\\\"")
+                );
+
+                // Check if this directory looks structured (has known model subdirs)
+                let is_structured = is_structured_model_dir(&dir_path);
+
+                if is_structured {
+                    // Structured directory: scan named subdirectories per category
+                    yaml_content.push_str(&format!(
+                        concat!(
+                            "mooshieui_{idx}:\n",
+                            "  base_path: {dir}\n",
+                            "  checkpoints: |\n",
+                            "    checkpoints\n",
+                            "    Stable-diffusion\n",
+                            "    Stable-Diffusion\n",
+                            "    StableDiffusion\n",
+                            "    models/Stable-diffusion\n",
+                            "    Models/Stable-Diffusion\n",
+                            "    Models/StableDiffusion\n",
+                            "    dlbackend/comfyui/models/checkpoints\n",
+                            "  vae: |\n",
+                            "    vae\n",
+                            "    VAE\n",
+                            "    models/VAE\n",
+                            "    Models/VAE\n",
+                            "    dlbackend/comfyui/models/vae\n",
+                            "  loras: |\n",
+                            "    loras\n",
+                            "    lora\n",
+                            "    Lora\n",
+                            "    LoRA\n",
+                            "    LoRAs\n",
+                            "    LORA\n",
+                            "    Loras\n",
+                            "    LyCORIS\n",
+                            "    lycoris\n",
+                            "    models/Lora\n",
+                            "    models/loras\n",
+                            "    models/LyCORIS\n",
+                            "    Models/Lora\n",
+                            "    Models/loras\n",
+                            "    Models/LyCORIS\n",
+                            "    dlbackend/comfyui/models/loras\n",
+                            "  upscale_models: |\n",
+                            "    upscale_models\n",
+                            "    ESRGAN\n",
+                            "    models/ESRGAN\n",
+                            "    models/RealESRGAN\n",
+                            "    Models/ESRGAN\n",
+                            "    Models/RealESRGAN\n",
+                            "    dlbackend/comfyui/models/upscale_models\n",
+                            "  embeddings: |\n",
+                            "    embeddings\n",
+                            "    models/TextualInversion\n",
+                            "    Models/TextualInversion\n",
+                            "    dlbackend/comfyui/models/embeddings\n",
+                            "  controlnet: |\n",
+                            "    controlnet\n",
+                            "    ControlNet\n",
+                            "    models/ControlNet\n",
+                            "    Models/ControlNet\n",
+                            "    dlbackend/comfyui/models/controlnet\n",
+                            "  clip: |\n",
+                            "    clip\n",
+                            "    models/clip\n",
+                            "    Models/clip\n",
+                            "    dlbackend/comfyui/models/clip\n",
+                            "  unet: |\n",
+                            "    unet\n",
+                            "    models/unet\n",
+                            "    Models/unet\n",
+                            "    dlbackend/comfyui/models/unet\n",
+                            "  diffusion_models: |\n",
+                            "    diffusion_models\n",
+                            "    DiffusionModels\n",
+                            "    models/diffusion_models\n",
+                            "    models/DiffusionModels\n",
+                            "    Models/diffusion_models\n",
+                            "    Models/DiffusionModels\n",
+                            "    dlbackend/comfyui/models/diffusion_models\n",
+                            "  text_encoders: |\n",
+                            "    text_encoders\n",
+                            "    TextEncoders\n",
+                            "    models/text_encoders\n",
+                            "    models/TextEncoders\n",
+                            "    Models/text_encoders\n",
+                            "    Models/TextEncoders\n",
+                            "    dlbackend/comfyui/models/text_encoders\n",
+                            // Anima ControlNet-LLLite weights load through core's
+                            // ModelPatchLoader, which reads this folder (not controlnet).
+                            "  model_patches: |\n",
+                            "    model_patches\n",
+                            "    ModelPatches\n",
+                            "    models/model_patches\n",
+                            "    Models/model_patches\n",
+                            "    dlbackend/comfyui/models/model_patches\n",
+                        ),
+                        idx = i + 1,
+                        dir = quoted_dir
+                    ));
+                } else {
+                    // Flat directory: infer category from directory name and only
+                    // expose "." for that single category to avoid cross-contamination.
+                    let category = classify_flat_model_dir(&dir_path);
+                    log::info!(
+                        "Flat model directory {:?} classified as {:?}",
+                        dir,
+                        category
+                    );
+                    yaml_content.push_str(&format!(
+                        "mooshieui_{idx}:\n  base_path: {dir}\n  {cat}: \".\"\n",
+                        idx = i + 1,
+                        dir = quoted_dir,
+                        cat = category,
+                    ));
+                }
+            }
+            if let Err(e) = std::fs::write(&yaml_path, &yaml_content) {
+                log::warn!("Failed to write extra_model_paths.yaml: {}", e);
+            } else {
+                cmd.arg("--extra-model-paths-config").arg(&yaml_path);
+                log::info!("Using {} extra model path(s)", dirs.len());
+            }
+        }
+    }
+
+    for arg in &config.extra_args {
+        cmd.arg(arg);
+    }
+
+    // Force UTF-8 stdio so custom nodes that print Unicode symbols
+    // (e.g. Untwisting-RoPE progress markers) don't crash on Windows
+    // with cp1252/ANSI encoding errors.
+    cmd.env("PYTHONUTF8", "1");
+    cmd.env("PYTHONIOENCODING", "utf-8");
+
+    // Persist GPU kernel / compile caches across app restarts.
+    //
+    // On newer GPUs the first generation after each launch can spend many minutes
+    // compiling and autotuning kernels. This is most severe on AMD RDNA4
+    // (gfx120x) with bleeding-edge ROCm, where MIOpen has no prebuilt kernel db
+    // and does an exhaustive search, but it also affects the torch.compile /
+    // Triton path on CUDA and Intel XPU's SYCL/NEO compiler caches. Those
+    // caches default to per-process or /tmp locations, so the compile cost is
+    // re-paid on every restart. Point them at a stable directory under the app
+    // data dir (the parent of the ComfyUI install) so the cost is paid once.
+    // Any value the user already set in the environment wins.
+    {
+        let cache_base = std::path::Path::new(&config.comfyui_path)
+            .parent()
+            .map(|p| p.join("kernel-cache"))
+            .unwrap_or_else(|| std::env::temp_dir().join("mooshieui-kernel-cache"));
+        for (var, dir) in kernel_cache_targets(&cache_base) {
+            if std::env::var_os(var).is_some() {
+                continue; // respect an explicit user override
+            }
+            match std::fs::create_dir_all(&dir) {
+                Ok(()) => {
+                    cmd.env(var, &dir);
+                }
+                Err(e) => log::warn!("Could not create kernel cache dir {:?}: {}", dir, e),
+            }
+        }
+        // Unlike CUDA/ROCm, Intel's SYCL runtime ships with persistent kernel
+        // caching disabled by default (SYCL_CACHE_PERSISTENT=0) — without this,
+        // SYCL_CACHE_DIR above has nothing to persist into.
+        if std::env::var_os("SYCL_CACHE_PERSISTENT").is_none() {
+            cmd.env("SYCL_CACHE_PERSISTENT", "1");
+        }
+        log::info!("Persistent kernel cache dir: {}", cache_base.display());
+    }
+
+    // When running inside an AppImage, the bundled LD_LIBRARY_PATH and LD_PRELOAD
+    // can interfere with Python/PyTorch. Clear them for the child process so it
+    // uses the system's native libraries (CUDA, ROCm, etc.).
+    #[cfg(target_os = "linux")]
+    strip_appimage_env(&mut cmd);
+
+    // Hide the console window on Windows so ComfyUI doesn't pop up a terminal
+    #[cfg(target_os = "windows")]
+    {
+        #[allow(unused_imports)]
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
+    // Log ComfyUI output to a temp file for debugging
+    let log_path = std::env::temp_dir().join("comfyui-desktop-stderr.log");
+    let log_file = std::fs::File::create(&log_path).ok();
+    log::info!("ComfyUI log: {}", log_path.display());
+
+    cmd.stdout(std::process::Stdio::null())
+        .stderr(match log_file {
+            Some(f) => std::process::Stdio::from(f),
+            None => std::process::Stdio::null(),
+        })
+        .kill_on_drop(!config.keep_alive);
+
+    let child = cmd
+        .spawn()
+        .map_err(|e| AppError::ProcessSpawnFailed(e.to_string()))?;
+
+    *state.comfyui_process.lock().await = Some(child);
+
+    Ok(StartResult::Spawned)
+}
+
+/// Poll until the ComfyUI HTTP server responds on `/system_stats`.
+/// Returns `Ok(())` once ready, or an error after the timeout.
+/// Also checks if the child process has exited early (crash), and if so,
+/// reads the stderr log for diagnostic information.
+pub async fn wait_for_ready(state: &AppState, timeout_secs: u64) -> Result<(), AppError> {
+    let base_url = state.base_url().await;
+    let url = format!("{}/system_stats", base_url);
+    let iterations = timeout_secs * 2; // 500ms per iteration
+
+    for i in 0..iterations {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Check if the server is responding
+        if comfyui_health_ok(&state.http_client, &url).await {
+            super::nodes::verify_required_mooshie_nodes(&state.http_client, &base_url)
+                .await
+                .map_err(AppError::ProcessSpawnFailed)?;
+            if let Err(e) =
+                super::nodes::verify_required_controlnet_nodes(&state.http_client, &base_url).await
+            {
+                log::warn!(
+                    "ControlNet custom nodes not loaded at startup (optional): {}",
+                    e
+                );
+            }
+            if let Err(e) =
+                super::nodes::verify_required_style_transfer_nodes(&state.http_client, &base_url)
+                    .await
+            {
+                log::warn!(
+                    "Style transfer custom nodes not loaded at startup (optional): {}",
+                    e
+                );
+            }
+            if let Err(e) =
+                super::nodes::verify_required_gguf_nodes(&state.http_client, &base_url).await
+            {
+                log::warn!("GGUF custom nodes not loaded at startup (optional): {}", e);
+            }
+            mark_legacy_worker_idle(state).await;
+            return Ok(());
+        }
+
+        // Every 2 seconds, check if the child process has already exited (crashed)
+        if i % 4 == 3 {
+            let mut process = state.comfyui_process.lock().await;
+            if let Some(ref mut child) = *process {
+                match child.try_wait() {
+                    Ok(Some(status)) => {
+                        *process = None;
+                        let log_excerpt = read_comfyui_log_tail(30);
+                        let msg = if let Some(ref log) = log_excerpt {
+                            // Detect PyTorch installed without GPU support
+                            if log.contains("Torch not compiled with CUDA enabled")
+                                || log.contains("CUDA not available")
+                            {
+                                // The "ROCm is Linux-only" hint only makes sense off Linux.
+                                // On Linux, point AMD users at the right remedy instead.
+                                #[cfg(target_os = "linux")]
+                                let note =
+                                    "Note: if you have an AMD GPU, make sure it is ROCm-supported \
+                                     and select AMD (ROCm) when reinstalling PyTorch.";
+                                #[cfg(not(target_os = "linux"))]
+                                let note =
+                                    "Note: AMD GPU acceleration (ROCm) is only available on Linux.";
+                                format!(
+                                    "PyTorch was installed without GPU support. \
+                                     The CPU-only version of PyTorch was installed instead of the GPU-accelerated version. \
+                                     Go to Settings → Advanced → Reinstall PyTorch to fix this, \
+                                     or re-run setup and make sure the correct GPU type is selected. \
+                                     {}",
+                                    note
+                                )
+                            } else {
+                                format!(
+                                    "ComfyUI process exited with {} — last log output:\n{}",
+                                    status, log
+                                )
+                            }
+                        } else {
+                            format!("ComfyUI process exited with {}", status)
+                        };
+                        return Err(AppError::ProcessSpawnFailed(msg));
+                    }
+                    Ok(None) => {} // Still running, keep waiting
+                    Err(e) => {
+                        log::warn!("Failed to check ComfyUI process status: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
+    // Timeout — read logs for diagnostics
+    let log_excerpt = read_comfyui_log_tail(30);
+    let msg = if let Some(log) = log_excerpt {
+        format!(
+            "ComfyUI did not start within {} seconds — last log output:\n{}",
+            timeout_secs, log
+        )
+    } else {
+        format!("ComfyUI did not start within {} seconds", timeout_secs)
+    };
+    Err(AppError::ConnectionFailed(msg))
+}
+
+/// Read the last N lines from the ComfyUI stderr log file for diagnostics.
+pub fn read_comfyui_log_tail(lines: usize) -> Option<String> {
+    let log_path = std::env::temp_dir().join("comfyui-desktop-stderr.log");
+    let content = std::fs::read_to_string(&log_path).ok()?;
+    let all_lines: Vec<&str> = content.lines().collect();
+    let start = all_lines.len().saturating_sub(lines);
+    let tail: Vec<&str> = all_lines[start..].to_vec();
+    if tail.is_empty() {
+        None
+    } else {
+        Some(tail.join("\n"))
+    }
+}
+
+pub async fn stop_comfyui_process(state: &AppState) -> Result<(), AppError> {
+    let config = state.config.read().await.clone();
+    let port = config.server_port;
+
+    // Disconnect WebSocket first
+    {
+        let mut ws = state.ws_handle.lock().await;
+        if let Some(h) = ws.take() {
+            h.abort();
+        }
+    }
+
+    // Kill our child process if we have one
+    {
+        let mut process = state.comfyui_process.lock().await;
+        if let Some(ref mut child) = *process {
+            child.kill().await.ok();
+            let _ = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;
+            *process = None;
+        }
+    }
+
+    if uses_configured_gpu_workers(&config) {
+        stop_all_workers(state).await;
+        return Ok(());
+    }
+
+    // If something is still listening on the port (external process or race),
+    // kill it by port number
+    kill_process_on_port(port).await;
+
+    // Wait for the port to actually be free
+    let health_url = format!("http://127.0.0.1:{}/system_stats", port);
+    for _ in 0..20 {
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        if !comfyui_health_ok(&state.http_client, &health_url).await {
+            return Ok(()); // Port is free
+        }
+    }
+
+    log::warn!("Port {} still in use after stop attempts", port);
+    Ok(())
+}
+
+/// Synchronous shutdown path used from Tauri's `RunEvent::ExitRequested`.
+pub fn stop_comfyui_process_blocking(state: &AppState) {
+    let config = state.config.blocking_read().clone();
+
+    {
+        let mut ws = state.ws_handle.blocking_lock();
+        if let Some(h) = ws.take() {
+            h.abort();
+        }
+    }
+
+    {
+        let mut process = state.comfyui_process.blocking_lock();
+        if let Some(ref mut child) = *process {
+            log::info!("Shutting down ComfyUI process...");
+            let _ = child.start_kill();
+            *process = None;
+        }
+    }
+
+    if uses_configured_gpu_workers(&config) {
+        stop_all_workers_blocking(state);
+    } else {
+        kill_process_on_port_blocking(config.server_port);
+    }
+}
+
+/// Find and kill any process listening on the given port.
+pub async fn kill_process_on_port(port: u16) {
+    #[cfg(target_os = "linux")]
+    {
+        // fuser -k sends SIGKILL to all processes using the port
+        let _ = tokio::process::Command::new("fuser")
+            .args(["-k", &format!("{}/tcp", port)])
+            .output()
+            .await;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(output) = tokio::process::Command::new("lsof")
+            .args(["-nP", &format!("-iTCP:{port}"), "-sTCP:LISTEN", "-t"])
+            .output()
+            .await
+        {
+            let pids = String::from_utf8_lossy(&output.stdout);
+            for pid in pids.lines() {
+                if let Ok(pid) = pid.trim().parse::<u32>() {
+                    let _ = tokio::process::Command::new("kill")
+                        .args(["-9", &pid.to_string()])
+                        .output()
+                        .await;
+                }
+            }
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        #[allow(unused_imports)]
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        let mut cmd = tokio::process::Command::new("cmd");
+        cmd.args(["/C", "netstat -ano"]);
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        if let Ok(output) = cmd.output().await {
+            let text = String::from_utf8_lossy(&output.stdout);
+            for line in text.lines() {
+                if let Some(pid) = parse_netstat_listening_pid(line, port) {
+                    let mut kill_cmd = tokio::process::Command::new("taskkill");
+                    kill_cmd.args(["/F", "/PID", &pid.to_string()]);
+                    kill_cmd.creation_flags(CREATE_NO_WINDOW);
+                    let _ = kill_cmd.output().await;
+                }
+            }
+        }
+    }
+}
+
+/// Blocking variant for shutdown hooks that cannot `.await`.
+fn kill_process_on_port_blocking(port: u16) {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("fuser")
+            .args(["-k", &format!("{}/tcp", port)])
+            .output();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(output) = std::process::Command::new("lsof")
+            .args(["-nP", &format!("-iTCP:{port}"), "-sTCP:LISTEN", "-t"])
+            .output()
+        {
+            let pids = String::from_utf8_lossy(&output.stdout);
+            for pid in pids.lines() {
+                if pid.trim().parse::<u32>().is_ok() {
+                    let _ = std::process::Command::new("kill")
+                        .args(["-9", pid.trim()])
+                        .output();
+                }
+            }
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        #[allow(unused_imports)]
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        if let Ok(output) = std::process::Command::new("netstat")
+            .arg("-ano")
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+        {
+            for line in String::from_utf8_lossy(&output.stdout).lines() {
+                if let Some(pid) = parse_netstat_listening_pid(line, port) {
+                    let _ = std::process::Command::new("taskkill")
+                        .args(["/F", "/PID", &pid.to_string()])
+                        .creation_flags(CREATE_NO_WINDOW)
+                        .output();
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-GPU worker process management
+// ---------------------------------------------------------------------------
+
+use crate::comfyui::gpu_manager::{GpuWorker, WorkerStatus};
+use std::sync::Arc;
+
+/// Start a ComfyUI process for a specific GPU worker.
+/// Sets CUDA_VISIBLE_DEVICES to pin the process to the worker's GPU.
+pub async fn start_worker_process(
+    state: &AppState,
+    worker: &Arc<GpuWorker>,
+) -> Result<(), AppError> {
+    let config = state.config.read().await.clone();
+
+    // Deploy custom nodes (same as single-process path)
+    if !config.comfyui_path.is_empty() {
+        let main_exists = std::path::Path::new(&config.comfyui_path)
+            .join("main.py")
+            .exists();
+        if main_exists {
+            // Must run before launch: ComfyUI caches its model file lists at startup.
+            migrate_anima_lllite_weights(&config.comfyui_path);
+            super::nodes::ensure_mooshie_nodes(&config.comfyui_path)
+                .map_err(AppError::ProcessSpawnFailed)?;
+            // Non-fatal: logs a warning on failure rather than blocking startup.
+            super::nodes::ensure_mooshie_node_requirements(
+                &config.comfyui_path,
+                &config.venv_path,
+                config.network_proxy.as_deref(),
+                config.pip_index_url.as_deref(),
+            )
+            .await
+            .map_err(AppError::ProcessSpawnFailed)?;
+            super::nodes::ensure_required_controlnet_nodes(
+                &config.comfyui_path,
+                &config.venv_path,
+                config.network_proxy.as_deref(),
+                config.pip_index_url.as_deref(),
+            )
+            .await
+            .map_err(AppError::ProcessSpawnFailed)?;
+            super::nodes::ensure_required_style_transfer_nodes(
+                &config.comfyui_path,
+                &config.venv_path,
+                config.network_proxy.as_deref(),
+                config.pip_index_url.as_deref(),
+            )
+            .await
+            .map_err(AppError::ProcessSpawnFailed)?;
+            super::nodes::ensure_required_gguf_nodes(
+                &config.comfyui_path,
+                &config.venv_path,
+                config.network_proxy.as_deref(),
+                config.pip_index_url.as_deref(),
+            )
+            .await
+            .map_err(AppError::ProcessSpawnFailed)?;
+        }
+    }
+
+    if config.server_mode != ServerMode::AutoLaunch {
+        return Ok(());
+    }
+
+    // Check if something is already listening on the worker's port
+    let health_url = format!("{}/system_stats", worker.base_url);
+    if comfyui_health_ok(&state.http_client, &health_url).await {
+        let mooshie_ok =
+            super::nodes::verify_required_mooshie_nodes(&state.http_client, &worker.base_url).await;
+        let controlnet_ok =
+            super::nodes::verify_required_controlnet_nodes(&state.http_client, &worker.base_url)
+                .await;
+        let style_transfer_ok = super::nodes::verify_required_style_transfer_nodes(
+            &state.http_client,
+            &worker.base_url,
+        )
+        .await;
+        let gguf_ok =
+            super::nodes::verify_required_gguf_nodes(&state.http_client, &worker.base_url).await;
+
+        if mooshie_ok.is_ok() {
+            if let Err(e) = controlnet_ok {
+                log::warn!(
+                    "Worker {} (GPU {}): optional ControlNet nodes missing at {}: {}",
+                    worker.id,
+                    worker.gpu_index,
+                    worker.base_url,
+                    e
+                );
+            }
+            if let Err(e) = style_transfer_ok {
+                log::warn!(
+                    "Worker {} (GPU {}): optional style transfer nodes missing at {}: {}",
+                    worker.id,
+                    worker.gpu_index,
+                    worker.base_url,
+                    e
+                );
+            }
+            if let Err(e) = gguf_ok {
+                log::warn!(
+                    "Worker {} (GPU {}): optional GGUF nodes missing at {}: {}",
+                    worker.id,
+                    worker.gpu_index,
+                    worker.base_url,
+                    e
+                );
+            }
+            log::info!(
+                "Worker {} (GPU {}): ComfyUI already running at {}",
+                worker.id,
+                worker.gpu_index,
+                worker.base_url,
+            );
+            {
+                let mut status = worker.status.write().await;
+                *status = WorkerStatus::Idle;
+            }
+            return Ok(());
+        }
+
+        log::warn!(
+            "Worker {} (GPU {}): ComfyUI at {} missing MooshieUI nodes — freeing port {}",
+            worker.id,
+            worker.gpu_index,
+            worker.base_url,
+            worker.port
+        );
+        wait_for_port_free(state, &health_url, worker.port).await;
+    }
+
+    #[cfg(target_os = "windows")]
+    let python_path = format!("{}/Scripts/python.exe", config.venv_path);
+    #[cfg(not(target_os = "windows"))]
+    let python_path = format!("{}/bin/python", config.venv_path);
+    let main_path = format!("{}/main.py", config.comfyui_path);
+
+    if config.venv_path.is_empty() || !std::path::Path::new(&python_path).exists() {
+        return Err(AppError::ProcessSpawnFailed(format!(
+            "Python not found at '{}'. Run setup first.",
+            python_path
+        )));
+    }
+    if config.comfyui_path.is_empty() || !std::path::Path::new(&main_path).exists() {
+        return Err(AppError::ProcessSpawnFailed(format!(
+            "ComfyUI main.py not found at '{}'.",
+            main_path
+        )));
+    }
+
+    log::info!(
+        "Worker {} (GPU {}): Spawning ComfyUI on port {}",
+        worker.id,
+        worker.gpu_index,
+        worker.port,
+    );
+
+    {
+        let mut status = worker.status.write().await;
+        *status = WorkerStatus::Starting;
+    }
+
+    let mut cmd = tokio::process::Command::new(&python_path);
+    cmd.arg(&main_path)
+        .arg("--listen")
+        .arg("127.0.0.1")
+        .arg("--port")
+        .arg(worker.port.to_string())
+        .arg("--disable-auto-launch"); // MooshieUI is the frontend — no browser needed
+
+    cmd.arg("--preview-method").arg("auto");
+
+    // VRAM mode: worker-specific override > global config
+    let vram_mode = worker
+        .vram_mode
+        .as_deref()
+        .unwrap_or(config.vram_mode.as_str());
+    match vram_mode {
+        "high" => {
+            apply_highvram_flag(&mut cmd, &config);
+        }
+        "low" => {
+            cmd.arg("--lowvram");
+        }
+        "none" => {
+            cmd.arg("--novram");
+        }
+        _ => {}
+    }
+
+    // bf16 VAE for Blackwell
+    let has_vae_flag = config.extra_args.iter().any(|a| {
+        matches!(
+            a.as_str(),
+            "--bf16-vae" | "--fp16-vae" | "--fp32-vae" | "--cpu-vae"
+        )
+    });
+    if !has_vae_flag && has_blackwell_gpu() {
+        cmd.arg("--bf16-vae");
+    }
+
+    // Extra model paths (reuse the main YAML if the single-process path wrote it)
+    let main_yaml = std::env::temp_dir().join("mooshieui_extra_model_paths.yaml");
+    if main_yaml.exists() {
+        cmd.arg("--extra-model-paths-config").arg(&main_yaml);
+    }
+
+    for arg in &config.extra_args {
+        cmd.arg(arg);
+    }
+
+    // Force UTF-8 stdio so custom nodes that print Unicode symbols
+    // (e.g. Untwisting-RoPE progress markers) don't crash on Windows
+    // with cp1252/ANSI encoding errors.
+    cmd.env("PYTHONUTF8", "1");
+    cmd.env("PYTHONIOENCODING", "utf-8");
+
+    // Pin to specific GPU
+    cmd.env("CUDA_VISIBLE_DEVICES", worker.gpu_index.to_string());
+
+    // Persist GPU kernel / compile caches across restarts (see the single-process
+    // spawn path for the rationale). Namespaced per GPU so concurrent workers
+    // don't contend on the same MIOpen db.
+    {
+        let cache_base = std::path::Path::new(&config.comfyui_path)
+            .parent()
+            .map(|p| p.join("kernel-cache"))
+            .unwrap_or_else(|| std::env::temp_dir().join("mooshieui-kernel-cache"))
+            .join(format!("gpu{}", worker.gpu_index));
+        for (var, dir) in kernel_cache_targets(&cache_base) {
+            if std::env::var_os(var).is_some() {
+                continue; // respect an explicit user override
+            }
+            match std::fs::create_dir_all(&dir) {
+                Ok(()) => {
+                    cmd.env(var, &dir);
+                }
+                Err(e) => log::warn!("Could not create kernel cache dir {:?}: {}", dir, e),
+            }
+        }
+        if std::env::var_os("SYCL_CACHE_PERSISTENT").is_none() {
+            cmd.env("SYCL_CACHE_PERSISTENT", "1");
+        }
+    }
+
+    // AppImage cleanup on Linux
+    #[cfg(target_os = "linux")]
+    strip_appimage_env(&mut cmd);
+
+    #[cfg(target_os = "windows")]
+    {
+        #[allow(unused_imports)]
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+
+    let log_path =
+        std::env::temp_dir().join(format!("comfyui-desktop-worker{}-stderr.log", worker.id));
+    let log_file = std::fs::File::create(&log_path).ok();
+    log::info!("Worker {} log: {}", worker.id, log_path.display());
+
+    cmd.stdout(std::process::Stdio::null())
+        .stderr(match log_file {
+            Some(f) => std::process::Stdio::from(f),
+            None => std::process::Stdio::null(),
+        })
+        .kill_on_drop(!config.keep_alive);
+
+    let child = cmd
+        .spawn()
+        .map_err(|e| AppError::ProcessSpawnFailed(e.to_string()))?;
+
+    *worker.process.lock().await = Some(child);
+    Ok(())
+}
+
+/// Wait for a worker's ComfyUI process to become ready.
+pub async fn wait_for_worker_ready(
+    state: &AppState,
+    worker: &Arc<GpuWorker>,
+    timeout_secs: u64,
+) -> Result<(), AppError> {
+    let url = format!("{}/system_stats", worker.base_url);
+    let iterations = timeout_secs * 2;
+
+    for i in 0..iterations {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        if comfyui_health_ok(&state.http_client, &url).await {
+            if let Err(e) =
+                super::nodes::verify_required_mooshie_nodes(&state.http_client, &worker.base_url)
+                    .await
+            {
+                let mut status = worker.status.write().await;
+                *status = WorkerStatus::Error;
+                return Err(AppError::ProcessSpawnFailed(e));
+            }
+            if let Err(e) =
+                super::nodes::verify_required_controlnet_nodes(&state.http_client, &worker.base_url)
+                    .await
+            {
+                log::warn!(
+                    "Worker {}: ControlNet custom nodes not loaded (optional): {}",
+                    worker.id,
+                    e
+                );
+            }
+            if let Err(e) = super::nodes::verify_required_style_transfer_nodes(
+                &state.http_client,
+                &worker.base_url,
+            )
+            .await
+            {
+                log::warn!(
+                    "Worker {}: style transfer custom nodes not loaded (optional): {}",
+                    worker.id,
+                    e
+                );
+            }
+            if let Err(e) =
+                super::nodes::verify_required_gguf_nodes(&state.http_client, &worker.base_url).await
+            {
+                log::warn!(
+                    "Worker {}: GGUF custom nodes not loaded (optional): {}",
+                    worker.id,
+                    e
+                );
+            }
+            let mut status = worker.status.write().await;
+            *status = WorkerStatus::Idle;
+            log::info!(
+                "Worker {} (GPU {}): ready on port {}",
+                worker.id,
+                worker.gpu_index,
+                worker.port
+            );
+            return Ok(());
+        }
+
+        // Check for crash
+        if i % 4 == 3 {
+            let mut process = worker.process.lock().await;
+            if let Some(ref mut child) = *process {
+                match child.try_wait() {
+                    Ok(Some(exit_status)) => {
+                        *process = None;
+                        let mut status = worker.status.write().await;
+                        *status = WorkerStatus::Error;
+                        let log_path = std::env::temp_dir()
+                            .join(format!("comfyui-desktop-worker{}-stderr.log", worker.id));
+                        let log_excerpt = std::fs::read_to_string(&log_path).ok().map(|content| {
+                            let lines: Vec<&str> = content.lines().collect();
+                            let start = lines.len().saturating_sub(20);
+                            lines[start..].join("\n")
+                        });
+                        let msg = match log_excerpt {
+                            Some(log) => format!(
+                                "Worker {} (GPU {}): process exited with {} — {}",
+                                worker.id, worker.gpu_index, exit_status, log
+                            ),
+                            None => format!(
+                                "Worker {} (GPU {}): process exited with {}",
+                                worker.id, worker.gpu_index, exit_status
+                            ),
+                        };
+                        return Err(AppError::ProcessSpawnFailed(msg));
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        log::warn!("Worker {}: Failed to check process: {}", worker.id, e);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut status = worker.status.write().await;
+    *status = WorkerStatus::Error;
+    Err(AppError::ConnectionFailed(format!(
+        "Worker {} (GPU {}): did not start within {} seconds",
+        worker.id, worker.gpu_index, timeout_secs
+    )))
+}
+
+/// Stop a specific worker's ComfyUI process.
+pub async fn stop_worker_process(worker: &Arc<GpuWorker>) -> Result<(), AppError> {
+    // Abort WebSocket task
+    {
+        let mut ws = worker.ws_handle.lock().await;
+        if let Some(h) = ws.take() {
+            h.abort();
+        }
+    }
+
+    // Kill child process
+    {
+        let mut process = worker.process.lock().await;
+        if let Some(ref mut child) = *process {
+            child.kill().await.ok();
+            let _ = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;
+            *process = None;
+        }
+    }
+
+    // Kill anything lingering on the port
+    kill_process_on_port(worker.port).await;
+
+    let mut status = worker.status.write().await;
+    *status = WorkerStatus::Stopped;
+
+    log::info!("Worker {} (GPU {}): stopped", worker.id, worker.gpu_index);
+    Ok(())
+}
+
+/// Start all enabled workers.
+pub async fn start_all_workers(state: &AppState) -> Vec<(u32, Result<(), AppError>)> {
+    let mut results = Vec::new();
+    for worker in &state.gpu_manager.workers {
+        let status = *worker.status.read().await;
+        if status == WorkerStatus::Disabled {
+            continue;
+        }
+        let res = start_worker_process(state, worker).await;
+        results.push((worker.id, res));
+    }
+    results
+}
+
+/// Wait for all starting workers to become ready (in parallel).
+pub async fn wait_all_workers_ready(state: &AppState, timeout_secs: u64) {
+    let mut handles = Vec::new();
+
+    for worker in &state.gpu_manager.workers {
+        let status = *worker.status.read().await;
+        if status != WorkerStatus::Starting {
+            continue;
+        }
+
+        let w = Arc::clone(worker);
+        let http_client = state.http_client.clone();
+        let base_url = w.base_url.clone();
+        let worker_id = w.id;
+        let gpu_index = w.gpu_index;
+        let port = w.port;
+
+        let handle = tokio::spawn(async move {
+            let url = format!("{}/system_stats", base_url);
+            let iterations = timeout_secs * 2;
+            for i in 0..iterations {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                if comfyui_health_ok(&http_client, &url).await {
+                    // Health endpoint responding is not enough: verify the
+                    // required MooshieUI custom nodes are actually loaded before
+                    // marking the worker Idle, mirroring wait_for_worker_ready.
+                    // Otherwise a node-less worker gets handed generation jobs
+                    // and fails them.
+                    if let Err(e) =
+                        super::nodes::verify_required_mooshie_nodes(&http_client, &base_url).await
+                    {
+                        let mut status = w.status.write().await;
+                        *status = WorkerStatus::Error;
+                        log::error!(
+                            "Worker {} (GPU {}): MooshieUI nodes not loaded at {}: {}",
+                            worker_id,
+                            gpu_index,
+                            base_url,
+                            e
+                        );
+                        return Err(worker_id);
+                    }
+                    if let Err(e) =
+                        super::nodes::verify_required_controlnet_nodes(&http_client, &base_url)
+                            .await
+                    {
+                        log::warn!(
+                            "Worker {}: ControlNet custom nodes not loaded (optional): {}",
+                            worker_id,
+                            e
+                        );
+                    }
+                    if let Err(e) =
+                        super::nodes::verify_required_style_transfer_nodes(&http_client, &base_url)
+                            .await
+                    {
+                        log::warn!(
+                            "Worker {}: style transfer custom nodes not loaded (optional): {}",
+                            worker_id,
+                            e
+                        );
+                    }
+                    if let Err(e) =
+                        super::nodes::verify_required_gguf_nodes(&http_client, &base_url).await
+                    {
+                        log::warn!(
+                            "Worker {}: GGUF custom nodes not loaded (optional): {}",
+                            worker_id,
+                            e
+                        );
+                    }
+                    let mut status = w.status.write().await;
+                    *status = WorkerStatus::Idle;
+                    log::info!(
+                        "Worker {} (GPU {}): ready on port {}",
+                        worker_id,
+                        gpu_index,
+                        port
+                    );
+                    return Ok(worker_id);
+                }
+                if i % 4 == 3 {
+                    let mut process = w.process.lock().await;
+                    if let Some(ref mut child) = *process {
+                        if let Ok(Some(_)) = child.try_wait() {
+                            *process = None;
+                            let mut status = w.status.write().await;
+                            *status = WorkerStatus::Error;
+                            return Err(worker_id);
+                        }
+                    }
+                }
+            }
+            let mut status = w.status.write().await;
+            *status = WorkerStatus::Error;
+            Err(worker_id)
+        });
+        handles.push(handle);
+    }
+
+    for handle in handles {
+        match handle.await {
+            Ok(Ok(id)) => log::info!("Worker {} is ready", id),
+            Ok(Err(id)) => log::error!("Worker {} failed to become ready", id),
+            Err(e) => log::error!("Worker ready-wait task panicked: {}", e),
+        }
+    }
+}
+
+/// Stop all workers.
+pub async fn stop_all_workers(state: &AppState) {
+    for worker in &state.gpu_manager.workers {
+        if let Err(e) = stop_worker_process(worker).await {
+            log::error!("Failed to stop worker {}: {}", worker.id, e);
+        }
+    }
+}
+
+/// Stop all workers from synchronous shutdown hooks.
+pub fn stop_all_workers_blocking(state: &AppState) {
+    use super::gpu_manager::WorkerStatus;
+
+    for worker in &state.gpu_manager.workers {
+        {
+            let mut ws = worker.ws_handle.blocking_lock();
+            if let Some(h) = ws.take() {
+                h.abort();
+            }
+        }
+
+        {
+            let mut process = worker.process.blocking_lock();
+            if let Some(ref mut child) = *process {
+                log::info!(
+                    "Shutting down worker {} (GPU {})...",
+                    worker.id,
+                    worker.gpu_index
+                );
+                let _ = child.start_kill();
+                *process = None;
+            }
+        }
+
+        kill_process_on_port_blocking(worker.port);
+
+        worker.release();
+        let mut status = worker.status.blocking_write();
+        if *status != WorkerStatus::Disabled {
+            *status = WorkerStatus::Stopped;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{kernel_cache_targets, uses_configured_gpu_workers};
+    use crate::config::{AppConfig, GpuWorkerConfig};
+
+    #[test]
+    fn configured_gpu_worker_mode_requires_explicit_config_entries() {
+        let mut config = AppConfig::default();
+        assert!(!uses_configured_gpu_workers(&config));
+
+        config.gpu_workers.push(GpuWorkerConfig {
+            gpu_index: 1,
+            port: Some(8189),
+            enabled: true,
+            label: Some("GPU 1".to_string()),
+            vram_mode: None,
+        });
+        assert!(uses_configured_gpu_workers(&config));
+    }
+
+    #[test]
+    fn disabled_configured_worker_still_uses_worker_mode() {
+        let mut config = AppConfig::default();
+        config.gpu_workers.push(GpuWorkerConfig {
+            gpu_index: 1,
+            port: Some(8189),
+            enabled: false,
+            label: None,
+            vram_mode: None,
+        });
+
+        assert!(uses_configured_gpu_workers(&config));
+    }
+
+    #[test]
+    fn kernel_cache_targets_covers_all_backends_including_intel() {
+        let base = std::path::Path::new("/tmp/mooshie-kernel-cache-test");
+        let targets = kernel_cache_targets(base);
+        assert_eq!(targets.len(), 6);
+
+        let find = |var: &str| {
+            targets
+                .iter()
+                .find(|(v, _)| *v == var)
+                .map(|(_, d)| d.clone())
+        };
+        assert_eq!(
+            find("TORCHINDUCTOR_CACHE_DIR"),
+            Some(base.join("torchinductor"))
+        );
+        assert_eq!(find("TRITON_CACHE_DIR"), Some(base.join("triton")));
+        assert_eq!(find("MIOPEN_USER_DB_PATH"), Some(base.join("miopen")));
+        assert_eq!(find("MIOPEN_CUSTOM_CACHE_DIR"), Some(base.join("miopen")));
+        assert_eq!(find("SYCL_CACHE_DIR"), Some(base.join("sycl")));
+        assert_eq!(find("NEO_CACHE_DIR"), Some(base.join("neo")));
+    }
+}
