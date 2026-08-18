@@ -1,9 +1,14 @@
+## What's New in v2.1.4
+
+### Fixes and maintenance
+- **Fixed ComfyUI crashing on startup with "Torch not compiled with CUDA enabled"**: when the installed PyTorch build has no GPU accelerator support (for example CPU-only installs, or AMD GPUs on Windows where ROCm isn't available), ComfyUI was launched without the `--cpu` flag, and its own startup code assumes CUDA is present, crashing instead of falling back to CPU. MooshieUI now checks the installed torch build at launch and automatically passes `--cpu` when no accelerator is available. ([#610](https://github.com/Mooshieblob1/MooshieUI/pull/610))
+
+---
+
 ## What's New in v2.1.3
 
 ### Fixes and maintenance
-- **VAE selector improvements**: the VAE dropdown now includes a "None" option to explicitly skip VAE encoding, useful for workflows where the VAE is applied elsewhere. Previously only "Automatic" and model-specific VAEs were available.
-- **Text encoder UI permanence**: the text encoder selector is now permanently visible in split-model mode, ensuring all model components can be configured without conditional visibility changes.
-- **i18n consistency**: added "None" translations for the VAE option across all 12 supported languages (English, German, Spanish, French, Italian, Japanese, Korean, Portuguese, Russian, Traditional Chinese, Simplified Chinese, Polish).
+- **Fixed setup failing on Windows profiles with an apostrophe in the path**: the uv/uvx and ComfyUI archive extraction steps built PowerShell commands by interpolating file paths directly into single-quoted strings, so a path like `C:\Users\Cole's Computer\...` broke the quoting and corrupted the command, causing setup to fail. Paths are now properly escaped before being passed to PowerShell. ([#608](https://github.com/Mooshieblob1/MooshieUI/pull/608))
 
 ---
 
