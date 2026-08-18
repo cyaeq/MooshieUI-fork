@@ -137,7 +137,11 @@ fn resolve_role(state: &WebState, headers: &HeaderMap, remote: &SocketAddr) -> U
 /// authenticated client uses the shared admin gallery/prefs, so this always
 /// returns `None`. Anonymous LAN callers also return `None` here and are
 /// rejected by the role checks on the individual handlers.
-fn resolve_username(_state: &WebState, _headers: &HeaderMap, _remote: &SocketAddr) -> Option<String> {
+fn resolve_username(
+    _state: &WebState,
+    _headers: &HeaderMap,
+    _remote: &SocketAddr,
+) -> Option<String> {
     None
 }
 
@@ -2136,6 +2140,34 @@ async fn dispatch_command(
             *current = new_config;
             state.set_lan_access_token(&lan_token);
             Ok(serde_json::json!(null))
+        }
+        "get_lan_info" => {
+            let port = state.config.read().await.ui_server_port;
+            Ok(serde_json::json!({
+                "addresses": get_lan_addresses(port),
+                "port": port,
+            }))
+        }
+        "quit_application" => {
+            if !caller_is_local {
+                return Err("Only the local browser can exit the application".into());
+            }
+            #[cfg(not(feature = "desktop"))]
+            {
+                return Err("Application exit is not available in server mode".into());
+            }
+            #[cfg(feature = "desktop")]
+            {
+                let app_handle = state.app_handle.lock().await.clone();
+                let Some(app_handle) = app_handle else {
+                    return Err("AppHandle not available".into());
+                };
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    app_handle.exit(0);
+                });
+                Ok(serde_json::json!(null))
+            }
         }
         "check_attention_backend" => {
             let status = crate::commands::api::check_attention_backend_core(&state)
@@ -5528,6 +5560,7 @@ async fn auth_status_handler(
         "lan_enabled": state.lan_enabled,
         "server_mode": !cfg!(feature = "desktop"),
         "can_use_modelhub": can_use_modelhub,
+        "can_exit_application": cfg!(feature = "desktop") && is_localhost(&remote),
     }))
 }
 
@@ -5950,11 +5983,7 @@ async fn auth_lan_info_handler(
         let cfg = state.app.config.read().await;
         cfg.ui_server_port
     };
-    let ips = get_lan_ips();
-    let addresses: Vec<String> = ips
-        .iter()
-        .map(|ip| format!("http://{}:{}", ip, port))
-        .collect();
+    let addresses = get_lan_addresses(port);
     (
         StatusCode::OK,
         Json(serde_json::json!({
@@ -5983,6 +6012,13 @@ fn get_lan_ips() -> Vec<String> {
         ips.push("<unknown>".to_string());
     }
     ips
+}
+
+pub(crate) fn get_lan_addresses(port: u16) -> Vec<String> {
+    get_lan_ips()
+        .into_iter()
+        .map(|ip| format!("http://{}:{}", ip, port))
+        .collect()
 }
 
 /// Resolve the gallery directory for a given user.

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { AppConfig, LlmProviderState, QueueInfo } from "../../types/index.js";
-  import { getConfig, updateConfig, stopComfyui, startComfyui, fetchReleaseNotes, importImageDirectory, exportLogs, exportLogsContent, getGalleryPath, setGalleryPath, setStorageLimit, installAttentionBackend, checkAttentionBackend, clearAllQueues, getQueue, getGpuStats, getComfyuiVersion, updateComfyui } from "../../utils/api.js";
+  import { getConfig, updateConfig, stopComfyui, startComfyui, fetchReleaseNotes, importImageDirectory, exportLogs, exportLogsContent, getGalleryPath, setGalleryPath, setStorageLimit, installAttentionBackend, checkAttentionBackend, clearAllQueues, getQueue, getGpuStats, getComfyuiVersion, updateComfyui, getLanInfo } from "../../utils/api.js";
   import type { ReleaseNote, ImportResult, AttentionBackendStatus, BackendSupport, ComfyUiVersionInfo } from "../../utils/api.js";
   import { connection } from "../../stores/connection.svelte.js";
   import { autocomplete } from "../../stores/autocomplete.svelte.js";
@@ -175,6 +175,7 @@
   let prefsImportDone = $state(false);
   let prefsTransferError = $state<string | null>(null);
   let prefsFileInput = $state<HTMLInputElement | null>(null);
+  let prefsServerMessage = $state<"uploaded" | "downloaded" | "no_data" | null>(null);
 
   // Clear queue state (mod/admin only)
   let clearQueueBusy = $state(false);
@@ -606,8 +607,9 @@
 
   async function loadLanInfo() {
     try {
-      const resp = await fetch("/internal-api/_auth/lan_info", { headers: authHeaders() });
-      const data = await resp.json();
+      const data = isTauri
+        ? await getLanInfo()
+        : await fetch("/internal-api/_auth/lan_info", { headers: authHeaders() }).then((resp) => resp.json());
       lanAddresses = data.addresses ?? [];
     } catch {
       lanAddresses = [];
@@ -889,6 +891,31 @@
     await prefsSync.importJSON(raw);
     prefsImportDone = true;
     setTimeout(() => (prefsImportDone = false), 4000);
+  }
+
+  async function uploadPrefsToServer() {
+    if (!isBrowserMode || prefsSync.serverTransfer) return;
+    if (!window.confirm(locale.t("settings.sync.upload_confirm"))) return;
+    prefsServerMessage = null;
+    prefsTransferError = null;
+    try {
+      await prefsSync.uploadToServer();
+      prefsServerMessage = "uploaded";
+    } catch (e) {
+      prefsTransferError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function downloadPrefsFromServer() {
+    if (!isBrowserMode || prefsSync.serverTransfer) return;
+    if (!window.confirm(locale.t("settings.sync.download_confirm"))) return;
+    prefsServerMessage = null;
+    prefsTransferError = null;
+    try {
+      prefsServerMessage = (await prefsSync.downloadFromServer()) ? "downloaded" : "no_data";
+    } catch (e) {
+      prefsTransferError = e instanceof Error ? e.message : String(e);
+    }
   }
 
   async function handleImportDirectory() {
@@ -1401,9 +1428,7 @@
     loadInstallPath();
     getGalleryPath().then(p => { galleryPathDisplay = p; }).catch(() => {});
     void loadCacheCount();
-    if (isBrowserMode) {
-      loadLanInfo();
-    }
+    if (isAdmin) void loadLanInfo();
     startQueuePolling();
   });
 
@@ -1982,7 +2007,6 @@
                 {/if}
               </p>
             {/if}
-            {#if config.browser_mode}
               <div class="flex items-center justify-between pt-2 border-t border-neutral-800">
                 <div>
                   <label class="text-xs text-neutral-300 font-medium">{locale.t('settings.lan.enable')}</label>
@@ -2000,6 +2024,7 @@
                   <div class="w-9 h-5 bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
                 </label>
               </div>
+              <p class="text-[11px] text-neutral-500">{locale.t('settings.lan.restart_note')}</p>
               {#if config.lan_enabled}
                 <div class="space-y-3 pt-2 border-t border-neutral-800">
                   <p class="text-xs text-amber-400">
@@ -2068,7 +2093,6 @@
                     {/if}
                   </div>
                 </div>
-              {/if}
             {/if}
           </div>
         </section>
@@ -2086,42 +2110,41 @@
           </button>
           {#if !collapsed.sync}
           <div class="px-5 pb-5 space-y-4">
-            <!-- Master toggle -->
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <p class="text-sm font-medium text-neutral-200">{locale.t('settings.sync.enable_label')}</p>
-                <p class="text-xs text-neutral-500 mt-0.5">{locale.t('settings.sync.enable_desc')}</p>
-              </div>
-              <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                <input
-                  type="checkbox"
-                  checked={prefsSync.enabled}
-                  onchange={(e) => prefsSync.setEnabled((e.target as HTMLInputElement).checked)}
-                  class="sr-only peer"
-                />
-                <div class="w-9 h-5 bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-              </label>
-            </div>
-
             {#if isBrowserMode}
-              <div class="flex flex-wrap items-center gap-3">
+              <p class="text-xs text-neutral-500">{locale.t('settings.sync.server_desc')}</p>
+              <div class="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onclick={() => void prefsSync.forceSyncNow()}
-                  disabled={prefsSync.syncing || !prefsSync.enabled}
+                  onclick={uploadPrefsToServer}
+                  disabled={prefsSync.serverTransfer !== null}
                   class="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-100 rounded-lg text-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {prefsSync.syncing ? locale.t('settings.sync.syncing') : locale.t('settings.sync.sync_now')}
+                  {prefsSync.serverTransfer === "upload" ? locale.t('settings.sync.uploading') : locale.t('settings.sync.upload_button')}
+                </button>
+                <button
+                  type="button"
+                  onclick={downloadPrefsFromServer}
+                  disabled={prefsSync.serverTransfer !== null}
+                  class="px-4 py-2 border border-neutral-700 text-neutral-300 hover:border-indigo-500 hover:text-indigo-300 rounded-lg text-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {prefsSync.serverTransfer === "download" ? locale.t('settings.sync.downloading') : locale.t('settings.sync.download_button')}
                 </button>
                 {#if prefsSync.lastSyncedAt}
                   <span class="text-xs text-neutral-500">{locale.t('settings.sync.last_synced', { time: locale.formatDateTime(prefsSync.lastSyncedAt) })}</span>
                 {/if}
               </div>
+              {#if prefsServerMessage === "uploaded"}
+                <p class="text-xs text-emerald-400">{locale.t('settings.sync.uploaded')}</p>
+              {:else if prefsServerMessage === "downloaded"}
+                <p class="text-xs text-emerald-400">{locale.t('settings.sync.downloaded')}</p>
+              {:else if prefsServerMessage === "no_data"}
+                <p class="text-xs text-amber-400">{locale.t('settings.sync.no_server_data')}</p>
+              {/if}
               {#if prefsSync.lastSyncError}
                 <p class="text-xs text-red-400">{prefsSync.lastSyncError}</p>
               {/if}
             {:else}
-              <p class="text-xs text-neutral-500">{locale.t('settings.sync.browser_only_note')}</p>
+              <p class="text-xs text-neutral-500">{locale.t('settings.sync.browser_transfer_note')}</p>
             {/if}
             <p class="text-[11px] text-neutral-500">{locale.t('settings.sync.scope_desc')}</p>
 

@@ -3,6 +3,7 @@
   import { locale } from "../../stores/locale.svelte.js";
   import { gallery } from "../../stores/gallery.svelte.js";
   import { artistFavourites } from "../../artist-gallery/favourites.svelte.js";
+  import { promptFavourites } from "../../artist-gallery/promptFavourites.svelte.js";
   import { detectArtistsInPrompt } from "../../artist-gallery/detection.js";
   import { styles } from "../../stores/styles.svelte.js";
   import { promptPresets } from "../../stores/promptPresets.svelte.js";
@@ -18,6 +19,7 @@
   import PromptComposeModal from "./PromptComposeModal.svelte";
   import H3PromptGuide from "../video/H3PromptGuide.svelte";
   import { buildH3Context } from "../../utils/h3Prompt.js";
+  import { cleanPromptDisplay } from "../../utils/promptClean.js";
 
   interface Props {
     showHistory?: boolean;
@@ -83,7 +85,6 @@
 
   const sortedPromptHistory = $derived(
     [...generation.promptHistory].sort((a, b) => {
-      if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
       return b.createdAt - a.createdAt;
     }).slice(0, 12)
   );
@@ -546,18 +547,18 @@
                 onclick={() => generation.applyPromptHistoryEntry(entry.id)}
                 title={locale.t('bottom_panel.load_prompt')}
               >
-                <p class="text-[11px] text-neutral-200 max-h-8 overflow-hidden">{entry.positivePrompt || locale.t('bottom_panel.empty_prompt')}</p>
+                <p class="text-[11px] text-neutral-200 max-h-8 overflow-hidden">{cleanPromptDisplay(entry.positivePrompt) || locale.t('bottom_panel.empty_prompt')}</p>
                 {#if entry.negativePrompt}
-                  <p class="text-[10px] text-neutral-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{locale.t('bottom_panel.neg_prefix')} {entry.negativePrompt}</p>
+                  <p class="text-[10px] text-neutral-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{locale.t('bottom_panel.neg_prefix')} {cleanPromptDisplay(entry.negativePrompt)}</p>
                 {/if}
               </button>
               <div class="mt-1.5 flex items-center justify-between gap-2">
                 <span class="text-[10px] text-neutral-500">{historyLabel(entry.createdAt)}</span>
                 <div class="flex items-center gap-1">
                   <button
-                    class="px-1.5 py-0.5 text-[10px] rounded border transition-colors {entry.favorite ? 'border-amber-500 text-amber-300 bg-amber-500/10' : 'border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-300'}"
-                    onclick={() => generation.togglePromptFavorite(entry.id)}
-                    title={entry.favorite ? locale.t('bottom_panel.unfavorite') : locale.t('bottom_panel.favorite')}
+                    class="px-1.5 py-0.5 text-[10px] rounded border transition-colors border-neutral-700 text-neutral-400 hover:border-amber-500 hover:text-amber-300"
+                    onclick={() => promptFavourites.addFromHistory(entry.id)}
+                    title={locale.t('bottom_panel.favorite')}
                   >
                     ★
                   </button>

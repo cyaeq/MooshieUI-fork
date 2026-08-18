@@ -7,6 +7,7 @@
   import type { ArtistSearchHit } from "../types.js";
   import ArtistLightbox from "./ArtistLightbox.svelte";
   import FavouritesManager from "./FavouritesManager.svelte";
+  import PromptFavouritesPanel from "./PromptFavouritesPanel.svelte";
   import { proxiedCdnUrl } from "../../utils/cdnFetch.js";
   import { cachedSrc } from "../imageCache.js";
   import { CharacterExplorer } from "../../animadex/index.js";
@@ -17,7 +18,7 @@
   import { ARTIST_PREVIEW_RECIPE } from "../previewRecipe.js";
   import type { ArtistPreviewStatus, ArtistPreviewVariant } from "../previewRecipe.js";
 
-  type ExplorerTab = "artists" | "characters";
+  type ExplorerTab = "artists" | "characters" | "prompts";
 
   interface Props {
     manifestUrl: string;
@@ -599,13 +600,20 @@
 
 <div class="flex h-full w-full flex-col overflow-hidden bg-neutral-950 text-neutral-100">
   <div class="flex-none border-b border-neutral-800 bg-neutral-900/80 px-4 pt-3">
-    <div class="mb-3 flex gap-1 rounded-lg border border-neutral-800 bg-neutral-950/80 p-1 w-fit">
+    <div class="mb-3 flex max-w-full gap-1 overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-950/80 p-1 w-fit overscroll-x-contain">
       <button
         type="button"
         class="rounded-md px-3 py-1 text-xs font-medium transition-colors {explorerTab === 'artists' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
         onclick={() => (explorerTab = 'artists')}
       >
         {locale.t('artist_gallery.tab_artists')}
+      </button>
+      <button
+        type="button"
+        class="rounded-md px-3 py-1 text-xs font-medium transition-colors {explorerTab === 'prompts' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
+        onclick={() => (explorerTab = 'prompts')}
+      >
+        Prompts
       </button>
       <button
         type="button"
@@ -619,8 +627,10 @@
 
   {#if explorerTab === 'characters'}
     <CharacterExplorer oninsertCharacter={oninsertCharacter} />
+  {:else if explorerTab === 'prompts'}
+    <PromptFavouritesPanel />
   {:else}
-  <header class="flex-none border-b border-neutral-800 bg-neutral-900/60 px-4 py-3">
+  <header class="flex-none border-b border-neutral-800 bg-neutral-900/60 px-3 py-3 sm:px-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-lg font-semibold">{locale.t('artist_gallery.title')}</h1>
@@ -641,7 +651,7 @@
     {#if store.manifest}
       <div class="mt-3 flex flex-wrap items-center gap-2">
         <!-- Search -->
-        <div class="relative min-w-48 flex-1 sm:max-w-xs">
+        <div class="relative min-w-0 w-full flex-1 sm:max-w-xs">
           <input
             type="search"
             placeholder={locale.t('artist_gallery.search_placeholder')}

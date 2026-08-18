@@ -2982,5 +2982,49 @@ const ko: Record<string, string> = {
 
   "generation.video.pick_refs_title": "참조 이미지 선택",
 
+  "app.exit.tooltip": "애플리케이션 종료",
+  "app.exit.confirm": "MooshieUI를 종료할까요? 진행 중인 작업이 중지됩니다.",
+  "settings.lan.restart_note": "LAN 액세스를 변경한 후 서버가 올바른 네트워크 인터페이스에 다시 바인딩되도록 MooshieUI를 재시작하세요.",
+  "settings.sync.server_desc": "이 MooshieUI 서버를 통해 환경설정 스냅샷을 전송합니다. 자동 전송은 하지 않습니다.",
+  "settings.sync.upload_button": "서버에 업로드",
+  "settings.sync.uploading": "업로드 중...",
+  "settings.sync.upload_confirm": "이 브라우저의 환경설정을 업로드할까요? 서버의 스냅샷이 교체됩니다.",
+  "settings.sync.uploaded": "환경설정을 서버에 업로드했습니다",
+  "settings.sync.download_button": "서버에서 다운로드",
+  "settings.sync.downloading": "다운로드 중...",
+  "settings.sync.download_confirm": "서버 환경설정을 다운로드할까요? 현재 브라우저의 환경설정이 교체됩니다.",
+  "settings.sync.downloaded": "서버 환경설정을 적용했습니다",
+  "settings.sync.no_server_data": "이 서버에는 아직 환경설정 스냅샷이 없습니다.",
+  "settings.sync.browser_transfer_note": "서버 업로드와 다운로드는 브라우저/LAN 모드에서 사용할 수 있습니다. 아래에서 로컬 JSON 내보내기와 가져오기도 사용할 수 있습니다.",
+  "prompt_favourites.search_placeholder": "저장된 프롬프트 검색",
+
+  "prompt_favourites.save_current": "현재 저장",
+
+  "prompt_favourites.new_group": "새 그룹",
+
+  "prompt_favourites.export": "내보내기",
+
+  "prompt_favourites.prompt_library": "프롬프트 라이브러리",
+
+  "prompt_favourites.history": "기록",
+
+  "prompt_favourites.save": "저장",
+
+  "prompt_favourites.derive": "파생",
+
+  "prompt_favourites.positive_prompt_dialog": "긍정 프롬프트",
+
+  "prompt_favourites.rename_group": "이름 바꾸기",
+
+  "prompt_favourites.rename_group_dialog": "그룹 이름 바꾸기",
+
+  "prompt_favourites.delete_group": "삭제",
+
+  "prompt_favourites.delete_group_confirm": "그룹 \"{title}\"을(를) 삭제할까요? 프롬프트는 라이브러리로 이동됩니다.",
+
+  "prompt_favourites.edit": "편집",
+
+  "prompt_favourites.negative_prompt_dialog": "부정 프롬프트",
+
 };
 export default ko;

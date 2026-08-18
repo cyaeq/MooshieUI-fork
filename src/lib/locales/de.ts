@@ -2984,5 +2984,49 @@ const de: Record<string, string> = {
 
   "generation.video.pick_refs_title": "Referenzbilder auswählen",
 
+  "app.exit.tooltip": "Anwendung beenden",
+  "app.exit.confirm": "MooshieUI beenden? Laufende Vorgänge werden gestoppt.",
+  "settings.lan.restart_note": "Starten Sie MooshieUI nach Änderungen am LAN-Zugriff neu, damit der Server die Netzwerkschnittstelle neu binden kann.",
+  "settings.sync.server_desc": "Übertragen Sie einen Einstellungs-Snapshot über diesen MooshieUI-Server. Es erfolgt keine automatische Übertragung.",
+  "settings.sync.upload_button": "Zum Server hochladen",
+  "settings.sync.uploading": "Wird hochgeladen...",
+  "settings.sync.upload_confirm": "Einstellungen dieses Browsers hochladen? Der vorhandene Server-Snapshot wird ersetzt.",
+  "settings.sync.uploaded": "Einstellungen zum Server hochgeladen",
+  "settings.sync.download_button": "Vom Server herunterladen",
+  "settings.sync.downloading": "Wird heruntergeladen...",
+  "settings.sync.download_confirm": "Server-Einstellungen herunterladen? Die Einstellungen dieses Browsers werden ersetzt.",
+  "settings.sync.downloaded": "Server-Einstellungen angewendet",
+  "settings.sync.no_server_data": "Auf diesem Server wurde noch kein Einstellungs-Snapshot hochgeladen.",
+  "settings.sync.browser_transfer_note": "Server-Upload und -Download sind im Browser-/LAN-Modus verfügbar. Lokaler JSON-Export und -Import bleiben unten verfügbar.",
+  "prompt_favourites.search_placeholder": "Gespeicherte Prompts durchsuchen",
+
+  "prompt_favourites.save_current": "Aktuellen speichern",
+
+  "prompt_favourites.new_group": "Neue Gruppe",
+
+  "prompt_favourites.export": "Exportieren",
+
+  "prompt_favourites.prompt_library": "Prompt-Bibliothek",
+
+  "prompt_favourites.history": "Verlauf",
+
+  "prompt_favourites.save": "Speichern",
+
+  "prompt_favourites.derive": "Ableiten",
+
+  "prompt_favourites.positive_prompt_dialog": "Positiver Prompt",
+
+  "prompt_favourites.rename_group": "Umbenennen",
+
+  "prompt_favourites.rename_group_dialog": "Gruppe umbenennen",
+
+  "prompt_favourites.delete_group": "Löschen",
+
+  "prompt_favourites.delete_group_confirm": "Gruppe \"{title}\" löschen? Ihre Prompts werden in die Bibliothek verschoben.",
+
+  "prompt_favourites.edit": "Bearbeiten",
+
+  "prompt_favourites.negative_prompt_dialog": "Negativer Prompt",
+
 };
 export default de;

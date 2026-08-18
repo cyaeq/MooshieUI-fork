@@ -1,16 +1,6 @@
-/**
- * Server-side per-user preferences API.
- *
- * Only active in browser / LAN mode.  In Tauri desktop mode all functions
- * are no-ops and return null — local persistence via ipcStore / localStorage
- * continues unchanged.
- */
+/** Server-side preference snapshots used by explicit browser upload/download. */
 
-import { isBrowserMode, getAuthToken } from "./ipc.js";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+import { authHeaders, isBrowserMode } from "./ipc.js";
 
 export interface UserPrefsData {
   generation?: Record<string, unknown>;
@@ -19,6 +9,7 @@ export interface UserPrefsData {
   styles?: unknown;
   lora_presets?: unknown;
   artist_favourites?: unknown;
+  prompt_favourites?: unknown;
   gallery_boards?: unknown;
   autocomplete?: unknown;
   accessibility?: unknown;
@@ -28,50 +19,32 @@ export interface UserPrefsData {
   updated_at?: string;
 }
 
-// ---------------------------------------------------------------------------
-// API helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Fetch the current user's saved preferences from the server.
- * Returns `null` when in Tauri mode, when unauthenticated, when no prefs
- * are saved yet (204), or on network failure.
- */
 export async function fetchServerPrefs(): Promise<UserPrefsData | null> {
-  if (!isBrowserMode) return null;
-  const token = getAuthToken();
-  // In LAN mode without a token we're anonymous — skip silently.
-  if (!token) return null;
-  try {
-    const resp = await fetch("/internal-api/_user/prefs", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (resp.status === 204 || resp.status === 404) return null;
-    if (!resp.ok) return null;
-    return (await resp.json()) as UserPrefsData;
-  } catch {
-    return null;
+  if (!isBrowserMode) {
+    throw new Error("Server preference download is only available in browser mode");
   }
+
+  const response = await fetch("/internal-api/_user/prefs", {
+    headers: authHeaders(),
+  });
+  if (response.status === 204 || response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`Preference download failed (${response.status})`);
+  }
+  return (await response.json()) as UserPrefsData;
 }
 
-/**
- * Push the current user's preferences to the server.
- * Fire-and-forget — never throws; failures are logged but do not block the UI.
- */
 export async function pushServerPrefs(prefs: UserPrefsData): Promise<void> {
-  if (!isBrowserMode) return;
-  const token = getAuthToken();
-  if (!token) return;
-  try {
-    await fetch("/internal-api/_user/prefs", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(prefs),
-    });
-  } catch (e) {
-    console.warn("[prefsSync] server push failed:", e);
+  if (!isBrowserMode) {
+    throw new Error("Server preference upload is only available in browser mode");
+  }
+
+  const response = await fetch("/internal-api/_user/prefs", {
+    method: "PUT",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(prefs),
+  });
+  if (!response.ok) {
+    throw new Error(`Preference upload failed (${response.status})`);
   }
 }

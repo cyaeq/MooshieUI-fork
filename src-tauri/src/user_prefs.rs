@@ -33,6 +33,8 @@ pub struct UserPrefs {
     pub lora_presets: Option<serde_json::Value>,
     /// Favourited artist slugs and user-defined categories.
     pub artist_favourites: Option<serde_json::Value>,
+    /// Independent prompt favourite library and groups.
+    pub prompt_favourites: Option<serde_json::Value>,
     /// Gallery board assignments and custom board names.
     pub gallery_boards: Option<serde_json::Value>,
     /// Autocomplete source/settings.

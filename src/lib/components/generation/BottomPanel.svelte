@@ -9,6 +9,7 @@
   import { formatGenerationTime } from "../../utils/localeFormat.js";
   import { compare } from "../../stores/compare.svelte.js";
   import { artistFavourites } from "../../artist-gallery/favourites.svelte.js";
+  import { promptFavourites } from "../../artist-gallery/promptFavourites.svelte.js";
   import { createArtistGalleryStore } from "../../artist-gallery/store.svelte.js";
   import { cachedSrc } from "../../artist-gallery/imageCache.js";
   import { artistInsert } from "../../stores/artistInsert.svelte.js";
@@ -31,6 +32,7 @@
     videoReferenceSlotsFree,
   } from "../../utils/galleryActions.js";
   import { H3_MAX_REF_IMAGES } from "../../utils/videoParams.js";
+  import { cleanPromptDisplay } from "../../utils/promptClean.js";
 
   interface Props {
     onupscale: (image: OutputImage) => void;
@@ -101,7 +103,6 @@
   const sortedPromptHistory = $derived(
     [...generation.promptHistory]
       .sort((a, b) => {
-        if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
         return b.createdAt - a.createdAt;
       })
   );
@@ -125,9 +126,7 @@
     isVideoMode ? gallery.sessionImages.filter(isVideoImage) : gallery.sessionImages
   );
   const sessionImageCount = $derived(sessionOutputs.length);
-  const favoriteCount = $derived(
-    generation.promptHistory.filter((p) => p.favorite).length
-  );
+  const favoriteCount = $derived(promptFavourites.entries.length);
 
   let imageSearch = $state("");
   let promptSearch = $state("");
@@ -613,15 +612,15 @@
           {:else}
             <div class="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable] px-2 py-2">
               {#each filteredPromptHistory as entry}
-                <div class="shrink-0 rounded-lg border bg-neutral-900/60 overflow-hidden {entry.favorite ? 'border-amber-500/40' : 'border-neutral-800 hover:border-neutral-700'} transition-colors">
+                <div class="shrink-0 rounded-lg border bg-neutral-900/60 overflow-hidden border-neutral-800 hover:border-neutral-700 transition-colors">
               <button
                 class="w-full text-left p-2.5"
                 onclick={() => generation.applyPromptHistoryEntry(entry.id)}
                 title={locale.t('bottom_panel.load_prompt')}
               >
-                <p class="text-[11px] text-neutral-200 leading-relaxed line-clamp-4">{entry.positivePrompt || locale.t('bottom_panel.empty_prompt')}</p>
+                <p class="text-[11px] text-neutral-200 leading-relaxed line-clamp-4">{cleanPromptDisplay(entry.positivePrompt) || locale.t('bottom_panel.empty_prompt')}</p>
                 {#if entry.negativePrompt}
-                  <p class="text-[10px] text-neutral-500 mt-1 line-clamp-1">{locale.t('bottom_panel.neg_prefix')} {entry.negativePrompt}</p>
+                  <p class="text-[10px] text-neutral-500 mt-1 line-clamp-1">{locale.t('bottom_panel.neg_prefix')} {cleanPromptDisplay(entry.negativePrompt)}</p>
                 {/if}
               </button>
               <div class="px-2.5 pb-2 flex items-center justify-between gap-2 shrink-0">
@@ -631,9 +630,9 @@
                 </div>
                 <div class="flex items-center gap-1">
                   <button
-                    class="px-1.5 py-0.5 text-[10px] rounded border transition-colors {entry.favorite ? 'border-amber-500 text-amber-300 bg-amber-500/10' : 'border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-300'}"
-                    onclick={() => generation.togglePromptFavorite(entry.id)}
-                    title={entry.favorite ? locale.t('bottom_panel.unfavorite') : locale.t('bottom_panel.favorite')}
+                    class="px-1.5 py-0.5 text-[10px] rounded border transition-colors border-neutral-700 text-neutral-400 hover:border-amber-500 hover:text-amber-300"
+                    onclick={() => promptFavourites.addFromHistory(entry.id)}
+                    title={locale.t('bottom_panel.favorite')}
                   >
                     ★
                   </button>

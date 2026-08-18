@@ -9,6 +9,7 @@ import {
 } from "../utils/promptSchedule.js";
 import { parseSegmentDetailPrompt } from "../utils/promptSegmentDetail.js";
 import { joinPromptBoxes, sanitizePromptForSend } from "../utils/promptSanitize.js";
+import { cleanPromptDisplay } from "../utils/promptClean.js";
 import { extractScaleFromModel } from "../utils/upscalers.js";
 import {
   MODEL_FAMILIES,
@@ -402,7 +403,8 @@ interface PromptHistoryEntry {
   mode: GenerationMode;
   stylePreset: StylePresetId;
   createdAt: number;
-  favorite: boolean;
+  /** Legacy field retained only to allow one-time migration of old snapshots. */
+  favorite?: boolean;
 }
 
 const STYLE_PRESETS: StylePreset[] = [
@@ -1570,7 +1572,6 @@ class GenerationStore {
       mode: this.mode,
       stylePreset: this.stylePreset,
       createdAt: Date.now(),
-      favorite: existing?.favorite ?? false,
     };
 
     this.promptHistory = [
@@ -1578,13 +1579,6 @@ class GenerationStore {
       ...this.promptHistory.filter((entry) => entry.id !== nextEntry.id),
     ].slice(0, MAX_PROMPT_HISTORY);
 
-    this.savePromptHistory();
-  }
-
-  togglePromptFavorite(id: string) {
-    this.promptHistory = this.promptHistory.map((entry) =>
-      entry.id === id ? { ...entry, favorite: !entry.favorite } : entry
-    );
     this.savePromptHistory();
   }
 
@@ -1597,23 +1591,28 @@ class GenerationStore {
     const entry = this.promptHistory.find((item) => item.id === id);
     if (!entry) return;
 
-    // Mode first: crossing the image/video boundary swaps the prompt buckets, so
-    // writing the prompt before the switch would park it in the bucket we are
-    // leaving and then overwrite it with the one we arrive in.
-    this.mode = entry.mode;
-    this.positivePrompt = entry.positivePrompt;
-    this.negativePrompt = entry.negativePrompt;
-    // The stored prompt already includes any extra-box content (concatenated at
-    // save time), so clear the boxes to avoid duplicating it back on top.
-    this.extraPositiveBoxes = [];
-    this.extraNegativeBoxes = [];
-    this.stylePreset = entry.stylePreset;
-
+    this.applyPromptEntry(entry);
     this.promptHistory = [
       { ...entry, createdAt: Date.now() },
       ...this.promptHistory.filter((item) => item.id !== entry.id),
     ];
     this.savePromptHistory();
+    this.saveSettings();
+  }
+
+  applyPromptEntry(entry: { positivePrompt?: string; negativePrompt?: string; positive?: string; negative?: string; mode: GenerationMode | string; stylePreset: StylePresetId | string }) {
+
+    // Mode first: crossing the image/video boundary swaps the prompt buckets, so
+    // writing the prompt before the switch would park it in the bucket we are
+    // leaving and then overwrite it with the one we arrive in.
+    this.mode = entry.mode as GenerationMode;
+    this.positivePrompt = cleanPromptDisplay(entry.positivePrompt ?? entry.positive ?? "");
+    this.negativePrompt = cleanPromptDisplay(entry.negativePrompt ?? entry.negative ?? "");
+    // The stored prompt already includes any extra-box content (concatenated at
+    // save time), so clear the boxes to avoid duplicating it back on top.
+    this.extraPositiveBoxes = [];
+    this.extraNegativeBoxes = [];
+    this.stylePreset = entry.stylePreset as StylePresetId;
     this.saveSettings();
   }
 

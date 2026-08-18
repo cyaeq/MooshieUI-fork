@@ -32,6 +32,24 @@ pub async fn update_config(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn get_lan_info(state: State<'_, Arc<AppState>>) -> Result<serde_json::Value, AppError> {
+    let port = state.config.read().await.ui_server_port;
+    Ok(serde_json::json!({
+        "addresses": webserver::get_lan_addresses(port),
+        "port": port,
+    }))
+}
+
+#[tauri::command]
+pub async fn quit_application(app: tauri::AppHandle) -> Result<(), AppError> {
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        app.exit(0);
+    });
+    Ok(())
+}
+
 /// Return the resolved gallery directory path.
 /// If a custom `gallery_path` is set, returns that; otherwise returns the default.
 #[tauri::command]
@@ -158,9 +176,8 @@ pub async fn switch_to_browser_mode(
         port = actual_port;
     }
 
-    // Always start a new heartbeat watchdog — the previous one exits when
-    // app_mode_active is set, so we need a fresh one for the new browser session.
-    {
+    // LAN mode can have several clients, so closing one tab must not stop the host.
+    if !lan_enabled {
         let shared_state: Arc<AppState> = state.inner().clone();
         // 120s: browsers throttle background setInterval to ~1 min;
         // we need a timeout well above that to avoid killing the

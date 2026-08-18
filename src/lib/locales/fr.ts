@@ -3008,5 +3008,49 @@ const fr: Record<string, string> = {
 
   "generation.video.pick_refs_title": "Choisir des images de référence",
 
+  "app.exit.tooltip": "Quitter l'application",
+  "app.exit.confirm": "Quitter MooshieUI ? Toute tâche en cours sera arrêtée.",
+  "settings.lan.restart_note": "Redémarrez MooshieUI après avoir modifié l'accès LAN afin de réassocier le serveur à la bonne interface réseau.",
+  "settings.sync.server_desc": "Transférez un instantané des préférences via ce serveur MooshieUI. Aucun transfert n'est automatique.",
+  "settings.sync.upload_button": "Envoyer au serveur",
+  "settings.sync.uploading": "Envoi...",
+  "settings.sync.upload_confirm": "Envoyer les préférences de ce navigateur ? L'instantané du serveur sera remplacé.",
+  "settings.sync.uploaded": "Préférences envoyées au serveur",
+  "settings.sync.download_button": "Télécharger du serveur",
+  "settings.sync.downloading": "Téléchargement...",
+  "settings.sync.download_confirm": "Télécharger les préférences du serveur ? Celles du navigateur actuel seront remplacées.",
+  "settings.sync.downloaded": "Préférences du serveur appliquées",
+  "settings.sync.no_server_data": "Aucun instantané de préférences n'a encore été envoyé à ce serveur.",
+  "settings.sync.browser_transfer_note": "L'envoi et le téléchargement sont disponibles en mode navigateur/LAN. L'export et l'import JSON locaux restent disponibles ci-dessous.",
+  "prompt_favourites.search_placeholder": "Rechercher des prompts enregistrés",
+
+  "prompt_favourites.save_current": "Enregistrer actuel",
+
+  "prompt_favourites.new_group": "Nouveau groupe",
+
+  "prompt_favourites.export": "Exporter",
+
+  "prompt_favourites.prompt_library": "Bibliothèque de prompts",
+
+  "prompt_favourites.history": "Historique",
+
+  "prompt_favourites.save": "Enregistrer",
+
+  "prompt_favourites.derive": "Dériver",
+
+  "prompt_favourites.positive_prompt_dialog": "Prompt positif",
+
+  "prompt_favourites.rename_group": "Renommer",
+
+  "prompt_favourites.rename_group_dialog": "Renommer le groupe",
+
+  "prompt_favourites.delete_group": "Supprimer",
+
+  "prompt_favourites.delete_group_confirm": "Supprimer le groupe \"{title}\" ? Ses prompts seront déplacés vers la bibliothèque.",
+
+  "prompt_favourites.edit": "Modifier",
+
+  "prompt_favourites.negative_prompt_dialog": "Prompt négatif",
+
 };
 export default fr;

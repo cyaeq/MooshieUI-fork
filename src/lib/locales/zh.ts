@@ -2983,5 +2983,50 @@ const zh: Record<string, string> = {
 
   "generation.video.pick_refs_title": "选择参考图像",
 
+  "app.exit.tooltip": "退出应用",
+  "app.exit.confirm": "确定退出 MooshieUI 吗？进行中的任务将会停止。",
+  "settings.lan.restart_note": "更改局域网访问后请重启 MooshieUI，以便服务器重新绑定正确的网络接口。",
+  "settings.sync.server_desc": "通过此 MooshieUI 服务器传输偏好设置快照，不会自动上传或下载。",
+  "settings.sync.upload_button": "上传到服务器",
+  "settings.sync.uploading": "正在上传...",
+  "settings.sync.upload_confirm": "上传此浏览器的偏好设置吗？这会取代服务器上的现有快照。",
+  "settings.sync.uploaded": "偏好设置已上传到服务器",
+  "settings.sync.download_button": "从服务器下载",
+  "settings.sync.downloading": "正在下载...",
+  "settings.sync.download_confirm": "下载服务器偏好设置吗？这会取代当前浏览器中的偏好设置。",
+  "settings.sync.downloaded": "已应用服务器偏好设置",
+  "settings.sync.no_server_data": "此服务器尚未上传偏好设置快照。",
+  "settings.sync.browser_transfer_note": "服务器上传与下载仅适用于浏览器/局域网模式；下方仍可使用本地 JSON 导出与导入。",
+
+  "prompt_favourites.search_placeholder": "搜索已保存的提示词",
+
+  "prompt_favourites.save_current": "保存当前",
+
+  "prompt_favourites.new_group": "新建分组",
+
+  "prompt_favourites.export": "导出",
+
+  "prompt_favourites.prompt_library": "提示词库",
+
+  "prompt_favourites.history": "历史记录",
+
+  "prompt_favourites.save": "保存",
+
+  "prompt_favourites.derive": "派生",
+
+  "prompt_favourites.positive_prompt_dialog": "正向提示词",
+
+  "prompt_favourites.rename_group": "重命名",
+
+  "prompt_favourites.rename_group_dialog": "重命名分组",
+
+  "prompt_favourites.delete_group": "删除",
+
+  "prompt_favourites.delete_group_confirm": "删除分组「{title}」？其中的提示词会移到提示词库。",
+
+  "prompt_favourites.edit": "编辑",
+
+  "prompt_favourites.negative_prompt_dialog": "负面提示词",
+
 };
 export default zh;

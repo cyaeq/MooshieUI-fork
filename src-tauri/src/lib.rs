@@ -159,25 +159,38 @@ pub fn run() {
                 });
             }
 
-            // In browser mode: hide the window, start web server, open browser
+            let shared_state: Arc<AppState> = _app.state::<Arc<AppState>>().inner().clone();
+
+            // LAN access is backed by the same embedded web server in both UI modes.
+            let actual_port = if browser_mode || lan_enabled {
+                let state_for_server = shared_state.clone();
+                let port = tauri::async_runtime::block_on(async move {
+                    let (port, _handle) =
+                        webserver::start_server(state_for_server, ui_server_port, lan_enabled)
+                            .await;
+                    port
+                });
+                if port != ui_server_port {
+                    let cfg = tauri::async_runtime::block_on(async {
+                        let mut cfg = shared_state.config.write().await;
+                        cfg.ui_server_port = port;
+                        cfg.clone()
+                    });
+                    if let Err(error) = config::save_config(&cfg) {
+                        log::error!("Failed to persist fallback UI server port: {}", error);
+                    }
+                }
+                Some(port)
+            } else {
+                None
+            };
+
+            // In browser mode: hide the window and open the browser.
             if browser_mode {
                 use tauri::Manager;
                 if let Some(main_window) = _app.get_webview_window("main") {
                     let _ = main_window.hide();
                 }
-
-                // Share the same AppState between Tauri and the web server
-                let shared_state: Arc<AppState> = _app.state::<Arc<AppState>>().inner().clone();
-
-                let state_for_server = shared_state.clone();
-                // Bind synchronously so we know the actual port (it may have
-                // fallen back from `ui_server_port` if that port was in use).
-                let actual_port = tauri::async_runtime::block_on(async move {
-                    let (p, _handle) =
-                        webserver::start_server(state_for_server, ui_server_port, lan_enabled)
-                            .await;
-                    p
-                });
                 // Only start heartbeat watchdog in single-user browser mode.
                 // With LAN access enabled, multiple users may connect and we
                 // must NOT shut down when one browser tab closes.
@@ -192,10 +205,14 @@ pub fn run() {
                 }
 
                 // Open the default browser
-                let url = format!("http://127.0.0.1:{}", actual_port);
+                let url = format!("http://127.0.0.1:{}", actual_port.unwrap_or(ui_server_port));
                 log::info!("Opening browser at {}", url);
                 let _ = open::that(&url);
             } else {
+                shared_state
+                    .app_mode_active
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
+
                 // Normal app mode — configure WebView
                 #[cfg(target_os = "linux")]
                 {
@@ -546,6 +563,8 @@ pub fn run() {
             commands::workflow::generate_controlnet_preprocessor_preview,
             commands::config::get_config,
             commands::config::update_config,
+            commands::config::get_lan_info,
+            commands::config::quit_application,
             commands::config::get_gallery_path,
             commands::config::set_gallery_path,
             commands::config::switch_to_browser_mode,

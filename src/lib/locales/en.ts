@@ -2920,5 +2920,50 @@ const en: Record<string, string> = {
 
   "generation.video.pick_refs_title": "Choose reference images",
 
+  "app.exit.tooltip": "Exit application",
+  "app.exit.confirm": "Exit MooshieUI? Any active tasks will be stopped.",
+  "settings.lan.restart_note": "Restart MooshieUI after changing LAN access so the server can rebind to the correct network interface.",
+  "settings.sync.server_desc": "Transfer a preferences snapshot through this MooshieUI server. Nothing transfers automatically.",
+  "settings.sync.upload_button": "Upload to server",
+  "settings.sync.uploading": "Uploading...",
+  "settings.sync.upload_confirm": "Upload this browser's preferences? The existing server snapshot will be replaced.",
+  "settings.sync.uploaded": "Preferences uploaded to server",
+  "settings.sync.download_button": "Download from server",
+  "settings.sync.downloading": "Downloading...",
+  "settings.sync.download_confirm": "Download server preferences? This browser's preferences will be replaced.",
+  "settings.sync.downloaded": "Server preferences applied",
+  "settings.sync.no_server_data": "No preferences snapshot has been uploaded to this server yet.",
+  "settings.sync.browser_transfer_note": "Server upload and download are available in browser / LAN mode. Local JSON export and import remain available below.",
+
+  "prompt_favourites.search_placeholder": "Search saved prompts",
+
+  "prompt_favourites.save_current": "Save current",
+
+  "prompt_favourites.new_group": "New group",
+
+  "prompt_favourites.export": "Export",
+
+  "prompt_favourites.prompt_library": "Prompt library",
+
+  "prompt_favourites.history": "History",
+
+  "prompt_favourites.save": "Save",
+
+  "prompt_favourites.derive": "Derive",
+
+  "prompt_favourites.positive_prompt_dialog": "Positive prompt",
+
+  "prompt_favourites.rename_group": "Rename",
+
+  "prompt_favourites.rename_group_dialog": "Rename group",
+
+  "prompt_favourites.delete_group": "Delete",
+
+  "prompt_favourites.delete_group_confirm": "Delete group \"{title}\"? Its prompts will be moved to the library.",
+
+  "prompt_favourites.edit": "Edit",
+
+  "prompt_favourites.negative_prompt_dialog": "Negative prompt",
+
 };
 export default en;
