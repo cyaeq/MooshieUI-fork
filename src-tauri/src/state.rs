@@ -496,6 +496,11 @@ pub struct AppState {
     pub app_mode_active: std::sync::atomic::AtomicBool,
     /// True once the embedded web server has been started (prevents double-bind).
     pub web_server_running: std::sync::atomic::AtomicBool,
+    /// Shared LAN access token (token-based auth replacing account login).
+    /// Held in a plain `std` lock so the sync webserver auth helpers can read
+    /// it without awaiting the tokio config lock. Kept in sync with
+    /// `config.lan_access_token` on config updates.
+    pub lan_access_token: std::sync::RwLock<String>,
     /// True once the shared prompt cleanup/watchdog reactors have been spawned
     /// (prevents duplicates when both desktop and browser mode start them).
     pub cleanup_reactors_started: std::sync::atomic::AtomicBool,
@@ -549,6 +554,7 @@ impl AppState {
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
         let gpu_manager = GpuManager::new(&config, http_client.clone());
+        let lan_access_token = config.lan_access_token.clone();
         Self {
             config: RwLock::new(config),
             comfyui_process: Mutex::new(None),
@@ -566,6 +572,7 @@ impl AppState {
             app_handle: Mutex::new(None),
             app_mode_active: std::sync::atomic::AtomicBool::new(false),
             web_server_running: std::sync::atomic::AtomicBool::new(false),
+            lan_access_token: std::sync::RwLock::new(lan_access_token),
             cleanup_reactors_started: std::sync::atomic::AtomicBool::new(false),
             prompt_queue: PromptQueue::new(),
             gpu_manager,
@@ -580,6 +587,14 @@ impl AppState {
     pub async fn base_url(&self) -> String {
         let config = self.config.read().await;
         config.server_url.clone()
+    }
+
+    /// Update the shared LAN access token used by webserver auth checks.
+    /// Called whenever the config's `lan_access_token` changes.
+    pub fn set_lan_access_token(&self, token: &str) {
+        if let Ok(mut t) = self.lan_access_token.write() {
+            *t = token.to_string();
+        }
     }
 
     /// Request cancellation of an in-progress model download by filename (#399).

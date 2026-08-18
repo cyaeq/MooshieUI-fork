@@ -54,6 +54,10 @@ export const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
 class LocaleStore {
   current = $state<Locale>("en");
   private hasStoredPreference = false;
+  /** Epoch ms of the last user-initiated save. Lets a local choice win over a
+   *  stale server snapshot when prefs are pulled on page load (browser mode),
+   *  otherwise the language would appear to "not save". */
+  private lastUserSaveAt = 0;
 
   /** Detect system language and set locale if we support it, otherwise keep English.
    *  Only applies when no user preference has been saved yet. */
@@ -158,17 +162,29 @@ class LocaleStore {
   }
 
   async saveSettings(): Promise<void> {
+    // Record the user's choice time so a stale server pull can't clobber it.
+    this.lastUserSaveAt = Date.now();
     await ipcStore.set(STORE_KEY, { locale: this.current });
     triggerSync();
   }
 
-  applyServerPrefs(localeValue: string): void {
+  applyServerPrefs(localeValue: string, updatedAt?: string): void {
     try {
-      if (localeValue && translations[localeValue as Locale]) {
-        this.current = localeValue as Locale;
-        this.hasStoredPreference = true;
-        this.saveSettings().catch(() => {});
+      if (!localeValue || !translations[localeValue as Locale]) return;
+      // The user just picked a language locally — keep it unless the server
+      // snapshot is genuinely newer (another device / later session).
+      if (this.lastUserSaveAt > 0 && updatedAt) {
+        const serverAt = new Date(updatedAt).getTime();
+        if (Number.isFinite(serverAt) && serverAt <= this.lastUserSaveAt) {
+          return;
+        }
       }
+      this.current = localeValue as Locale;
+      this.hasStoredPreference = true;
+      // Persist the applied value locally without treating it as a fresh user
+      // change (so the timestamp comparison above stays meaningful).
+      ipcStore.set(STORE_KEY, { locale: this.current }).catch(() => {});
+      triggerSync();
     } catch (e) {
       console.error("Failed to apply server prefs (locale):", e);
     }

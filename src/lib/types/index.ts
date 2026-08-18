@@ -344,6 +344,10 @@ export interface AppConfig {
   browser_mode: boolean;
   ui_server_port: number;
   lan_enabled: boolean;
+  /** Shared LAN access token (token-based access). Null for non-admin clients. */
+  lan_access_token?: string | null;
+  /** True when a LAN access token is configured (surfaced to non-admin clients). */
+  lan_access_token_configured?: boolean;
   attention_backend: string;
   gpu_workers: Array<{
     gpu_index: number;

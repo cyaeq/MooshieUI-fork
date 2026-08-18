@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { ipcInvoke, ipcListen, isTauri, isBrowserMode, startHeartbeat, getAuthToken, setAuthToken, setAuthUser, authHeaders, wasRememberMe } from "./lib/utils/ipc.js";
+  import { ipcInvoke, ipcListen, isTauri, isBrowserMode, startHeartbeat, getAuthToken, setAuthToken, clearAuthToken, authHeaders, wasRememberMe } from "./lib/utils/ipc.js";
   import { useMobileLayout } from "./lib/utils/device.js";
   import SetupWizard from "./lib/components/setup/SetupWizard.svelte";
   import MobileApp from "./lib/components/mobile/MobileApp.svelte";
@@ -575,21 +575,16 @@
   let mobileGenerateNavigationVersion = $state(0);
   let generationDoneToast = $state<GenerationDoneToast | null>(null);
 
-  // Auth gate state (browser mode LAN access)
+  // Auth gate state (browser mode LAN access, token-based)
   let authRequired = $state(false);
   let authChecked = $state(false);
   let userRole = $state<"admin" | "moderator" | "user" | "anonymous">("admin");
   let canUseModelhub = $state(true);
-  let loginUser = $state("");
-  let loginPass = $state("");
+  let tokenConfigured = $state(true);
+  let loginToken = $state("");
   let loginError = $state<string | null>(null);
   let loginBusy = $state(false);
   let rememberMe = $state(wasRememberMe());
-  let mustChangePassword = $state(false);
-  let newPass1 = $state("");
-  let newPass2 = $state("");
-  let changePassError = $state<string | null>(null);
-  let changePassBusy = $state(false);
   async function checkAuth(): Promise<boolean> {
     if (!isBrowserMode) {
       authChecked = true;
@@ -604,6 +599,7 @@
       const data = await resp.json();
       userRole = data.role ?? "anonymous";
       canUseModelhub = data.can_use_modelhub ?? false;
+      tokenConfigured = data.token_configured !== false;
       if (data.role === "anonymous" && data.auth_required) {
         authRequired = true;
         authChecked = true;
@@ -619,36 +615,25 @@
     }
   }
 
-  async function handleLogin() {
+  async function handleTokenSubmit() {
     loginBusy = true;
     loginError = null;
+    const token = loginToken.trim();
     try {
-      const resp = await fetch("/internal-api/_auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: loginUser, password: loginPass }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) {
-        loginError = data.error ?? locale.t("auth.login_failed");
-        return;
-      }
-      setAuthToken(data.token, rememberMe);
-      setAuthUser(loginUser.trim());
-      // Re-check auth status to get the actual role (user vs moderator)
+      // Store the token, then re-check auth status with it.
+      setAuthToken(token, rememberMe);
       const statusResp = await fetch("/internal-api/_auth/status", {
-        headers: { Authorization: `Bearer ${data.token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
-      const statusData = await statusResp.json();
-      userRole = statusData.role ?? "user";
-      canUseModelhub = statusData.can_use_modelhub ?? false;
-
-      // If the admin set a temporary password, force a change before proceeding
-      if (data.must_change_password) {
-        mustChangePassword = true;
+      const data = await statusResp.json();
+      userRole = data.role ?? "anonymous";
+      canUseModelhub = data.can_use_modelhub ?? false;
+      tokenConfigured = data.token_configured !== false;
+      if (data.role === "anonymous") {
+        loginError = locale.t("auth.token_invalid");
+        clearAuthToken();
         return;
       }
-
       authRequired = false;
       // Now continue the normal startup flow
       // LAN users skip setup check — setup is only for the host.
@@ -659,47 +644,6 @@
       loginError = String(e);
     } finally {
       loginBusy = false;
-    }
-  }
-
-  async function handleSetNewPassword() {
-    if (newPass1.length < 4) {
-      changePassError = locale.t("auth.password_min_length");
-      return;
-    }
-    if (newPass1 !== newPass2) {
-      changePassError = locale.t("auth.passwords_mismatch");
-      return;
-    }
-    changePassBusy = true;
-    changePassError = null;
-    try {
-      const resp = await fetch("/internal-api/_auth/change_password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getAuthToken()}`,
-        },
-        body: JSON.stringify({ current_password: loginPass, new_password: newPass1 }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) {
-        changePassError = data.error ?? locale.t("auth.change_password_failed");
-        return;
-      }
-      // Password changed — proceed normally
-      mustChangePassword = false;
-      authRequired = false;
-      loginPass = "";
-      newPass1 = "";
-      newPass2 = "";
-      // LAN users skip setup check — setup is only for the host.
-      setupComplete = true;
-      await initApp();
-    } catch (e) {
-      changePassError = String(e);
-    } finally {
-      changePassBusy = false;
     }
   }
   let versionTapCount = $state(0);
@@ -800,6 +744,29 @@
       message: parsed.error ?? fallbackMessage,
     });
     startupStatusKind = "error";
+  }
+
+  /**
+   * Refresh the model store, retrying with backoff while ComfyUI is still
+   * scanning its model directories. `/system_stats` (and thus `server_ready`)
+   * responds before the model scan finishes — especially with large extra
+   * model paths — so a single refresh can return an empty checkpoint list and
+   * leave the UI showing "disconnected" for a while. Returns the observed
+   * checkpoint list once non-empty (or the retry budget is exhausted).
+   */
+  async function refreshModelsWithRetry(attempts = 5, baseDelayMs = 2500): Promise<string[]> {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        await models.refresh();
+        if (models.checkpoints.length > 0) return models.checkpoints;
+      } catch (e) {
+        console.warn(`Model refresh attempt ${i + 1} failed:`, e);
+      }
+      if (i < attempts - 1) {
+        await new Promise((r) => setTimeout(r, baseDelayMs * (i + 1)));
+      }
+    }
+    return models.checkpoints;
   }
 
   let galleryImagesPerRow = $state(5);
@@ -1727,6 +1694,8 @@
 
       if (metadata.vae !== undefined) {
         generation.vae = metadata.vae;
+        // Imported metadata is an explicit manual choice — keep it permanent.
+        generation.markModelComponentsManual();
       }
 
       // MooshieUI-exclusive params round-trip
@@ -2350,6 +2319,19 @@
     downloads.init();
     notifications.startPolling();
 
+    // Token-based LAN access: honor `?token=` access links (from Settings →
+    // "Copy access link"). Store it and strip it from the URL so it isn't
+    // shared through browser history.
+    if (isBrowserMode && !getAuthToken()) {
+      const urlToken = new URLSearchParams(window.location.search).get("token");
+      if (urlToken) {
+        setAuthToken(urlToken, true);
+        rememberMe = true;
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, "", cleanUrl);
+      }
+    }
+
     // Check auth for browser mode LAN access (before any ipcInvoke calls)
     const authOk = await checkAuth();
     if (!authOk) return;
@@ -2444,8 +2426,8 @@
           startup.locked = false;
           startupStatus = "";
           startupStatusKind = "idle";
-          models.refresh().then(() => {
-            generation.applyDefaultsIfNeeded(models.checkpoints, models.vaes);
+          refreshModelsWithRetry().then((checkpoints) => {
+            generation.applyDefaultsIfNeeded(checkpoints, models.vaes);
           });
         }
       }),
@@ -2456,13 +2438,14 @@
         startup.locked = false;
         startupStatus = "";
         startupStatusKind = "idle";
-        // Load models now that server is up
+        // Load models now that server is up. Retry while ComfyUI finishes
+        // scanning its model directories so the dropdowns aren't left empty.
         try {
-          await models.refresh();
-          console.log("Models loaded:", models.checkpoints);
-          if (models.checkpoints.length > 0) {
+          const checkpoints = await refreshModelsWithRetry();
+          console.log("Models loaded:", checkpoints);
+          if (checkpoints.length > 0) {
             connection.connected = true;
-            generation.applyDefaultsIfNeeded(models.checkpoints, models.vaes);
+            generation.applyDefaultsIfNeeded(checkpoints, models.vaes);
           }
         } catch (e) {
           console.error("Model refresh failed after server ready:", e);
@@ -3024,11 +3007,11 @@
           startupStatus = locale.t("app.status.connecting");
           startupStatusKind = "connecting";
           try {
-            await models.refresh();
-            console.log("Models loaded (already running):", models.checkpoints);
-            if (models.checkpoints.length > 0) {
+            const checkpoints = await refreshModelsWithRetry();
+            console.log("Models loaded (already running):", checkpoints);
+            if (checkpoints.length > 0) {
               connection.connected = true;
-              generation.applyDefaultsIfNeeded(models.checkpoints, models.vaes);
+              generation.applyDefaultsIfNeeded(checkpoints, models.vaes);
             }
             startup.locked = false;
             startupStatus = "";
@@ -3121,64 +3104,23 @@
 </script>
 
 {#if authRequired}
-  {#if mustChangePassword}
-    <!-- Forced password change screen -->
-    <div class="flex items-center justify-center h-full bg-neutral-950">
-      <div class="w-80 space-y-4">
-        <div class="mooshie-branding flex items-center justify-center gap-3 mb-6">
-          <img src={themeLogoUrl} alt={locale.t("app.brand_name")} class="w-10 h-10 aspect-square object-contain rounded-lg" />
-          <h1 class="text-xl font-bold text-neutral-100">{locale.t("app.brand_name")}</h1>
-        </div>
-        <p class="text-sm text-neutral-400 text-center">{locale.t("auth.password_reset_by_admin")}</p>
-        <input
-          type="password"
-          bind:value={newPass1}
-          placeholder={locale.t("auth.new_password_placeholder")}
-          class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500 transition-colors"
-          onkeydown={(e) => { if (e.key === "Enter") document.getElementById("confirm-pass")?.focus(); }}
-        />
-        <input
-          id="confirm-pass"
-          type="password"
-          bind:value={newPass2}
-          placeholder={locale.t("auth.confirm_password_placeholder")}
-          class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500 transition-colors"
-          onkeydown={(e) => { if (e.key === "Enter") handleSetNewPassword(); }}
-        />
-        {#if changePassError}
-          <p class="text-xs text-red-400">{changePassError}</p>
-        {/if}
-        <button
-          class="w-full py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer {changePassBusy ? 'bg-neutral-700 text-neutral-500' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}"
-          disabled={changePassBusy}
-          onclick={handleSetNewPassword}
-        >
-          {changePassBusy ? locale.t("common.saving") : locale.t("auth.change_password")}
-        </button>
-      </div>
-    </div>
-  {:else}
-  <!-- Login gate for LAN users -->
+  <!-- Token gate for LAN users (token-based access, no accounts) -->
   <div class="flex items-center justify-center h-full bg-neutral-950">
     <div class="w-80 space-y-4">
       <div class="mooshie-branding flex items-center justify-center gap-3 mb-6">
         <img src={themeLogoUrl} alt={locale.t("app.brand_name")} class="w-10 h-10 aspect-square object-contain rounded-lg" />
         <h1 class="text-xl font-bold text-neutral-100">{locale.t("app.brand_name")}</h1>
       </div>
-      <p class="text-sm text-neutral-400 text-center">{locale.t("auth.sign_in_continue")}</p>
-      <input
-        type="text"
-        bind:value={loginUser}
-        placeholder={locale.t("auth.username_placeholder")}
-        class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500 transition-colors"
-        onkeydown={(e) => { if (e.key === "Enter") handleLogin(); }}
-      />
+      <p class="text-sm text-neutral-400 text-center">{locale.t("auth.token_required")}</p>
+      {#if !tokenConfigured}
+        <p class="text-xs text-amber-400 text-center">{locale.t("auth.token_not_configured")}</p>
+      {/if}
       <input
         type="password"
-        bind:value={loginPass}
-        placeholder={locale.t("auth.password_placeholder")}
+        bind:value={loginToken}
+        placeholder={locale.t("auth.token_placeholder")}
         class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500 transition-colors"
-        onkeydown={(e) => { if (e.key === "Enter") handleLogin(); }}
+        onkeydown={(e) => { if (e.key === "Enter") handleTokenSubmit(); }}
       />
       <label class="flex items-center gap-2 cursor-pointer select-none">
         <input
@@ -3194,14 +3136,13 @@
       <button
         class="w-full py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer {loginBusy ? 'bg-neutral-700 text-neutral-500' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}"
         disabled={loginBusy}
-        onclick={handleLogin}
+        onclick={handleTokenSubmit}
       >
-        {loginBusy ? locale.t("common.saving") : locale.t("auth.sign_in")}
+        {loginBusy ? locale.t("common.saving") : locale.t("auth.enter_access_token")}
       </button>
 
     </div>
   </div>
-  {/if}
 {:else if setupComplete === null}
   <!-- Loading state -->
   <div class="flex items-center justify-center h-full bg-neutral-950">
@@ -3570,10 +3511,10 @@
                   startupStatus = locale.t("app.status.connecting");
                   startupStatusKind = "connecting";
                   try {
-                    await models.refresh();
-                    if (models.checkpoints.length > 0) {
+                    const checkpoints = await refreshModelsWithRetry();
+                    if (checkpoints.length > 0) {
                       connection.connected = true;
-                      generation.applyDefaultsIfNeeded(models.checkpoints, models.vaes);
+                      generation.applyDefaultsIfNeeded(checkpoints, models.vaes);
                     }
                     startupStatus = "";
                     startupStatusKind = "idle";

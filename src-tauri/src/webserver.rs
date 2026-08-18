@@ -114,38 +114,30 @@ fn resolve_role(state: &WebState, headers: &HeaderMap, remote: &SocketAddr) -> U
     if !state.lan_enabled {
         return UserRole::Admin;
     }
-    // Check bearer token — all remote users must authenticate
-    if let Some(token) = extract_token(headers) {
-        if let Some(username) = state.auth.validate_token(&token) {
-            if let Some(role) = state.auth.get_account_role(&username) {
-                if role == "admin" {
-                    return UserRole::Admin;
-                }
-                if role == "moderator" {
-                    return UserRole::Moderator;
-                }
+    // Token-based access: any remote client presenting the configured LAN
+    // access token is treated as admin. No accounts, no usernames, no roles.
+    let configured = state
+        .app
+        .lan_access_token
+        .read()
+        .map(|t| t.clone())
+        .unwrap_or_default();
+    if !configured.is_empty() {
+        if let Some(token) = extract_token(headers) {
+            if token == configured {
+                return UserRole::Admin;
             }
-            return UserRole::User;
         }
     }
     UserRole::Anonymous
 }
 
 /// Resolve the username for the current request.
-/// Returns None for localhost/admin (they use the shared gallery root).
-fn resolve_username(state: &WebState, headers: &HeaderMap, remote: &SocketAddr) -> Option<String> {
-    if is_localhost(remote) || !state.lan_enabled {
-        return None; // admin — uses root gallery
-    }
-    if let Some(token) = extract_token(headers) {
-        if let Some(username) = state.auth.validate_token(&token) {
-            // Authenticated admin accounts use the shared gallery, same as localhost
-            if state.auth.get_account_role(&username).as_deref() == Some("admin") {
-                return None;
-            }
-            return Some(username);
-        }
-    }
+/// With token-based LAN access there are no per-user accounts: every
+/// authenticated client uses the shared admin gallery/prefs, so this always
+/// returns `None`. Anonymous LAN callers also return `None` here and are
+/// rejected by the role checks on the individual handlers.
+fn resolve_username(_state: &WebState, _headers: &HeaderMap, _remote: &SocketAddr) -> Option<String> {
     None
 }
 
@@ -155,11 +147,18 @@ fn query_param<'a>(query: &'a str, name: &str) -> Option<&'a str> {
 }
 
 fn username_for_token(state: &WebState, token: &str) -> Option<Option<String>> {
-    let username = state.auth.validate_token(token)?;
-    if state.auth.get_account_role(&username).as_deref() == Some("admin") {
+    // Token-based LAN access: a matching token grants shared admin access
+    // (None = shared gallery/prefs root). No per-user accounts.
+    let configured = state
+        .app
+        .lan_access_token
+        .read()
+        .map(|t| t.clone())
+        .unwrap_or_default();
+    if !configured.is_empty() && token == configured {
         Some(None)
     } else {
-        Some(Some(username))
+        None
     }
 }
 
@@ -205,8 +204,9 @@ fn proxy_request_authed(
     if resolve_role(state, headers, remote) != UserRole::Anonymous {
         return true;
     }
+    // `?token=` accepts the shared LAN access token for <img>-style requests.
     query_param(query, "token")
-        .and_then(|t| state.auth.validate_token(t))
+        .and_then(|t| username_for_token(state, t))
         .is_some()
 }
 
@@ -2131,8 +2131,10 @@ async fn dispatch_command(
             config::normalize_config_fields(&mut new_config);
             let mut current = state.config.write().await;
             config::preserve_secrets(&mut new_config, &current);
+            let lan_token = new_config.lan_access_token.clone();
             config::save_config(&new_config)?;
             *current = new_config;
+            state.set_lan_access_token(&lan_token);
             Ok(serde_json::json!(null))
         }
         "check_attention_backend" => {
@@ -5495,7 +5497,8 @@ async fn auth_register_handler(
     }
 }
 
-/// GET /internal-api/_auth/status — check if auth is required, accounts exist, and caller's role.
+/// GET /internal-api/_auth/status — report whether LAN auth is required, whether
+/// an access token is configured, and the caller's role. Token-based: no accounts.
 async fn auth_status_handler(
     AxumState(state): AxumState<SharedState>,
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
@@ -5508,41 +5511,24 @@ async fn auth_status_handler(
         UserRole::User => "user",
         UserRole::Anonymous => "anonymous",
     };
-    // Admins/mods always have modelhub access; for users check the account flag
-    let can_use_modelhub = match role {
-        UserRole::Admin | UserRole::Moderator => true,
-        _ => {
-            if let Some(token) = extract_token(&headers) {
-                state
-                    .auth
-                    .validate_token(&token)
-                    .and_then(|u| state.auth.get_modelhub_access(&u))
-                    .unwrap_or(false)
-            } else {
-                false
-            }
-        }
-    };
-    let mut payload = serde_json::json!({
-        "auth_required": state.lan_enabled,
-        "has_accounts": state.auth.has_accounts(),
+    let token_configured = state
+        .app
+        .lan_access_token
+        .read()
+        .map(|t| !t.is_empty())
+        .unwrap_or(false);
+    // Token-based access has no per-user restrictions: anyone authenticated is
+    // admin and may use the model hub.
+    let can_use_modelhub = role != UserRole::Anonymous;
+    Json(serde_json::json!({
+        "auth_required": state.lan_enabled && role == UserRole::Anonymous,
+        "token_configured": token_configured,
+        "has_accounts": false,
         "role": role_str,
         "lan_enabled": state.lan_enabled,
         "server_mode": !cfg!(feature = "desktop"),
         "can_use_modelhub": can_use_modelhub,
-        "legacy_password_deadline": state.auth.legacy_password_deadline(),
-    });
-
-    if let Some(token) = extract_token(&headers) {
-        if let Some(username) = state.auth.validate_token(&token) {
-            let uses_legacy = state.auth.account_uses_legacy_password(&username);
-            payload["uses_legacy_password"] = serde_json::json!(uses_legacy);
-            payload["legacy_password_expired"] =
-                serde_json::json!(uses_legacy && state.auth.is_legacy_password_grace_expired());
-        }
-    }
-
-    Json(payload)
+    }))
 }
 
 /// GET /internal-api/_auth/accounts — list all accounts with roles and online status. Admin/Moderator.

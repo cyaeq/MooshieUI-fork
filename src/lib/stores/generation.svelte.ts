@@ -543,6 +543,30 @@ class GenerationStore {
   modelSourceCategory = $state<string | null>(null);
   clipModel = $state<string | null>(null);
   clipType = $state<string | null>(null);
+  /**
+   * True once the user manually picks a VAE / Text Encoder. While set, model
+   * detection no longer auto-fills these two fields — the user's choice
+   * (including "None") is permanent. Cleared when a new model is selected so
+   * a fresh model still receives its recommended components.
+   */
+  modelComponentsManual = $state(false);
+  /**
+   * Manual "model loading type" override keyed by `${category}::${filename}`.
+   * `"checkpoint"` forces a model to load as a single all-in-one checkpoint
+   * (VAE + text encoder baked in); `"split"` forces diffusion model + separate
+   * text encoder + separate VAE. Absent = let auto-detection decide. Auto
+   * detection remains available as a suggestion via `detectedModelKind`.
+   */
+  modelLoadingOverrides = $state<Record<string, "checkpoint" | "split">>({});
+  /** Detected model kind from the last metadata scan, used as a suggestion. */
+  detectedModelKind = $state<"checkpoint" | "diffusion_model" | null>(null);
+  /**
+   * When true (default), `toParams()` runs the pre-submit model self-check that
+   * throws when split-model components are missing or a split-only family is
+   * loaded as a single checkpoint. Turning this off lets the workflow be
+   * submitted as configured and hands error reporting to ComfyUI.
+   */
+  preflightModelCheck = $state(true);
   stylePreset = $state<StylePresetId>("none");
   stylePresetsEnabled = $state(false);
   controlnetEnabled = $state(false);
@@ -1094,6 +1118,78 @@ class GenerationStore {
   }
 
   /**
+   * Record a manual model-loading override (single-file checkpoint vs split
+   * diffusion model) for a model key. `null` clears it and returns to
+   * auto-detection. Persisted so the choice survives restarts.
+   */
+  setModelLoadingOverride(modelKey: string, mode: "checkpoint" | "split" | null): void {
+    const next = { ...this.modelLoadingOverrides };
+    if (!mode) {
+      delete next[modelKey];
+    } else {
+      next[modelKey] = mode;
+    }
+    this.modelLoadingOverrides = next;
+    this.saveSettings();
+  }
+
+  /**
+   * Apply a manual loading override to the currently selected model and re-run
+   * detection so the recommended VAE / Text Encoder refresh under the new mode.
+   */
+  applyModelLoadingOverride(mode: "checkpoint" | "split"): void {
+    if (mode === "checkpoint") {
+      const checkpointName =
+        this.useSplitModel && this.diffusionModel ? this.diffusionModel : this.checkpoint;
+      if (!checkpointName) return;
+      this.modelSourceCategory = null;
+      this.useSplitModel = false;
+      this.diffusionModel = null;
+      this.clipModel = null;
+      this.clipType = null;
+      this.checkpoint = checkpointName;
+      // Persist under the exact `category::filename` key the detection re-run
+      // below will query (`applyDetectedModelKind` reads modelLoadingOverrides
+      // keyed by the category passed to fetchAndApplyModelMetadata — here
+      // "checkpoints"). Storing the pre-switch key (e.g. "diffusion_models::X")
+      // would leave the manual choice unmatched, and auto-detection would then
+      // silently flip the mode back to split for any file the backend
+      // classifies as a diffusion model.
+      this.setModelLoadingOverride(`checkpoints::${checkpointName}`, "checkpoint");
+      this.invalidateModelMetadataCache();
+      void this.fetchAndApplyModelMetadata("checkpoints", checkpointName);
+      return;
+    }
+
+    const diffusionName = this.useSplitModel ? this.diffusionModel : this.checkpoint;
+    if (!diffusionName) return;
+    this.diffusionModel = diffusionName;
+    this.checkpoint = diffusionName;
+    this.useSplitModel = true;
+    const category = this.modelSourceCategory ?? "diffusion_models";
+    // Same contract as above: the override key must match the category the
+    // detection re-run below will query.
+    this.setModelLoadingOverride(`${category}::${diffusionName}`, "split");
+    this.invalidateModelMetadataCache();
+    void this.fetchAndApplyModelMetadata(category, diffusionName);
+  }
+
+  /** Drop the manual loading override for the current model and let auto-detection decide again. */
+  clearModelLoadingOverride(): void {
+    const key = this.currentModelMetadataKey();
+    if (!key) return;
+    this.setModelLoadingOverride(key, null);
+    this.invalidateModelMetadataCache();
+    const category = this.useSplitModel
+      ? (this.modelSourceCategory ?? "diffusion_models")
+      : (this.modelSourceCategory ?? "checkpoints");
+    const filename = this.useSplitModel ? this.diffusionModel : this.checkpoint;
+    if (category && filename) {
+      void this.fetchAndApplyModelMetadata(category, filename);
+    }
+  }
+
+  /**
    * `category::filename` identifying the currently selected model, keyed on the
    * folder the file physically lives in. Using the physical folder matters after a
    * silent reclassification: the loaded-metadata key and the manual family
@@ -1225,10 +1321,38 @@ class GenerationStore {
     filename: string,
     modelKind: string | null,
   ): void {
+    // Record what detection saw — used as a suggestion in the model panel.
+    this.detectedModelKind =
+      modelKind === "diffusion_model"
+        ? "diffusion_model"
+        : modelKind === "checkpoint"
+          ? "checkpoint"
+          : null;
+
     // GGUF stays on the existing error path: UnetLoaderGGUF is a third-party node
     // with no absolute-path input, so a misplaced .gguf can't be loaded anyway.
     if (!modelKind || filename.toLowerCase().endsWith(".gguf")) {
       this.modelSourceCategory = null;
+      return;
+    }
+
+    // Manual model-loading override (single-file checkpoint vs split diffusion)
+    // wins over auto-detection. Auto-detection remains a suggestion only.
+    const loadingOverride = this.modelLoadingOverrides[`${category}::${filename}`];
+    if (loadingOverride === "checkpoint") {
+      this.modelSourceCategory = null;
+      this.useSplitModel = false;
+      this.diffusionModel = null;
+      this.clipModel = null;
+      this.clipType = null;
+      this.checkpoint = filename;
+      return;
+    }
+    if (loadingOverride === "split") {
+      this.modelSourceCategory = category === "diffusion_models" ? null : category;
+      if (!this.diffusionModel) this.diffusionModel = filename;
+      this.checkpoint = filename;
+      this.useSplitModel = true;
       return;
     }
 
@@ -1254,8 +1378,21 @@ class GenerationStore {
     this.modelSourceCategory = null;
   }
 
+  /** The user manually changed VAE or Text Encoder — stop auto-filling them. */
+  markModelComponentsManual(): void {
+    this.modelComponentsManual = true;
+  }
+
+  /** A new model was selected — allow recommended VAE / Text Encoder auto-fill again. */
+  clearModelComponentsManual(): void {
+    this.modelComponentsManual = false;
+  }
+
   ensureRecommendedSplitClip(encoders: string[], save = false): void {
     if (!this.useSplitModel) return;
+    // The user took manual control of VAE / Text Encoder — respect it.
+    // Detection never overrides a manual choice (including an explicit "None").
+    if (this.modelComponentsManual) return;
 
     const recommendedModel = this.modelRecommendedClipModel?.trim();
     const recommendedType = this.modelRecommendedClipType?.trim();
@@ -1274,15 +1411,20 @@ class GenerationStore {
 
   ensureRecommendedSplitVae(vaes: string[], save = false): void {
     if (!this.useSplitModel) return;
+    // The user took manual control of VAE / Text Encoder — respect it.
+    // Detection never overrides a manual choice (including an explicit "None").
+    if (this.modelComponentsManual) return;
 
     const recommended = this.modelRecommendedVae?.trim();
     if (!recommended) return;
 
     const current = this.vae.trim();
-    if (current !== recommended) {
-      this.vae = recommended;
-      if (save) this.saveSettings();
-    }
+    // Only auto-fill the recommended VAE when the field is empty ("Automatic").
+    // An explicit "none" or any other chosen VAE is the user's permanent choice.
+    if (current === "none") return;
+    if (current !== "") return;
+    this.vae = recommended;
+    if (save) this.saveSettings();
   }
 
   /** SDXL-style area conditioning (ConditioningSetArea). */
@@ -1925,6 +2067,8 @@ class GenerationStore {
           this.modelSourceCategory = saved.modelSourceCategory;
         if (saved.clipModel !== undefined) this.clipModel = saved.clipModel;
         if (saved.clipType !== undefined) this.clipType = saved.clipType;
+        if (saved.modelComponentsManual !== undefined)
+          this.modelComponentsManual = saved.modelComponentsManual;
         if (saved.stylePreset !== undefined) this.stylePreset = saved.stylePreset;
         if (saved.stylePresetsEnabled !== undefined) this.stylePresetsEnabled = !!saved.stylePresetsEnabled;
         if (saved.controlnetEnabled !== undefined) this.controlnetEnabled = saved.controlnetEnabled;
@@ -2040,6 +2184,15 @@ class GenerationStore {
             ),
           ) as Record<string, ModelFamily>;
         }
+        if (saved.modelLoadingOverrides && typeof saved.modelLoadingOverrides === "object") {
+          this.modelLoadingOverrides = Object.fromEntries(
+            Object.entries(saved.modelLoadingOverrides as Record<string, unknown>).filter(
+              ([key, value]) => !!key && (value === "checkpoint" || value === "split"),
+            ),
+          ) as Record<string, "checkpoint" | "split">;
+        }
+        if (saved.preflightModelCheck !== undefined)
+          this.preflightModelCheck = !!saved.preflightModelCheck;
         if (saved.manualSaveMode !== undefined) this.manualSaveMode = saved.manualSaveMode;
         if (saved.advancedMode !== undefined) this.advancedMode = saved.advancedMode;
         if (saved.resolutionLocked !== undefined) this.resolutionLocked = saved.resolutionLocked;
@@ -2139,6 +2292,9 @@ class GenerationStore {
         modelSourceCategory: this.modelSourceCategory,
         clipModel: this.clipModel,
         clipType: this.clipType,
+        modelComponentsManual: this.modelComponentsManual,
+        modelLoadingOverrides: this.modelLoadingOverrides,
+        preflightModelCheck: this.preflightModelCheck,
         stylePreset: this.stylePreset,
         stylePresetsEnabled: this.stylePresetsEnabled,
         controlnetEnabled: this.controlnetEnabled,
@@ -2319,6 +2475,8 @@ class GenerationStore {
       regionalPrompts: this.regionalPrompts,
       regionalPromptStrategy: this.regionalPromptStrategy,
       modelFamilyOverrides: this.modelFamilyOverrides,
+      modelLoadingOverrides: this.modelLoadingOverrides,
+      preflightModelCheck: this.preflightModelCheck,
       videoVariant: this.videoVariant,
       videoDurationSeconds: this.videoDurationSeconds,
       videoMegapixels: this.videoMegapixels,
@@ -2378,31 +2536,36 @@ class GenerationStore {
     // block generation over state video does not use.
     const isVideo = this._mode === "video";
 
-    if (!isVideo && this.useSplitModel) {
-      if (!this.diffusionModel) {
-        throw new Error("Split model is selected, but no diffusion model is resolved yet.");
+    // Pre-submit model self-check. Gated by the `preflightModelCheck` setting:
+    // when disabled the workflow is submitted exactly as configured and error
+    // reporting is left to ComfyUI.
+    if (this.preflightModelCheck) {
+      if (!isVideo && this.useSplitModel) {
+        if (!this.diffusionModel) {
+          throw new Error("Split model is selected, but no diffusion model is resolved yet.");
+        }
+        if (!this.clipModel) {
+          throw new Error("Split model text encoder is still loading.");
+        }
+        if (!this.clipType) {
+          throw new Error("Split model text encoder type is still loading.");
+        }
+        if (!this.vae) {
+          throw new Error("Split model VAE is still loading.");
+        }
       }
-      if (!this.clipModel) {
-        throw new Error("Split model text encoder is still loading.");
-      }
-      if (!this.clipType) {
-        throw new Error("Split model text encoder type is still loading.");
-      }
-      if (!this.vae) {
-        throw new Error("Split model VAE is still loading.");
-      }
-    }
 
-    // Diffusion-only families (Flux, Anima, Wan, Qwen, Chroma, ...) carry no
-    // text encoder in a single checkpoint. If one was placed in `checkpoints/`
-    // and loaded via CheckpointLoaderSimple, ComfyUI returns a None CLIP and
-    // fails with "clip input is invalid: None". Surface an actionable error.
-    if (!isVideo && !this.useSplitModel && familyRequiresSeparateClip(this.modelFamily)) {
-      throw new Error(
-        `"${this.checkpoint}" is a ${this.modelFamily} diffusion model with no built-in text encoder. ` +
-          `Move it to ComfyUI's diffusion_models/ folder and select it as a diffusion model, ` +
-          `or choose a full checkpoint instead.`,
-      );
+      // Diffusion-only families (Flux, Anima, Wan, Qwen, Chroma, ...) carry no
+      // text encoder in a single checkpoint. If one was placed in `checkpoints/`
+      // and loaded via CheckpointLoaderSimple, ComfyUI returns a None CLIP and
+      // fails with "clip input is invalid: None". Surface an actionable error.
+      if (!isVideo && !this.useSplitModel && familyRequiresSeparateClip(this.modelFamily)) {
+        throw new Error(
+          `"${this.checkpoint}" is a ${this.modelFamily} diffusion model with no built-in text encoder. ` +
+            `Move it to ComfyUI's diffusion_models/ folder and select it as a diffusion model, ` +
+            `or choose a full checkpoint instead.`,
+        );
+      }
     }
 
     const style = this.stylePresetsEnabled

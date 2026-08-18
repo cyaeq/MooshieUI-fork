@@ -113,6 +113,12 @@ pub struct AppConfig {
     pub ui_server_port: u16,
     /// Enable LAN access (bind to 0.0.0.0 instead of 127.0.0.1). Only effective in browser mode.
     pub lan_enabled: bool,
+    /// Shared access token for LAN clients. When set, remote LAN users must
+    /// present this token (Authorization: Bearer or ?token=) instead of an
+    /// account login. Empty = LAN access is blocked for remote clients
+    /// (localhost always allowed).
+    #[serde(default)]
+    pub lan_access_token: String,
     /// Attention backend: "default", "sage_v1", "sage_v2", "flash_v1", "flash_v2"
     pub attention_backend: String,
     /// Multi-GPU worker configs. When empty, single-worker mode (backward compat).
@@ -236,6 +242,7 @@ impl Default for AppConfig {
             browser_mode: false,
             ui_server_port: 3200,
             lan_enabled: false,
+            lan_access_token: String::new(),
             attention_backend: "default".to_string(),
             gpu_workers: vec![],
             network_proxy: None,
@@ -292,6 +299,17 @@ pub fn config_to_client_json(
             obj.insert(
                 "llm_external_api_key_configured".to_string(),
                 serde_json::json!(llm_configured),
+            );
+            // The LAN access token is a shared credential for remote clients.
+            // Blank it for non-admin clients and only surface a configured flag.
+            let lan_token_configured = obj
+                .get("lan_access_token")
+                .and_then(|v| v.as_str())
+                .is_some_and(|s| !s.is_empty());
+            obj.insert("lan_access_token".to_string(), serde_json::Value::Null);
+            obj.insert(
+                "lan_access_token_configured".to_string(),
+                serde_json::json!(lan_token_configured),
             );
         }
     }
@@ -508,6 +526,14 @@ pub(crate) fn preserve_secrets(incoming: &mut AppConfig, current: &AppConfig) {
         incoming
             .llm_external_api_key
             .clone_from(&current.llm_external_api_key);
+    }
+    // A full-config save from a non-admin snapshot carries a nulled token;
+    // treat an empty value as a stale echo, not an intent to clear. Clearing
+    // happens by writing a new value (or via the dedicated Settings action).
+    if incoming.lan_access_token.trim().is_empty() {
+        incoming
+            .lan_access_token
+            .clone_from(&current.lan_access_token);
     }
 }
 

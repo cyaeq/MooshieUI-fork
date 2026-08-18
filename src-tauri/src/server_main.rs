@@ -17,9 +17,19 @@ async fn main() {
 
     log::info!("MooshieUI Server starting...");
 
-    let config = load_persisted_config();
+    let mut config = load_persisted_config();
     let port = config.ui_server_port;
     let auto_start = config.auto_start;
+
+    // Token-based LAN access: allow overriding the access token via env for
+    // headless deployments (Docker/K8s). Accounts created below remain for
+    // legacy compatibility but no longer gate LAN access.
+    if let Ok(token) = std::env::var("MOOSHIEUI_LAN_TOKEN") {
+        let token = token.trim().to_string();
+        if !token.is_empty() {
+            config.lan_access_token = token;
+        }
+    }
     let state = Arc::new(AppState::new(config));
 
     // Seed admin account from env vars if provided and not already created.

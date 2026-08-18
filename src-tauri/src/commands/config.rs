@@ -24,8 +24,11 @@ pub async fn update_config(
     // the read that carries the key forward and the write that replaces config.
     let mut current = state.config.write().await;
     preserve_secrets(&mut config, &current);
+    let lan_token = config.lan_access_token.clone();
     save_config(&config).map_err(AppError::Other)?;
     *current = config;
+    // Keep the webserver's token-based auth in sync with the saved config.
+    state.set_lan_access_token(&lan_token);
     Ok(())
 }
 

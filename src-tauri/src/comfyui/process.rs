@@ -646,6 +646,46 @@ pub async fn start_comfyui_process(state: &AppState) -> Result<StartResult, AppE
         return Ok(StartResult::Spawned);
     }
 
+    // We own a live managed child (spawned earlier, e.g. from app mode before
+    // switching to browser mode). Never kill it from a start call: repeated
+    // browser-mode page loads / tabs would otherwise fall into the "stale
+    // external ComfyUI" path below, kill the healthy server on its port, and
+    // respawn it in a loop — leaving the UI stuck on "Starting ComfyUI...".
+    {
+        let mut guard = state.comfyui_process.lock().await;
+        if let Some(child) = guard.as_mut() {
+            match child.try_wait() {
+                Ok(None) => {
+                    // Child still running → we own it. If it's already serving
+                    // requests treat this as already-running; otherwise it's
+                    // still booting and this is a duplicate start request.
+                    let health_url = format!("{}/system_stats", config.server_url);
+                    let healthy = comfyui_health_ok(&state.http_client, &health_url).await;
+                    drop(guard);
+                    if healthy {
+                        log::info!(
+                            "Managed ComfyUI already running at {}, skipping start",
+                            config.server_url
+                        );
+                        mark_legacy_worker_idle(state).await;
+                        return Ok(StartResult::AlreadyRunning);
+                    }
+                    log::info!(
+                        "Managed ComfyUI still starting at {}, skipping duplicate start",
+                        config.server_url
+                    );
+                    return Ok(StartResult::Spawned);
+                }
+                Ok(Some(_)) | Err(_) => {
+                    // Exited (or we can't probe it) — clear the slot and let
+                    // the detection/spawn below run normally.
+                    *guard = None;
+                }
+            }
+        }
+        drop(guard);
+    }
+
     // Check if something is already listening on the target port (e.g. a container)
     let health_url = format!("{}/system_stats", config.server_url);
     if comfyui_health_ok(&state.http_client, &health_url).await {
@@ -707,6 +747,37 @@ pub async fn start_comfyui_process(state: &AppState) -> Result<StartResult, AppE
             log::warn!("ControlNet node verification (optional): {}", e);
         }
         wait_for_port_free(state, &health_url, config.server_port).await;
+    }
+
+    // Guard against concurrent/repeated spawns: browser-mode page reloads or
+    // multiple tabs can fire start_comfyui while the first spawn is still
+    // booting (port not yet listening, so the health check above fails).
+    // If we already hold a LIVE child process, treat this as already
+    // in-flight instead of spawning a second process that would fight over
+    // the same port — that port race is what made startup intermittently
+    // fail ("有时起不来").
+    {
+        let mut guard = state.comfyui_process.lock().await;
+        if let Some(child) = guard.as_mut() {
+            match child.try_wait() {
+                Ok(None) => {
+                    // Child still running → a managed spawn is already in
+                    // flight (or the process is up but not yet healthy).
+                    drop(guard);
+                    log::info!(
+                        "ComfyUI process already starting at {}, skipping duplicate spawn",
+                        config.server_url
+                    );
+                    return Ok(StartResult::Spawned);
+                }
+                Ok(Some(_)) | Err(_) => {
+                    // Exited (or we can't probe it) — clear the slot and let
+                    // the spawn below run normally.
+                    *guard = None;
+                }
+            }
+        }
+        drop(guard);
     }
 
     #[cfg(target_os = "windows")]

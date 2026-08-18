@@ -10,13 +10,18 @@
   import { prepareOutputImageForEditMode } from "../../utils/editImagePreparation.js";
   import { uploadImageBytes } from "../../utils/api.js";
   import { formatGenerationTime } from "../../utils/localeFormat.js";
+  import { useMobileLayout } from "../../utils/device.js";
   import type { OutputImage } from "../../types/index.js";
+  import MobileGalleryLightbox from "./MobileGalleryLightbox.svelte";
 
   interface Props {
     onSwitchToGenerate?: () => void;
   }
 
   let { onSwitchToGenerate }: Props = $props();
+
+  /** True when rendered inside the touch-optimised mobile shell. */
+  const isMobile = useMobileLayout;
 
   const GALLERY_PREFS_KEY = "mooshieui.gallery.prefs.v1";
 
@@ -29,6 +34,10 @@
   let galleryView = $state<"huge" | "large" | "small" | "details">("large");
   let galleryRenderLimit = $state(48);
   let dirPickerImage = $state<OutputImage | null>(null);
+  // Mobile: the filter toolbar collapses behind a toggle, and per-image actions
+  // open in a bottom sheet instead of a hover overlay.
+  let mobileFiltersOpen = $state(false);
+  let mobileActionImage = $state<OutputImage | null>(null);
 
   function loadMoreGallery(node: HTMLElement) {
     const observer = new IntersectionObserver(
@@ -100,6 +109,13 @@
   }
 
   function viewColumns(view: "huge" | "large" | "small" | "details"): number {
+    if (isMobile) {
+      // Touch-friendly fixed density — the per-row slider is hidden on mobile
+      // and the details (table) view is replaced by the grid.
+      if (view === "huge") return 2;
+      if (view === "small") return 3;
+      return 2;
+    }
     if (view === "huge") return Math.max(2, galleryImagesPerRow - 2);
     if (view === "small") return Math.min(10, galleryImagesPerRow + 2);
     return galleryImagesPerRow;
@@ -338,6 +354,21 @@
       {/if}
 
       <div class="rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 space-y-3">
+        {#if isMobile}
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-neutral-400">{locale.t("gallery.filter")}</span>
+          <button
+            type="button"
+            class="flex items-center gap-1 px-3 py-2 text-xs rounded-lg border border-neutral-700 text-neutral-300 hover:border-neutral-500 active:bg-neutral-800 transition-colors touch-target"
+            onclick={() => (mobileFiltersOpen = !mobileFiltersOpen)}
+            aria-expanded={mobileFiltersOpen}
+          >
+            {mobileFiltersOpen ? locale.t("gallery.filter_hide") : locale.t("gallery.filter_show")}
+            <svg class="w-3.5 h-3.5 transition-transform {mobileFiltersOpen ? 'rotate-180' : ''}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+        {/if}
+        {#if !isMobile || mobileFiltersOpen}
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-3 items-end">
           <div class="lg:col-span-2">
             <div class="text-xs text-neutral-400 mb-1">{locale.t("gallery.images_per_row")} {viewColumns(galleryView)}</div>
@@ -405,6 +436,7 @@
             </label>
           </div>
         </div>
+        {/if}
       </div>
 
       {#each galleryGroupsVisible as group}
@@ -412,7 +444,7 @@
           {#if galleryGroupBy !== "none"}
             <h3 class="text-sm text-neutral-300 font-medium">{group.label}</h3>
           {/if}
-          {#if galleryView === "details"}
+          {#if galleryView === "details" && !isMobile}
             <div class="rounded-xl border border-neutral-800 overflow-hidden">
               <div class="grid grid-cols-[72px_1fr_150px_120px_320px] gap-2 px-3 py-2 bg-neutral-900 text-[11px] uppercase tracking-wide text-neutral-500 border-b border-neutral-800">
                 <div>{locale.t("gallery.col_preview")}</div><div>{locale.t("gallery.col_name")}</div><div>{locale.t("gallery.col_date")}</div><div>{locale.t("gallery.col_size")}</div><div>{locale.t("gallery.col_actions")}</div>
@@ -456,7 +488,7 @@
               {/each}
             </div>
           {:else}
-            <div class="grid gap-3" style="grid-template-columns: repeat({viewColumns(galleryView)}, minmax(0, 1fr));">
+            <div class="grid {isMobile ? 'gap-2' : 'gap-3'}" style="grid-template-columns: repeat({viewColumns(galleryView)}, minmax(0, 1fr));">
               {#each group.images as image}
                 <div class="group relative rounded-lg overflow-hidden border border-neutral-800 hover:border-indigo-500 transition-colors {galleryView === 'huge' ? 'aspect-4/3' : 'aspect-square'}">
                   <button
@@ -466,6 +498,17 @@
                   >
                     <img use:lazyThumbnail={{ image, size: thumbSize }} alt={image.filename} class="w-full h-full object-cover" />
                   </button>
+                  {#if isMobile}
+                    <button
+                      type="button"
+                      class="absolute top-1 right-1 w-9 h-9 touch-target flex items-center justify-center rounded-full bg-black/70 text-neutral-100 active:bg-black/90"
+                      title={locale.t("gallery.actions")}
+                      aria-label={locale.t("gallery.actions")}
+                      onclick={(e) => { e.stopPropagation(); mobileActionImage = image; }}
+                    >
+                      <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                    </button>
+                  {/if}
                   {#if isVideoImage(image)}
                     <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div class="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
@@ -475,24 +518,25 @@
                       </div>
                     </div>
                     {#if image.duration_seconds != null}
-                      <div class="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/70 text-white text-[10px] font-mono pointer-events-none">
+                      <div class="absolute {isMobile ? 'top-12' : 'top-1'} right-1 px-1.5 py-0.5 rounded bg-black/70 text-white text-[10px] font-mono pointer-events-none">
                         {formatDuration(image.duration_seconds)}
                       </div>
                     {/if}
                   {/if}
-                  {#if gallery.showGenerationTime && image.generationTimeMs != null}
+                  {#if !isMobile && gallery.showGenerationTime && image.generationTimeMs != null}
                     <div class="absolute {isVideoImage(image) && image.duration_seconds != null ? 'top-7' : 'top-1'} right-1 px-1.5 py-0.5 rounded bg-black/70 text-amber-300 text-[10px] font-mono pointer-events-none">
                       {formatGenerationTime(image.generationTimeMs, locale.current)}
                     </div>
                   {/if}
                   <div class="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[10px] text-neutral-200 pointer-events-none">{boardLabel(image)}</div>
-                  {#if generation.manualSaveMode && !image.gallery_filename}
+                  {#if !isMobile && generation.manualSaveMode && !image.gallery_filename}
                     <div class="absolute top-0 right-0 pt-1 pr-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button class="w-7 h-7 flex items-center justify-center rounded bg-indigo-700/90 hover:bg-indigo-600 text-neutral-100 shadow" title={locale.t("gallery.save_to_folder")} onclick={(e) => { e.stopPropagation(); saveToDir(image); }}>
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
                       </button>
                     </div>
                   {/if}
+                  {#if !isMobile}
                   <div class="absolute bottom-0 inset-x-0 flex justify-center items-center gap-1 px-1.5 pb-1.5 pt-6 opacity-0 group-hover:opacity-100 transition-opacity bg-linear-to-t from-black/80 to-transparent">
                     {#if !isVideoImage(image)}
                       <button class="w-7 h-7 flex items-center justify-center rounded bg-[#FFCC00]/95 hover:bg-[#FFCC00] text-black text-[11px] font-bold shadow" title={locale.t("gallery.img2img")} onclick={(e) => { e.stopPropagation(); img2imgImage(image); }}>I2I</button>
@@ -506,6 +550,7 @@
                     <button class="w-7 h-7 flex items-center justify-center rounded bg-neutral-800/90 hover:bg-neutral-700 text-neutral-200 shadow disabled:opacity-50" disabled={gallery.saving} title={locale.t(isVideoImage(image) ? "gallery.save_video_as" : "gallery.save_as")} onclick={(e) => { e.stopPropagation(); gallery.saveImageAs(image); }}>↓</button>
                     <button class="w-7 h-7 flex items-center justify-center rounded bg-red-900/80 hover:bg-red-800 text-red-300 hover:text-red-200 shadow" title={locale.t("gallery.delete")} onclick={(e) => { e.stopPropagation(); gallery.deleteImage(image); }}>×</button>
                   </div>
+                  {/if}
                 </div>
               {/each}
             </div>
@@ -533,4 +578,91 @@
       <button class="mt-3 w-full px-3 py-2 rounded border border-neutral-700 text-neutral-300 hover:border-neutral-500" onclick={() => (dirPickerImage = null)}>{locale.t("common.cancel")}</button>
     </div>
   </div>
+{/if}
+
+{#if isMobile && mobileActionImage}
+  {@const action = mobileActionImage}
+  <div
+    class="fixed inset-0 z-60 bg-black/60 no-scroll-chain"
+    role="presentation"
+    onclick={() => (mobileActionImage = null)}
+  ></div>
+  <div class="fixed bottom-0 inset-x-0 z-60 bg-neutral-900 border-t border-neutral-800 rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)] shadow-2xl">
+    <div class="bottom-sheet-handle"></div>
+    <div class="px-4 pb-2 space-y-1">
+      <div class="flex items-center gap-3 py-1">
+        <img use:lazyThumbnail={{ image: action, size: 160 }} alt={action.filename} class="w-12 h-12 rounded-lg border border-neutral-800 object-cover shrink-0" />
+        <div class="min-w-0 flex-1">
+          <p class="text-sm text-neutral-100 truncate">{action.filename}</p>
+          <select
+            class="mt-1 w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1.5 text-xs text-neutral-200"
+            value={boardLabel(action)}
+            onchange={(e) => assignBoard(action, (e.target as HTMLSelectElement).value)}
+          >
+            <option value="Unsorted">{locale.t("gallery.unsorted")}</option>
+            {#each gallery.boards as board}
+              <option value={board}>{board}</option>
+            {/each}
+          </select>
+        </div>
+        <button
+          type="button"
+          class="shrink-0 w-9 h-9 touch-target flex items-center justify-center rounded-lg text-neutral-400 active:bg-neutral-800"
+          aria-label={locale.t("common.close")}
+          onclick={() => (mobileActionImage = null)}
+        >
+          <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="h-px bg-neutral-800 my-1"></div>
+      <div class="grid grid-cols-4 gap-2 pt-1">
+        {#if isVideoImage(action)}
+          <button type="button" class="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg bg-neutral-800 active:bg-neutral-700 text-neutral-200" onclick={() => { gallery.openLightbox(action); mobileActionImage = null; }}>
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+            <span class="text-[10px] leading-none">{locale.t("gallery.play_video")}</span>
+          </button>
+        {:else}
+          <button type="button" class="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg bg-[#FFCC00] active:bg-[#FFDD4D] text-black font-semibold" onclick={() => { img2imgImage(action); mobileActionImage = null; }}>
+            <span class="text-[11px] font-bold leading-none">I2I</span>
+            <span class="text-[10px] leading-none">{locale.t("gallery.img2img")}</span>
+          </button>
+          <button type="button" class="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg bg-[#FFCC00] active:bg-[#FFDD4D] text-black font-semibold" onclick={() => { inpaintImage(action); mobileActionImage = null; }}>
+            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+            <span class="text-[10px] leading-none">{locale.t("gallery.inpaint")}</span>
+          </button>
+          {#if !action.is_upscaled}
+            <button type="button" class="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg bg-[#FFCC00] active:bg-[#FFDD4D] text-black font-semibold" onclick={() => { upscaleImage(action); mobileActionImage = null; }}>
+              <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span class="text-[10px] leading-none">{locale.t("gallery.upscale")}</span>
+            </button>
+          {:else}
+            <button type="button" disabled class="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg bg-neutral-800 text-neutral-600 opacity-50">
+              <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span class="text-[10px] leading-none">{locale.t("gallery.upscale")}</span>
+            </button>
+          {/if}
+          <button type="button" class="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg bg-neutral-800 active:bg-neutral-700 text-neutral-200" onclick={() => { gallery.copyToClipboard(action); mobileActionImage = null; }}>
+            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span class="text-[10px] leading-none">{locale.t("gallery.copy")}</span>
+          </button>
+          <button type="button" class="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg bg-neutral-800 active:bg-neutral-700 text-neutral-200" onclick={() => { gallery.toggleComparePin(action); mobileActionImage = null; }}>
+            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+            <span class="text-[10px] leading-none">{locale.t("gallery.compare.short")}</span>
+          </button>
+        {/if}
+        <button type="button" class="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg bg-neutral-800 active:bg-neutral-700 text-neutral-200 disabled:opacity-50" disabled={gallery.saving} onclick={() => { gallery.saveImageAs(action); mobileActionImage = null; }}>
+          <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span class="text-[10px] leading-none">{locale.t("gallery.save")}</span>
+        </button>
+        <button type="button" class="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg bg-red-900/70 active:bg-red-800 text-red-200" onclick={() => { gallery.deleteImage(action); mobileActionImage = null; }}>
+          <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          <span class="text-[10px] leading-none">{locale.t("gallery.delete")}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if isMobile && gallery.lightboxOpen}
+  <MobileGalleryLightbox />
 {/if}

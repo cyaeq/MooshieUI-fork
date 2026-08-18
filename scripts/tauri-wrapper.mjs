@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { writeFileSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ensureLinuxdeploy } from "./ensure-linuxdeploy.mjs";
 
 const args = process.argv.slice(2);
@@ -49,7 +52,12 @@ function linuxBuildEnv() {
 }
 
 async function runTauri(pm, tauriArgs, env = process.env) {
-  await run(pm, ["exec", "tauri", ...tauriArgs], { env });
+  // The `--` separator stops npm/pnpm from swallowing flags after the package
+  // name: `--config` is also an npm config option, so without it npm consumed
+  // the flag and forwarded its VALUE (e.g. the local-config.json path) as a
+  // stray positional arg that tauri then passed to `cargo build`, failing the
+  // build with "unexpected argument '<value>' found".
+  await run(pm, ["exec", "tauri", "--", ...tauriArgs], { env });
 }
 
 function tauriBuildArgs(args) {
@@ -58,7 +66,15 @@ function tauriBuildArgs(args) {
     return args;
   }
   // Local builds without release signing keys should still succeed.
-  return [...args, "--config", '{"bundle":{"createUpdaterArtifacts":false}}'];
+  // Pass the override as a config FILE rather than an inline JSON string: on
+  // Windows the wrapper spawns through cmd (shell: true), and the inline
+  // JSON's double quotes get mangled by cmd into a stray
+  // `{bundle:{createUpdaterArtifacts:false}}` argument that tauri forwards to
+  // cargo, failing the build. A plain file path needs no quoting.
+  const dir = mkdtempSync(join(tmpdir(), "mooshie-tauri-"));
+  const configPath = join(dir, "local-config.json");
+  writeFileSync(configPath, '{"bundle":{"createUpdaterArtifacts":false}}', "utf8");
+  return [...args, "--config", configPath];
 }
 
 async function main() {

@@ -11,10 +11,26 @@
  *
  * Only active in browser / LAN mode — `pushServerPrefs` / `fetchServerPrefs`
  * are no-ops in Tauri desktop mode.
+ *
+ * A global master switch (`enabled`) gates all server sync. When disabled the
+ * debounced pushes and the startup pull are skipped entirely (local persistence
+ * is unaffected), but the JSON export / import helpers always work so users can
+ * move config between installs by hand.
  */
 
 import { registerSyncHandler } from "../utils/syncTrigger.js";
 import { fetchServerPrefs, pushServerPrefs, type UserPrefsData } from "../utils/serverPrefs.js";
+
+const ENABLED_KEY = "mooshieui.prefsSync.enabled.v1";
+/** Bumped when the on-disk export format changes. */
+const EXPORT_VERSION = 1;
+
+export interface PrefsExportPayload {
+  version: number;
+  exported_at: string;
+  app: "mooshieui";
+  data: UserPrefsData;
+}
 import { generation } from "./generation.svelte.js";
 import { promptPresets } from "./promptPresets.svelte.js";
 import { styles } from "./styles.svelte.js";
@@ -30,12 +46,46 @@ import { notes } from "./notes.svelte.js";
 import { videoTimeline } from "./videoTimeline.svelte.js";
 
 class PrefsSyncStore {
+  /** Global master switch for server-side cross-browser sync. */
+  enabled = $state<boolean>(true);
+  /** Timestamp (ms) of the last successful push or pull, for the settings UI. */
+  lastSyncedAt = $state<number | null>(null);
+  lastSyncError = $state<string | null>(null);
+  syncing = $state(false);
+
   private _syncTimer: ReturnType<typeof setTimeout> | null = null;
   private _syncing = false;
   private _pending = false;
 
   constructor() {
+    this.loadEnabled();
     registerSyncHandler(() => this.scheduleSync());
+  }
+
+  private loadEnabled(): void {
+    try {
+      const raw = localStorage.getItem(ENABLED_KEY);
+      if (raw !== null) this.enabled = raw === "1";
+    } catch {
+      // Ignore storage errors — default to enabled.
+    }
+  }
+
+  /** Toggle the master switch and persist the choice locally (never synced itself). */
+  setEnabled(value: boolean): void {
+    this.enabled = value;
+    try {
+      if (value) localStorage.setItem(ENABLED_KEY, "1");
+      else localStorage.removeItem(ENABLED_KEY);
+    } catch {
+      // Ignore storage errors.
+    }
+    if (!value && this._syncTimer !== null) {
+      clearTimeout(this._syncTimer);
+      this._syncTimer = null;
+    }
+    // Re-pull the server snapshot when the user re-enables sync.
+    if (value) void this.loadAndApply();
   }
 
   /** Gather the current state of all participating stores. */
@@ -92,7 +142,7 @@ class PrefsSyncStore {
       videoTimeline.applyServerPrefs(prefs.video_timeline);
     }
     if (typeof prefs.locale === "string") {
-      locale.applyServerPrefs(prefs.locale);
+      locale.applyServerPrefs(prefs.locale, prefs.updated_at);
     }
   }
 
@@ -101,6 +151,7 @@ class PrefsSyncStore {
    * seed it with the current local state.
    */
   async loadAndApply(): Promise<void> {
+    if (!this.enabled) return;
     try {
       const prefs = await fetchServerPrefs();
       if (prefs) {
@@ -109,13 +160,17 @@ class PrefsSyncStore {
         // No snapshot on server yet — push current local state to seed it.
         await pushServerPrefs(this.collectAll());
       }
-    } catch {
+      this.lastSyncedAt = Date.now();
+      this.lastSyncError = null;
+    } catch (e) {
+      this.lastSyncError = e instanceof Error ? e.message : String(e);
       // Non-fatal — offline or server unavailable.
     }
   }
 
   /** Debounce: collapses rapid consecutive saves into one server push. */
   scheduleSync(): void {
+    if (!this.enabled) return;
     if (this._syncTimer !== null) clearTimeout(this._syncTimer);
     this._syncTimer = setTimeout(() => {
       this._syncTimer = null;
@@ -127,6 +182,7 @@ class PrefsSyncStore {
     // If a push is already in flight, mark that another is needed rather than
     // dropping it — changes made mid-flight would otherwise never reach the
     // server until the next unrelated save.
+    if (!this.enabled) return;
     if (this._syncing) {
       this._pending = true;
       return;
@@ -134,6 +190,10 @@ class PrefsSyncStore {
     this._syncing = true;
     try {
       await pushServerPrefs(this.collectAll());
+      this.lastSyncedAt = Date.now();
+      this.lastSyncError = null;
+    } catch (e) {
+      this.lastSyncError = e instanceof Error ? e.message : String(e);
     } finally {
       this._syncing = false;
     }
@@ -142,6 +202,59 @@ class PrefsSyncStore {
       // Re-run once to flush the state that changed during the last push.
       this._doSync().catch(() => {});
     }
+  }
+
+  /** Push the current local state to the server immediately (manual "sync now"). */
+  async forceSyncNow(): Promise<void> {
+    if (!this.enabled || this.syncing) return;
+    this.syncing = true;
+    try {
+      await pushServerPrefs(this.collectAll());
+      this.lastSyncedAt = Date.now();
+      this.lastSyncError = null;
+    } catch (e) {
+      this.lastSyncError = e instanceof Error ? e.message : String(e);
+    } finally {
+      this.syncing = false;
+    }
+  }
+
+  /**
+   * Serialize every participating store's state into an exportable JSON string.
+   * Works in both Tauri desktop and browser modes.
+   */
+  exportJSON(): string {
+    const payload: PrefsExportPayload = {
+      version: EXPORT_VERSION,
+      exported_at: new Date().toISOString(),
+      app: "mooshieui",
+      data: this.collectAll(),
+    };
+    return JSON.stringify(payload, null, 2);
+  }
+
+  /**
+   * Parse an exported JSON payload and apply it to every participating store.
+   * Accepts both the versioned wrapper and a bare `UserPrefsData` object.
+   */
+  async importJSON(raw: string): Promise<void> {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error("Invalid JSON file");
+    }
+    let data: UserPrefsData;
+    if (parsed && typeof parsed === "object" && "data" in (parsed as Record<string, unknown>)) {
+      data = (parsed as PrefsExportPayload).data;
+    } else {
+      data = parsed as UserPrefsData;
+    }
+    if (!data || typeof data !== "object") {
+      throw new Error("Unexpected payload shape");
+    }
+    await this.applyAll(data);
+    this.lastSyncedAt = Date.now();
   }
 }
 

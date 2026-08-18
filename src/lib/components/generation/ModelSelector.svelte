@@ -553,6 +553,25 @@
       !isKrea2Encoder(generation.clipModel)
   );
 
+  /** Manual "model loading type" override for the currently selected model. */
+  const currentModelKey = $derived(generation.currentModelMetadataKey());
+  const modelLoadingOverride = $derived(
+    currentModelKey ? generation.modelLoadingOverrides[currentModelKey] ?? null : null
+  );
+  /**
+   * True when auto-detection suggests a different loading kind than the current
+   * mode — surfaced as a one-click suggestion to adopt the detected kind.
+   */
+  const detectedKindSuggestsSplit = $derived(
+    generation.detectedModelKind === "diffusion_model" && !generation.useSplitModel
+  );
+  const detectedKindSuggestsCheckpoint = $derived(
+    generation.detectedModelKind === "checkpoint" && generation.useSplitModel
+  );
+  const showLoadingKindSuggestion = $derived(
+    detectedKindSuggestsSplit || detectedKindSuggestsCheckpoint
+  );
+
   // Per-file download progress. Keyed by filename so parallel downloads of
   // different components (diffusion model / text encoder / VAE) each have
   // their own tracked row that stays visible until the whole batch completes.
@@ -989,6 +1008,9 @@
     generation.modelSourceCategory = null;
     generation.clipModel = null;
     generation.clipType = null;
+    // A new model is a fresh selection — allow recommended VAE / Text Encoder
+    // auto-fill again instead of carrying the previous model's manual choices.
+    generation.clearModelComponentsManual();
     // generation.vae = "";  // Reset selected vae for checkpoint
     generation.checkpoint = name;
     generation.applyModelMetadata({
@@ -1011,6 +1033,7 @@
   async function selectCustomDiffusion(filename: string) {
     closeCheckpointDropdown();
     checkpointSearch = "";
+    generation.clearModelComponentsManual();
     generation.useSplitModel = true;
     generation.diffusionModel = filename;
     generation.checkpoint = filename;
@@ -1022,6 +1045,10 @@
   async function selectRecommended(rec: RecommendedModel) {
     closeCheckpointDropdown();
     checkpointSearch = "";
+
+    // Fresh model selection — reset the manual VAE / Text Encoder override so
+    // this model's recommended components can be applied below.
+    generation.clearModelComponentsManual();
 
     // Check each component individually and download only what's missing
     const missingFiles: { file: ModelFile; label: string }[] = [];
@@ -1488,11 +1515,61 @@
     {/if}
   </div>
 
+  <!-- Model loading type: single-file checkpoint (baked-in VAE + text encoder)
+       vs split diffusion model. Auto-detection remains a suggestion. -->
+  <div>
+    <label class="block text-xs text-neutral-400 mb-1">{locale.t('generation.model.model_type')}<InfoTip text={locale.t('generation.model.model_type_tip')} /></label>
+    <div class="grid grid-cols-3 gap-1 rounded-lg bg-neutral-800 border border-neutral-700 p-1">
+      <button
+        type="button"
+        class="rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors {modelLoadingOverride === null ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700'}"
+        onclick={() => generation.clearModelLoadingOverride()}
+        title={locale.t('generation.model.model_type_auto_tip')}
+      >
+        {locale.t('generation.model.model_type_auto')}
+      </button>
+      <button
+        type="button"
+        class="rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors {modelLoadingOverride === 'checkpoint' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700'}"
+        onclick={() => generation.applyModelLoadingOverride('checkpoint')}
+        title={locale.t('generation.model.model_type_checkpoint_tip')}
+      >
+        {locale.t('generation.model.model_type_checkpoint')}
+      </button>
+      <button
+        type="button"
+        class="rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors {modelLoadingOverride === 'split' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700'}"
+        onclick={() => generation.applyModelLoadingOverride('split')}
+        title={locale.t('generation.model.model_type_split_tip')}
+      >
+        {locale.t('generation.model.model_type_split')}
+      </button>
+    </div>
+    {#if showLoadingKindSuggestion}
+      <button
+        type="button"
+        class="mt-1.5 w-full flex items-center gap-1.5 text-left text-[11px] rounded-lg border border-amber-600/30 bg-amber-600/10 px-2.5 py-1.5 text-amber-300 hover:bg-amber-600/20 transition-colors"
+        onclick={() => generation.applyModelLoadingOverride(detectedKindSuggestsSplit ? 'split' : 'checkpoint')}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+        <span class="truncate">
+          {detectedKindSuggestsSplit
+            ? locale.t('generation.model.model_type_suggest_split')
+            : locale.t('generation.model.model_type_suggest_checkpoint')}
+        </span>
+      </button>
+    {/if}
+  </div>
+
   <!-- VAE -->
   <div>
     <label class="block text-xs text-neutral-400 mb-1">{locale.t('generation.model.vae')}<InfoTip text={locale.t('generation.model.vae_tip')} /></label>
     <select
       bind:value={generation.vae}
+      onchange={() => {
+        generation.markModelComponentsManual();
+        generation.saveSettings();
+      }}
       class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:border-indigo-500 transition-colors"
     >
       <option value="">{locale.t('generation.model.auto_vae')}</option>
@@ -1509,7 +1586,10 @@
     <label class="block text-xs text-neutral-400 mb-1">{locale.t('generation.model.text_encoder')}<InfoTip text={locale.t('generation.model.text_encoder_tip')} /></label>
     <select
       bind:value={generation.clipModel}
-      onchange={() => generation.saveSettings()}
+      onchange={() => {
+        generation.markModelComponentsManual();
+        generation.saveSettings();
+      }}
       class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:border-indigo-500 transition-colors"
     >
       <option value={null}>{locale.t('generation.model.text_encoder_none')}</option>

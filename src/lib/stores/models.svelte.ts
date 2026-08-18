@@ -57,14 +57,22 @@ class ModelsStore {
       // layout) or `clip/` (legacy ComfyUI / Forge layout). Fetch both and
       // merge so the picker doesn't miss encoders in the legacy directory
       // (e.g. `qwen_3_8b_fp4mixed.safetensors` placed under `clip/`).
+      //
+      // Every ComfyUI-API-backed call below fails SOFT: a single rejected
+      // promise would otherwise abort the whole `Promise.all` and prevent the
+      // disk-scan merge (mergeWithDiskModels) from ever running, leaving all
+      // model dropdowns empty even though the model manager (pure disk scan)
+      // can see the files. That happens whenever the API is down or not yet
+      // ready — e.g. right after adding an extra model path. We always want
+      // the on-disk lists populated regardless of API availability.
       const [checkpoints, vaes, loras, samplerInfo, embeddings, upscaleModels, diffusionModels, unetModels, textEncoders, clipEncoders, controlnetModels, ultralyticsModels, modelPatches] =
         await Promise.all([
-          getModels("checkpoints"),
-          getModels("vae"),
-          getModels("loras"),
-          getSamplers(),
-          getEmbeddings(),
-          getModels("upscale_models"),
+          getModels("checkpoints").catch(() => [] as string[]),
+          getModels("vae").catch(() => [] as string[]),
+          getModels("loras").catch(() => [] as string[]),
+          getSamplers().catch(() => ({ samplers: [] as string[], schedulers: [] as string[] })),
+          getEmbeddings().catch(() => [] as string[]),
+          getModels("upscale_models").catch(() => [] as string[]),
           getModels("diffusion_models").catch(() => [] as string[]),
           getModels("unet").catch(() => [] as string[]),
           getModels("text_encoders").catch(() => [] as string[]),

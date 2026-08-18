@@ -1,0 +1,356 @@
+
+> comfyui-desktop@2.1.3 build
+> vite build
+
+[36mvite v6.4.3 [32mbuilding for production...[36m[39m
+transforming...
+00:00:35 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/mobile/MobileApp.svelte:30:37 This reference only captures the initial value of `navigationVersion`. Did you mean to reference it inside a closure instead?
+https://svelte.dev/e/state_referenced_locally
+28: 
+29:   let currentTab = $state<MobileTab>("generate");
+30:   let lastNavigationVersion = $state(navigationVersion);
+                                                          ^
+31: 
+32:   function go(tab: MobileTab) {
+00:00:35 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/GenerationPage.svelte:61:24 This reference only captures the initial value of `mobileFriendly`. Did you mean to reference it inside a closure instead?
+https://svelte.dev/e/state_referenced_locally
+59:   let { mobileFriendly = false }: Props = $props();
+60: 
+61:   const storageSuffix = mobileFriendly ? ".mobile" : ".desktop";
+                                          ^
+62:   const DIMENSIONS_LAYOUT_KEY = `mooshieui.generation.dimensions.layout.v1${storageSuffix}`;
+63:   const SECTION_LAYOUT_KEY = `mooshieui.generation.sections.layout.v1${storageSuffix}`;
+00:00:35 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/GenerationPage.svelte:1461:4 `<div>` with a dragenter, dragover, dragleave or drop handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+1459: 
+1460:   {#snippet dimensionsSection()}
+1461:     <div bind:this={sectionRefs['dimensions']} data-drop-section="dimensions" class="relative rounded-lg bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'dimensions' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'} border {metadataDropTarget === 'dimensions' ? 'border-indigo-500/70 ring-2 ring-indigo-500/40' : 'border-neutral-800'} transition-colors"
+                ^
+1462:       ondragenter={(e) => onMetadataDragEnter(e, "dimensions")}
+1463:       ondragover={(e) => onMetadataDragOver(e, "dimensions")}
+00:00:35 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/GenerationPage.svelte:1494:4 `<div>` with a dragenter, dragover, dragleave or drop handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+1492: 
+1493:   {#snippet promptsSection()}
+1494:     <div bind:this={sectionRefs['prompts']} data-drop-section="prompts" class="relative rounded-lg bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'prompts' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'} border {metadataDropTarget === 'prompts' ? 'border-indigo-500/70 ring-2 ring-indigo-500/40' : 'border-neutral-800'} transition-colors"
+                ^
+1495:       ondragenter={(e) => onMetadataDragEnter(e, "prompts")}
+1496:       ondragover={(e) => onMetadataDragOver(e, "prompts")}
+00:00:35 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/GenerationPage.svelte:1837:4 `<div>` with a dragenter, dragover, dragleave or drop handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+1835: 
+1836:   {#snippet modelSection()}
+1837:     <div bind:this={sectionRefs['model']} data-drop-section="model" class="relative rounded-lg bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'model' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'} border {metadataDropTarget === 'model' ? 'border-indigo-500/70 ring-2 ring-indigo-500/40' : 'border-neutral-800'} transition-colors"
+                ^
+1838:       ondragenter={(e) => onMetadataDragEnter(e, "model")}
+1839:       ondragover={(e) => onMetadataDragOver(e, "model")}
+00:00:35 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/GenerationPage.svelte:1870:4 `<div>` with a dragenter, dragover, dragleave or drop handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+1868: 
+1869:   {#snippet samplerSection()}
+1870:     <div bind:this={sectionRefs['sampler']} data-drop-section="sampler" class="relative rounded-lg bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'sampler' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'} border {metadataDropTarget === 'sampler' ? 'border-indigo-500/70 ring-2 ring-indigo-500/40' : 'border-neutral-800'} transition-colors"
+                ^
+1871:       ondragenter={(e) => onMetadataDragEnter(e, "sampler")}
+1872:       ondragover={(e) => onMetadataDragOver(e, "sampler")}
+00:00:35 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/GenerationPage.svelte:1987:4 `<div>` with a dragenter, dragover, dragleave or drop handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+1985: 
+1986:   {#snippet facefixSection()}
+1987:     <div bind:this={sectionRefs['facefix']} data-drop-section="facefix" class="relative rounded-lg bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'facefix' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'} border {metadataDropTarget === 'facefix' ? 'border-indigo-500/70 ring-2 ring-indigo-500/40' : 'border-neutral-800'} transition-colors"
+                ^
+1988:       ondragenter={(e) => onMetadataDragEnter(e, "facefix")}
+1989:       ondragover={(e) => onMetadataDragOver(e, "facefix")}
+00:00:35 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/GenerationPage.svelte:2020:4 `<div>` with a dragenter, dragover, dragleave or drop handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+2018: 
+2019:   {#snippet upscaleHistorySection()}
+2020:     <div bind:this={sectionRefs['upscaleHistory']} data-drop-section="upscaleHistory" class="relative rounded-lg bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'upscaleHistory' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'} border {metadataDropTarget === 'upscaleHistory' ? 'border-indigo-500/70 ring-2 ring-indigo-500/40' : 'border-neutral-800'} transition-colors"
+                ^
+2021:       ondragenter={(e) => onMetadataDragEnter(e, "upscaleHistory")}
+2022:       ondragover={(e) => onMetadataDragOver(e, "upscaleHistory")}
+00:00:35 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/InterrogateModal.svelte:320:0 Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+318: <!-- Backdrop (portaled to body to escape overflow containers) -->
+319: <!-- svelte-ignore a11y_no_static_element_interactions -->
+320: <div
+         ^
+321:   use:portal
+322:   class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+00:00:35 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/InterrogateModal.svelte:333:6 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+331:       {/if}
+332:       <h2 class="text-lg font-semibold text-neutral-100 flex-1">{locale.t('generation.interrogate.title')}</h2>
+333:       <button
+                  ^
+334:         onclick={onclose}
+335:         class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-neutral-700 text-neutral-400 hover:text-neutral-200 transition-colors"
+00:00:36 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/InterrogateQuickModal.svelte:68:0 Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+66: 
+67: <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+68: <div
+        ^
+69:   use:portal
+70:   data-interrogate-quick-modal
+00:00:36 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/settings/SettingsPage.svelte:2193:12 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+2191:               <p class="text-xs text-neutral-500">{locale.t('settings.connection.auto_start_desc')}</p>
+2192:             </div>
+2193:             <button
+                         ^
+2194:               class="w-10 h-5 rounded-full transition-colors cursor-pointer {config.auto_start !== false ? 'bg-indigo-600' : 'bg-neutral-700'}"
+2195:               onclick={() => { config!.auto_start = config!.auto_start === false; autoSave(); }}
+00:00:36 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/settings/SettingsPage.svelte:977:6 `updateObj` is updated, but is not declared with `$state(...)`. Changing its value will not correctly trigger updates
+https://svelte.dev/e/non_reactive_update
+975:   let updateTotal = $state(0);
+976:   let browserUpdateMode = $state<BrowserUpdateMode>("local");
+977:   let updateObj: any | null = null;
+                                ^
+978: 
+979:   const updatePercent = $derived(updateTotal > 0 ? Math.round((updateDownloaded / updateTotal) * 100) : 0);
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/UpscaleSettings.svelte:112:4 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+110:   <div class="flex items-center justify-between">
+111:     <label class="text-xs text-neutral-400">{locale.t('generation.upscale.title')}<InfoTip text={locale.t('generation.upscale.tip')} /></label>
+112:     <button
+                ^
+113:       class="relative w-10 h-5 rounded-full transition-colors {generation.upscaleEnabled
+114:         ? 'bg-indigo-600'
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/FaceFixSettings.svelte:115:4 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+113:   <div class="flex items-center justify-between">
+114:     <label class="text-xs text-neutral-400">{locale.t('generation.facefix.title')}<InfoTip text={locale.t('generation.facefix.tip')} /></label>
+115:     <button
+                ^
+116:       class="relative w-10 h-5 rounded-full transition-colors {generation.facefixEnabled
+117:         ? 'bg-indigo-600'
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/FaceFixSettings.svelte:226:6 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+224:     <div class="flex items-center justify-between">
+225:       <label class="text-xs text-neutral-400">{locale.t('generation.facefix.auto_prompt')}<InfoTip text={locale.t('generation.facefix.auto_prompt_tip')} /></label>
+226:       <button
+                  ^
+227:         class="relative w-10 h-5 rounded-full transition-colors {generation.facefixAutoPrompt
+228:           ? 'bg-indigo-600'
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/ui/EditableValue.svelte:49:0 Visible, non-interactive element `<span>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+47: 
+48: <!-- svelte-ignore a11y_no_static_element_interactions -->
+49: <span onclick={(e) => e.preventDefault()}>
+           ^
+50: {#if editing}
+51:   <input
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/progress/PreviewImage.svelte:395:6 Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+393:     {#if !progress.isGenerating && progress.lastOutputImage}
+394:       <!-- svelte-ignore a11y_no_static_element_interactions -->
+395:       <div
+               ^
+396:         class="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
+397:         onmousedown={(e) => e.stopPropagation()}
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/progress/PreviewImage.svelte:461:10 Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag
+459:         <!-- Progress Bar -->
+460:         <div class="w-full h-0.5 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden mt-2">
+461:           <div 
+                 ^
+462:             class="h-full bg-indigo-600 dark:bg-indigo-500 transition-all ease-linear"
+463:             style="width: {progressPercent}%"
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/progress/PreviewImage.svelte:482:12 Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag
+480:         <div class="flex gap-1.5">
+481:           {#each tips as _, index}
+482:             <div
+                   ^
+483:               class="w-1.5 h-1.5 rounded-full transition-colors {index === currentTipIndex ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-neutral-300 dark:bg-neutral-700'}"
+484:             />
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/BottomPanel.svelte:548:16 `<div>` with a contextmenu, mouseenter or mouseleave handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+546:               <div class="grid gap-2" style="grid-template-columns: repeat(auto-fill, minmax(min({imageCardSize}px, 100%), 1fr)); align-content: start;">
+547:               {#each filteredSessionImages as image}
+548:                 <div
+                         ^
+549:                   class="relative w-full rounded-lg overflow-hidden border transition-colors {hoveredImage === image ? 'border-indigo-500' : 'border-neutral-800'}"
+550:                   style="aspect-ratio: 1 / 1;"
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/video/VideoExportPopover.svelte:59:54 This reference only captures the initial value of `frameCount`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+57:   // defaultCrossfadeFrames - so a short clip does not lose a disproportionate
+58:   // slice of itself to the crossfade.
+59:   let crossfadeFrames = $state(defaultCrossfadeFrames(frameCount));
+                                                                    ^
+60:   let sizeTarget = $state<SizeTarget>("discord");
+61:   // MP4 is the only format that can carry the clip's audio, and H3 always writes
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/video/VideoExportPopover.svelte:135:14 This reference only captures the initial value of `presetIndex`. Did you mean to reference it inside a closure instead?
+https://svelte.dev/e/state_referenced_locally
+133: 
+134:   // Seed fps/width/quality from the default preset. Runs once, at init.
+135:   applyPreset(presetIndex);
+                              ^
+136: 
+137:   $effect(() => {
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/PromptAssistantSetupModal.svelte:74:2 Elements with the 'dialog' interactive role must have a tabindex value
+https://svelte.dev/e/a11y_interactive_supports_focus
+72:   role="presentation"
+73: >
+74:   <div
+          ^
+75:     class="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl"
+76:     onclick={(e) => e.stopPropagation()}
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/PromptAssistantSetupModal.svelte:74:2 Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+72:   role="presentation"
+73: >
+74:   <div
+          ^
+75:     class="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl"
+76:     onclick={(e) => e.stopPropagation()}
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/PromptAssistantSetupModal.svelte:142:16 `<button>` cannot be a descendant of `<button>`. When rendering this component on the server, the resulting HTML will be modified by the browser (by moving, removing, or inserting elements), likely resulting in a `hydration_mismatch` warning
+https://svelte.dev/e/node_invalid_placement_ssr
+140:               {#each entry.variants as v}
+141:                 {@const selectable = fits(v)}
+142:                 <button
+                            ^
+143:                   disabled={!selectable}
+144:                   title={!selectable
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/settings/ModelManagerModal.svelte:471:14 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+469:           >
+470:             {#if hasContent}
+471:               <button
+                          ^
+472:                 type="button"
+473:                 onclick={() => toggleCollapse(node)}
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/artist-gallery/components/ArtistHoverPreview.svelte:15:41 This reference only captures the initial value of `manifestUrl`. Did you mean to reference it inside a closure instead?
+https://svelte.dev/e/state_referenced_locally
+13:   let { manifestUrl, slugOrTag }: Props = $props();
+14: 
+15:   const store = createArtistGalleryStore(manifestUrl);
+                                                        ^
+16: 
+17:   let entry = $state<ArtistEntry | null>(null);
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/artist-gallery/components/ArtistLightbox.svelte:134:8 Visible, non-interactive element `<img>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+132:     {#if currentImage}
+133:       <div class="flex items-start justify-center">
+134:         <img
+               ^
+135:           use:cachedSrc={currentImage.imageUrl}
+136:           use:flipImage={{ slug: entry.slug, variant: clampedVariant }}
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/artist-gallery/components/ArtistLightbox.svelte:134:8 Non-interactive element `<img>` should not be assigned mouse or keyboard event listeners
+https://svelte.dev/e/a11y_no_noninteractive_element_interactions
+132:     {#if currentImage}
+133:       <div class="flex items-start justify-center">
+134:         <img
+               ^
+135:           use:cachedSrc={currentImage.imageUrl}
+136:           use:flipImage={{ slug: entry.slug, variant: clampedVariant }}
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/artist-gallery/components/ArtistGalleryPage.svelte:48:41 This reference only captures the initial value of `manifestUrl`. Did you mean to reference it inside a closure instead?
+https://svelte.dev/e/state_referenced_locally
+46:   });
+47: 
+48:   const store = createArtistGalleryStore(manifestUrl);
+                                                        ^
+49: 
+50:   type SortField = ArtistSortField;
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/PromptComposeModal.svelte:65:2 Elements with the 'dialog' interactive role must have a tabindex value
+https://svelte.dev/e/a11y_interactive_supports_focus
+63:   role="presentation"
+64: >
+65:   <div
+          ^
+66:     class="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl"
+67:     onclick={(e) => e.stopPropagation()}
+00:00:37 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/PromptComposeModal.svelte:65:2 Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+63:   role="presentation"
+64: >
+65:   <div
+          ^
+66:     class="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl"
+67:     onclick={(e) => e.stopPropagation()}
+00:00:38 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/CheckpointGallery.svelte:369:8 Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+367:         {@const imgIdx = imageIndex[name] ?? 0}
+368:         <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+369:         <div
+                 ^
+370:           use:lazyFetch={name}
+371:           class="aspect-[3/4] flex flex-col rounded-lg border bg-neutral-900/60 overflow-hidden transition-all text-left cursor-pointer group {isActive
+00:00:38 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/CheckpointGallery.svelte:420:14 Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+418: 
+419:             {#if !isLoading}
+420:               <div
+                       ^
+421:                 class="absolute left-1 bottom-1 z-10 flex gap-0.5"
+422:                 onclick={(e) => e.stopPropagation()}
+00:00:38 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/CheckpointGallery.svelte:448:16 Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+446:                 </div>
+447:                 <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+448:                 <div
+                         ^
+449:                   class="absolute inset-0 flex items-center justify-between px-1 opacity-0 hover:opacity-100 transition-opacity"
+450:                   onclick={(e) => e.stopPropagation()}
+00:00:38 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/LoraGallery.svelte:674:8 Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+672: 
+673:         <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+674:         <div
+                 ^
+675:           use:lazyFetch={loraName}
+676:           class="aspect-[3/4] flex flex-col rounded-lg border bg-neutral-900/60 overflow-hidden transition-colors cursor-pointer group {enabled
+00:00:38 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/LoraGallery.svelte:729:14 Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+727: 
+728:             {#if !isLoading}
+729:               <div
+                       ^
+730:                 class="absolute left-1 bottom-1 z-10 flex gap-0.5"
+731:                 onclick={(e) => e.stopPropagation()}
+00:00:38 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/LoraGallery.svelte:757:16 Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+755:                 </div>
+756:                 <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+757:                 <div
+                         ^
+758:                   class="absolute inset-0 flex items-center justify-between px-1 opacity-0 hover:opacity-100 transition-opacity"
+759:                   onclick={(e) => e.stopPropagation()}
+00:00:38 [vite-plugin-svelte] C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/ModelPreviewActions.svelte:21:0 Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+19: 
+20: <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+21: <div
+        ^
+22:   class="absolute right-1 top-1 z-10 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+23:   onclick={stop}
+[32m✓[39m 390 modules transformed.
+rendering chunks...
+[33m[plugin vite:reporter] 
+(!) C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/utils/ipc.ts is dynamically imported by C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/utils/api.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/utils/api.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/utils/api.ts but also statically imported by C:/Users/cyaeq/Desktop/MooshieUI-main/src/App.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/animadex/fetch.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/artist-gallery/imageCache.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/ExternalComfyModal.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/ControlNetSettings.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/FaceFixSettings.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/GenerateButton.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/GenerationPage.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/InterrogateQuickModal.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/ModelSelector.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/SamplerSettings.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/generation/UpscaleSettings.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/modelhub/ModelHubPage.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/progress/ProgressBar.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/settings/LlmProviderPanel.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/settings/SettingsPage.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/setup/SetupWizard.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/updater/UpdateNotification.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/video/VideoExportPopover.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/components/video/VideoSettingsPanel.svelte, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/stores/autocomplete.svelte.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/stores/downloads.svelte.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/stores/gallery.svelte.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/stores/generation.svelte.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/stores/locale.svelte.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/stores/modelRequests.svelte.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/stores/notifications.svelte.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/stores/promptAssistant.svelte.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/stores/rifeInstall.svelte.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/utils/api.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/utils/cdnFetch.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/utils/comfyuiRestart.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/utils/device.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/utils/galleryActions.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/utils/metadataImport.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/utils/openExternal.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/utils/platformInfo.ts, C:/Users/cyaeq/Desktop/MooshieUI-main/src/lib/utils/serverPrefs.ts, dynamic import will not move module into another chunk.
+[39m
+computing gzip size...
+[2mdist/[22m[32mindex.html                           [39m[1m[2m    0.49 kB[22m[1m[22m[2m │ gzip:     0.31 kB[22m
+[2mdist/[22m[32massets/logo-grYlB2q-.png             [39m[1m[2m   18.23 kB[22m[1m[22m
+[2mdist/[22m[32massets/avif_dec-B7YOdlSS.wasm        [39m[1m[2m1,170.93 kB[22m[1m[22m[2m │ gzip:   341.83 kB[22m
+[2mdist/[22m[35massets/index-CdeItpvG.css            [39m[1m[2m  140.00 kB[22m[1m[22m[2m │ gzip:    21.83 kB[22m
+[2mdist/[22m[36massets/index-DWAWkcyj.js             [39m[1m[2m    0.12 kB[22m[1m[22m[2m │ gzip:     0.13 kB[22m
+[2mdist/[22m[36massets/index-DDgTLpJK.js             [39m[1m[2m    0.13 kB[22m[1m[22m[2m │ gzip:     0.14 kB[22m
+[2mdist/[22m[36massets/index-CAH3XQkg.js             [39m[1m[2m    1.09 kB[22m[1m[22m[2m │ gzip:     0.52 kB[22m
+[2mdist/[22m[36massets/event-CNdo2oXa.js             [39m[1m[2m    1.44 kB[22m[1m[22m[2m │ gzip:     0.69 kB[22m
+[2mdist/[22m[36massets/index-Dm_QtxGQ.js             [39m[1m[2m    1.45 kB[22m[1m[22m[2m │ gzip:     0.50 kB[22m
+[2mdist/[22m[36massets/index-DSWbl1gV.js             [39m[1m[2m    1.53 kB[22m[1m[22m[2m │ gzip:     0.53 kB[22m
+[2mdist/[22m[36massets/core-DhEqZVGG.js              [39m[1m[2m    2.44 kB[22m[1m[22m[2m │ gzip:     0.98 kB[22m
+[2mdist/[22m[36massets/webview-Bhf-n_os.js           [39m[1m[2m    3.36 kB[22m[1m[22m[2m │ gzip:     1.15 kB[22m
+[2mdist/[22m[36massets/index-CrkM_tXC.js             [39m[1m[2m    7.47 kB[22m[1m[22m[2m │ gzip:     1.99 kB[22m
+[2mdist/[22m[36massets/window-DePn7tLG.js            [39m[1m[2m   14.22 kB[22m[1m[22m[2m │ gzip:     3.57 kB[22m
+[2mdist/[22m[36massets/avifDecode-C4AR4OET.js        [39m[1m[2m   18.46 kB[22m[1m[22m[2m │ gzip:     7.61 kB[22m
+[2mdist/[22m[36massets/danbooru-artists-BrHJcJhw.js  [39m[1m[33m  838.61 kB[39m[22m[2m │ gzip:   216.40 kB[22m
+[2mdist/[22m[36massets/index-N7B5mjXI.js             [39m[1m[33m4,673.63 kB[39m[22m[2m │ gzip: 1,312.66 kB[22m
+[2mdist/[22m[36massets/anima-tags-B1Pgsp1k.js        [39m[1m[33m5,420.33 kB[39m[22m[2m │ gzip: 1,410.06 kB[22m
+[33m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 8.74s[39m

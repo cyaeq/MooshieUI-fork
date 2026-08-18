@@ -115,6 +115,9 @@
     generation.diffusionModel = null;
     generation.clipModel = null;
     generation.clipType = null;
+    // Fresh model selection — allow recommended VAE / Text Encoder auto-fill
+    // again for the newly chosen model.
+    generation.clearModelComponentsManual();
     generation.checkpoint = filename;
     generation.applyModelSpecificPreset();
     generation.saveSettings();

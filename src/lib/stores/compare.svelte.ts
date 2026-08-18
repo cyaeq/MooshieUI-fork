@@ -118,6 +118,9 @@ class CompareStore {
     generation.diffusionModel = snap.diffusionModel;
     generation.clipModel = snap.clipModel;
     generation.clipType = snap.clipType;
+    // Restoring a compare cell is an explicit manual choice — keep the restored
+    // VAE / Text Encoder as-is and stop auto-detection from overriding them.
+    generation.markModelComponentsManual();
     generation.loras = snap.loras.map((l) => ({ ...l }));
     generation.samplerName = snap.samplerName;
     generation.scheduler = snap.scheduler;

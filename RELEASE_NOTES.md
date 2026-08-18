@@ -1,3 +1,12 @@
+## What's New in v2.1.3
+
+### Fixes and maintenance
+- **VAE selector improvements**: the VAE dropdown now includes a "None" option to explicitly skip VAE encoding, useful for workflows where the VAE is applied elsewhere. Previously only "Automatic" and model-specific VAEs were available.
+- **Text encoder UI permanence**: the text encoder selector is now permanently visible in split-model mode, ensuring all model components can be configured without conditional visibility changes.
+- **i18n consistency**: added "None" translations for the VAE option across all 12 supported languages (English, German, Spanish, French, Italian, Japanese, Korean, Portuguese, Russian, Traditional Chinese, Simplified Chinese, Polish).
+
+---
+
 ## What's New in v2.1.2
 
 ### Fixes and maintenance

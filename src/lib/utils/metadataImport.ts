@@ -163,7 +163,12 @@ function applyDimensions(meta: Record<string, string>): boolean {
 function applyModel(meta: Record<string, string>): boolean {
   let applied = false;
   if (meta.model) { generation.checkpoint = meta.model; applied = true; }
-  if (meta.vae) { generation.vae = meta.vae; applied = true; }
+  if (meta.vae) {
+    generation.vae = meta.vae;
+    // Imported metadata is an explicit manual choice — keep it permanent.
+    generation.markModelComponentsManual();
+    applied = true;
+  }
   if (meta.loras) {
     try {
       const raw = meta.loras.trim();

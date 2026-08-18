@@ -8,6 +8,8 @@
   import { accessibility } from "../../stores/accessibility.svelte.js";
   import { locale, LOCALE_OPTIONS } from "../../stores/locale.svelte.js";
   import { gallery } from "../../stores/gallery.svelte.js";
+  import { prefsSync } from "../../stores/prefsSync.svelte.js";
+  import { models } from "../../stores/models.svelte.js";
   import { promptAssistant } from "../../stores/promptAssistant.svelte.js";
   import PromptAssistantSetupModal from "../generation/PromptAssistantSetupModal.svelte";
   import OpenModelFolders from "./OpenModelFolders.svelte";
@@ -16,7 +18,7 @@
   import ModelRequestsPanel from "./ModelRequestsPanel.svelte";
   import QualityTagsEditor from "./QualityTagsEditor.svelte";
   import LlmProviderPanel from "./LlmProviderPanel.svelte";
-  import { ipcInvoke, ipcListen, isTauri, isBrowserMode, authHeaders, clearAuthToken } from "../../utils/ipc.js";
+  import { ipcInvoke, ipcListen, isTauri, isBrowserMode, authHeaders, clearAuthToken, ipcOpenDirectoryDialog } from "../../utils/ipc.js";
   import { useMobileLayout, isMobileUA, setForceDesktopOverride } from "../../utils/device.js";
   import {
     applyTheme,
@@ -81,7 +83,14 @@
 
   /** Open a directory picker. Returns path string or null. */
   async function openDirectoryDialog(title: string): Promise<string | null> {
-    if (!isTauri) return null;
+    if (!isTauri) {
+      // Browser / LAN mode: there is no native Tauri dialog. Fall back to the
+      // web Directory Picker so the Browse button actually responds instead of
+      // silently doing nothing. Note browsers cannot expose absolute paths, so
+      // this returns only the folder name — sufficient for a quick picker
+      // fallback, not a full path.
+      return ipcOpenDirectoryDialog();
+    }
     const { open } = await import("@tauri-apps/plugin-dialog");
     const selected = await open({ directory: true, multiple: false, title });
     return typeof selected === "string" ? selected : null;
@@ -158,6 +167,14 @@
   let exportingLogs = $state(false);
   let logExportDone = $state(false);
   let logExportError = $state<string | null>(null);
+
+  // Preferences sync / export / import state (LoRA presets, prompt history, etc.)
+  let prefsExporting = $state(false);
+  let prefsImporting = $state(false);
+  let prefsExportDone = $state(false);
+  let prefsImportDone = $state(false);
+  let prefsTransferError = $state<string | null>(null);
+  let prefsFileInput = $state<HTMLInputElement | null>(null);
 
   // Clear queue state (mod/admin only)
   let clearQueueBusy = $state(false);
@@ -275,6 +292,51 @@
   let lanAuthBusy = $state(false);
   let lanAddresses = $state<string[]>([]);
   let showAddAccountModal = $state(false);
+
+  // LAN access token (token-based access — replaces the account system)
+  let lanTokenVisible = $state(false);
+  let lanTokenInput = $state("");
+  let lanTokenMsg = $state<{ kind: "ok" | "error"; text: string } | null>(null);
+
+  /** Generate a cryptographically random hex token and save it. */
+  function generateLanToken() {
+    if (!config) return;
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    const token = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    config.lan_access_token = token;
+    lanTokenInput = "";
+    lanTokenMsg = { kind: "ok", text: locale.t("settings.lan.token_generated") };
+    void autoSave();
+  }
+
+  /** Save a manually-entered access token. */
+  async function saveLanToken() {
+    if (!config) return;
+    const token = lanTokenInput.trim();
+    if (!token) {
+      lanTokenMsg = { kind: "error", text: locale.t("settings.lan.token_empty_error") };
+      return;
+    }
+    config.lan_access_token = token;
+    lanTokenInput = "";
+    lanTokenMsg = { kind: "ok", text: locale.t("settings.lan.token_saved") };
+    await autoSave();
+  }
+
+  /** Copy `http://<lan-ip>:<port>/?token=<token>` to the clipboard. */
+  async function copyLanAccessLink() {
+    if (!config?.lan_access_token || lanAddresses.length === 0) return;
+    const port = config.ui_server_port || 3200;
+    const base = lanAddresses[0]!.replace(/^https?:\/\//, "").replace(/:\d+$/, "");
+    const url = `http://${base}:${port}/?token=${encodeURIComponent(config.lan_access_token)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      lanTokenMsg = { kind: "ok", text: locale.t("settings.lan.token_copied") };
+    } catch {
+      lanTokenMsg = { kind: "error", text: locale.t("settings.lan.token_copy_failed") };
+    }
+  }
 
   // Account list: search, sort, and delete modal
   let accountSearch = $state("");
@@ -739,6 +801,96 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Preferences sync / export / import (LoRA presets, prompt history, etc.)
+  // ---------------------------------------------------------------------------
+
+  function triggerPrefsDownload(json: string, filename: string) {
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleExportPrefs() {
+    prefsExportDone = false;
+    prefsTransferError = null;
+    prefsExporting = true;
+    try {
+      const json = prefsSync.exportJSON();
+      const defaultName = `mooshieui-config-${new Date().toISOString().slice(0, 10)}.json`;
+      if (isTauri) {
+        const { save } = await import("@tauri-apps/plugin-dialog");
+        const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+        const path = await save({
+          defaultPath: defaultName,
+          filters: [{ name: "JSON", extensions: ["json"] }],
+        });
+        if (!path) return;
+        await writeTextFile(path, json);
+      } else {
+        triggerPrefsDownload(json, defaultName);
+      }
+      prefsExportDone = true;
+      setTimeout(() => (prefsExportDone = false), 4000);
+    } catch (e) {
+      prefsTransferError = String(e);
+    } finally {
+      prefsExporting = false;
+    }
+  }
+
+  async function handleImportPrefs() {
+    prefsImportDone = false;
+    prefsTransferError = null;
+    if (isTauri) {
+      prefsImporting = true;
+      try {
+        const { open } = await import("@tauri-apps/plugin-dialog");
+        const { readTextFile } = await import("@tauri-apps/plugin-fs");
+        const selected = await open({
+          multiple: false,
+          filters: [{ name: "JSON", extensions: ["json"] }],
+        });
+        if (!selected || typeof selected !== "string") return;
+        const raw = await readTextFile(selected);
+        await applyPrefsImport(raw);
+      } catch (e) {
+        prefsTransferError = String(e);
+      } finally {
+        prefsImporting = false;
+      }
+      return;
+    }
+    prefsFileInput?.click();
+  }
+
+  async function onPrefsFilePicked(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    prefsImporting = true;
+    try {
+      await applyPrefsImport(await file.text());
+    } catch (e) {
+      prefsTransferError = e instanceof Error ? e.message : String(e);
+    } finally {
+      prefsImporting = false;
+    }
+  }
+
+  async function applyPrefsImport(raw: string) {
+    await prefsSync.importJSON(raw);
+    prefsImportDone = true;
+    setTimeout(() => (prefsImportDone = false), 4000);
+  }
+
   async function handleImportDirectory() {
     const selected = await openDirectoryDialog(locale.t('settings.gallery.import_dialog_title'));
     if (!selected) return;
@@ -1086,6 +1238,7 @@
       prompt_assistant: false,
       civitai: false,
       about: false,
+      sync: false,
     };
     try {
       const raw = localStorage.getItem(COLLAPSED_KEY);
@@ -1123,6 +1276,7 @@
     { key: "civitai", labelKey: "settings.sections.civitai", keywords: "civitai api key metadata model hub image fetch download authentication" },
     { key: "queue", labelKey: "settings.sections.queue", keywords: "queue position pending running cancel clear jobs users order wait" },
     { key: "about", labelKey: "settings.sections.about", keywords: "version update check updates about troubleshooting logs export diagnostic github report issue" },
+    { key: "sync", labelKey: "settings.sections.sync", keywords: "sync preferences cross browser server backup export import data json lora presets prompt history" },
   ];
 
   function sectionVisible(key: string): boolean {
@@ -1248,22 +1402,13 @@
     getGalleryPath().then(p => { galleryPathDisplay = p; }).catch(() => {});
     void loadCacheCount();
     if (isBrowserMode) {
-      loadLanAccounts();
       loadLanInfo();
-      void refreshPasswordSecurityStatus();
     }
     startQueuePolling();
   });
 
   onDestroy(() => {
     stopQueuePolling();
-  });
-
-  // Poll account list every 10s to refresh online/offline indicators (admin/mod).
-  $effect(() => {
-    if (!isBrowserMode || !canManageServer) return;
-    const id = setInterval(loadLanAccounts, 10_000);
-    return () => clearInterval(id);
   });
 
   function snapshotRestartFields() {
@@ -1380,11 +1525,19 @@
     saving = true;
     error = null;
     try {
+      // Model paths are persisted only via the explicit Save button. Detect a
+      // change BEFORE snapshotRestartFields() resets the baseline, then refresh
+      // the model store so the generation dropdowns pick up files from the new
+      // path immediately (disk scan) instead of waiting for a restart.
+      const modelPathsChanged = (config.extra_model_paths ?? "") !== originalModelPaths;
       await updateConfig(config);
       saved = true;
       snapshotRestartFields();
       checkRestartNeeded();
       void refreshAttentionStatus();
+      if (modelPathsChanged) {
+        void models.refresh();
+      }
       setTimeout(() => (saved = false), 2000);
     } catch (e) {
       error = `Failed to save: ${e}`;
@@ -1863,73 +2016,57 @@
                     </div>
                   {/if}
 
-                  <!-- Existing accounts -->
-                  {#if lanAccounts.length > 0}
-                    <div class="space-y-2">
-                      <div class="flex items-center justify-between">
-                        <p class="text-xs text-neutral-400 font-medium">{locale.t('settings.lan.accounts')}</p>
-                        <p class="text-[10px] text-neutral-500">{locale.t('settings.lan.accounts_count', { shown: sortedAccounts.length, total: lanAccounts.length })}</p>
-                      </div>
+                  <!-- LAN access token (token-based access, no accounts) -->
+                  <div class="bg-neutral-800 rounded-lg p-3 space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                      <p class="text-xs text-neutral-400 font-medium">{locale.t('settings.lan.token_title')}</p>
+                      {#if config.lan_access_token}
+                        <button
+                          class="text-[10px] px-2 py-1 rounded bg-neutral-700 text-neutral-300 hover:bg-neutral-600 transition-colors cursor-pointer"
+                          onclick={() => (lanTokenVisible = !lanTokenVisible)}
+                        >{lanTokenVisible ? locale.t('settings.lan.token_hide') : locale.t('settings.lan.token_show')}</button>
+                      {/if}
+                    </div>
+                    <p class="text-xs text-neutral-500">{locale.t('settings.lan.token_desc')}</p>
+                    {#if config.lan_access_token}
+                      <p class="text-sm font-mono text-indigo-300 select-all break-all bg-neutral-900 rounded-lg px-3 py-2">
+                        {lanTokenVisible ? config.lan_access_token : '••••••••••••••••••••••••••••••••'}
+                      </p>
+                    {:else}
+                      <p class="text-xs text-amber-400">{locale.t('settings.lan.token_not_set')}</p>
+                    {/if}
 
-                      <!-- Search -->
+                    <div class="flex items-center gap-2">
                       <input
                         type="text"
-                        placeholder={locale.t('settings.lan.search_accounts')}
-                        bind:value={accountSearch}
-                        class="w-full px-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-indigo-500"
+                        placeholder={locale.t('settings.lan.token_new_placeholder')}
+                        bind:value={lanTokenInput}
+                        class="flex-1 min-w-0 px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-700 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-indigo-500"
+                        onkeydown={(e) => { if (e.key === "Enter") saveLanToken(); }}
                       />
-
-                      <!-- Sort buttons -->
-                      <div class="flex gap-1">
-                        {#each [["name", "settings.lan.sort_name"], ["joined", "settings.lan.sort_joined"], ["last_online", "settings.lan.sort_last_online"]] as [key, labelKey]}
-                          <button
-                            class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors {accountSort === key ? 'bg-indigo-600/30 text-indigo-300' : 'bg-neutral-800 text-neutral-400 hover:text-neutral-300'}"
-                            onclick={() => { if (accountSort === key) { accountSortAsc = !accountSortAsc; } else { accountSort = key as typeof accountSort; accountSortAsc = true; } }}
-                          >{locale.t(labelKey)} {accountSort === key ? (accountSortAsc ? '↑' : '↓') : ''}</button>
-                        {/each}
-                      </div>
-
-                      <!-- Scrollable account list (max 6 visible) -->
-                      <div class="max-h-72 overflow-y-auto space-y-1 pr-1">
-                        {#each sortedAccounts as account}
-                          <div class="flex items-center justify-between bg-neutral-800 rounded-lg px-3 py-2">
-                            <div class="flex items-center gap-2 min-w-0">
-                              <span class="inline-block w-2 h-2 rounded-full shrink-0 {account.online ? 'bg-green-500' : 'bg-neutral-600'}"></span>
-                              <span class="text-sm text-neutral-200 truncate" title={account.username}>{account.username}</span>
-                              {#if account.role === "moderator"}
-                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-600/30 text-indigo-300 font-medium shrink-0">{locale.t('common.role_mod')}</span>
-                              {/if}
-                              <span class="text-[10px] text-neutral-500 shrink-0">{locale.formatBytes(account.storage_limit_bytes)}</span>
-                              <span class="text-[10px] text-neutral-500 shrink-0" title={account.created_at ? locale.t('settings.lan.joined_title', { date: new Date(account.created_at).toLocaleDateString() }) : ''}>
-                                {account.created_at ? relativeTime(account.created_at) : ''}
-                              </span>
-                              {#if !account.online && account.last_online}
-                                <span class="text-[10px] text-neutral-600 shrink-0" title={locale.t('settings.lan.last_online_title', { date: locale.formatDateTime(account.last_online) })}>
-                                  · {relativeTime(account.last_online)}
-                                </span>
-                              {/if}
-                            </div>
-                            <button
-                              class="shrink-0 ml-2 p-1 rounded hover:bg-neutral-700 text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer"
-                              title={locale.t('settings.lan.manage_user', { user: account.username })}
-                              onclick={() => { actionsTargetAccount = account; showAccountActionsModal = true; }}
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
-                            </button>
-                          </div>
-                        {/each}
-                      </div>
+                      <button
+                        class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer bg-indigo-600 hover:bg-indigo-500 text-white"
+                        onclick={saveLanToken}
+                      >{locale.t('settings.lan.token_set')}</button>
                     </div>
-                  {:else}
-                    <p class="text-xs text-neutral-500">{locale.t('settings.lan.no_accounts')}</p>
-                  {/if}
 
-                  <!-- Add account button -->
-                  <button
-                    class="w-full px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer {lanAuthBusy ? 'bg-neutral-700 text-neutral-500' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}"
-                    disabled={lanAuthBusy}
-                    onclick={() => { lanNewUser = ''; lanNewPass = ''; lanAuthError = null; showAddAccountModal = true; }}
-                  >{locale.t('settings.lan.add_account')}</button>
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer bg-neutral-700 hover:bg-neutral-600 text-neutral-200"
+                        onclick={generateLanToken}
+                      >{locale.t('settings.lan.token_generate')}</button>
+                      {#if config.lan_access_token && lanAddresses.length > 0}
+                        <button
+                          class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer bg-neutral-700 hover:bg-neutral-600 text-neutral-200"
+                          onclick={copyLanAccessLink}
+                        >{locale.t('settings.lan.token_copy_link')}</button>
+                      {/if}
+                    </div>
+
+                    {#if lanTokenMsg}
+                      <p class="text-xs {lanTokenMsg.kind === 'ok' ? 'text-emerald-400' : 'text-red-400'}">{lanTokenMsg.text}</p>
+                    {/if}
+                  </div>
                 </div>
               {/if}
             {/if}
@@ -1937,88 +2074,101 @@
         </section>
         {/if}
 
-        <!-- Account Management (moderator in browser mode — admins see this inside the LAN section above) -->
-        {#if canManageServer && !isAdmin && isBrowserMode}
+        <!-- Cross-browser Sync & Data Export/Import -->
+        {#if sectionVisible("sync")}
         <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
-          <div class="p-5 space-y-3">
-            <h3 class="text-sm font-medium text-neutral-200">{locale.t('settings.lan.account_management')}</h3>
-            <p class="text-xs text-neutral-500">{locale.t('settings.lan.account_management_desc')}</p>
-
-            {#if lanAccounts.length > 0}
-              <div class="space-y-2">
-                <div class="flex items-center justify-between">
-                  <p class="text-xs text-neutral-400 font-medium">{locale.t('settings.lan.accounts')}</p>
-                  <p class="text-[10px] text-neutral-500">{locale.t('settings.lan.accounts_count', { shown: sortedAccounts.length, total: lanAccounts.length })}</p>
-                </div>
-
-                <input
-                  type="text"
-                  placeholder={locale.t('settings.lan.search_accounts')}
-                  bind:value={accountSearch}
-                  class="w-full px-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-indigo-500"
-                />
-
-                <div class="flex gap-1">
-                  {#each [["name", "settings.lan.sort_name"], ["joined", "settings.lan.sort_joined"], ["last_online", "settings.lan.sort_last_online"]] as [key, labelKey]}
-                    <button
-                      class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors {accountSort === key ? 'bg-indigo-600/30 text-indigo-300' : 'bg-neutral-800 text-neutral-400 hover:text-neutral-300'}"
-                      onclick={() => { if (accountSort === key) { accountSortAsc = !accountSortAsc; } else { accountSort = key as typeof accountSort; accountSortAsc = true; } }}
-                    >{locale.t(labelKey)} {accountSort === key ? (accountSortAsc ? '↑' : '↓') : ''}</button>
-                  {/each}
-                </div>
-
-                <div class="max-h-72 overflow-y-auto space-y-1 pr-1">
-                  {#each sortedAccounts as account}
-                    <div class="flex items-center justify-between bg-neutral-800 rounded-lg px-3 py-2">
-                      <div class="flex items-center gap-2 min-w-0">
-                        <span class="inline-block w-2 h-2 rounded-full shrink-0 {account.online ? 'bg-green-500' : 'bg-neutral-600'}"></span>
-                        <span class="text-sm text-neutral-200 truncate" title={account.username}>{account.username}</span>
-                        {#if account.role === "moderator"}
-                          <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-600/30 text-indigo-300 font-medium shrink-0">{locale.t('common.role_mod')}</span>
-                        {/if}
-                        {#if account.role === "admin"}
-                          <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-600/30 text-amber-300 font-medium shrink-0">{locale.t('common.role_admin')}</span>
-                        {/if}
-                        {#if account.role === "user"}
-                          <span class="text-[10px] text-neutral-500 shrink-0">{locale.formatBytes(account.storage_limit_bytes)}</span>
-                        {/if}
-                        <span class="text-[10px] text-neutral-500 shrink-0" title={account.created_at ? locale.t('settings.lan.joined_title', { date: new Date(account.created_at).toLocaleDateString() }) : ''}>
-                          {account.created_at ? relativeTime(account.created_at) : ''}
-                        </span>
-                        {#if !account.online && account.last_online}
-                          <span class="text-[10px] text-neutral-600 shrink-0" title={locale.t('settings.lan.last_online_title', { date: locale.formatDateTime(account.last_online) })}>
-                            · {relativeTime(account.last_online)}
-                          </span>
-                        {/if}
-                      </div>
-                      {#if account.role === "user"}
-                        <button
-                          class="shrink-0 ml-2 p-1 rounded hover:bg-neutral-700 text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer"
-                          title={locale.t('settings.lan.manage_user', { user: account.username })}
-                          onclick={() => { actionsTargetAccount = account; showAccountActionsModal = true; }}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
-                        </button>
-                      {/if}
-                    </div>
-                  {/each}
-                </div>
+          <button
+            class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
+            onclick={() => (collapsed.sync = !collapsed.sync)}
+          >
+            {locale.t('settings.sync.title')}
+            <svg class="w-4 h-4 text-neutral-500 transition-transform {collapsed.sync ? '-rotate-90' : ''}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          {#if !collapsed.sync}
+          <div class="px-5 pb-5 space-y-4">
+            <!-- Master toggle -->
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm font-medium text-neutral-200">{locale.t('settings.sync.enable_label')}</p>
+                <p class="text-xs text-neutral-500 mt-0.5">{locale.t('settings.sync.enable_desc')}</p>
               </div>
+              <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={prefsSync.enabled}
+                  onchange={(e) => prefsSync.setEnabled((e.target as HTMLInputElement).checked)}
+                  class="sr-only peer"
+                />
+                <div class="w-9 h-5 bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+
+            {#if isBrowserMode}
+              <div class="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onclick={() => void prefsSync.forceSyncNow()}
+                  disabled={prefsSync.syncing || !prefsSync.enabled}
+                  class="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-100 rounded-lg text-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {prefsSync.syncing ? locale.t('settings.sync.syncing') : locale.t('settings.sync.sync_now')}
+                </button>
+                {#if prefsSync.lastSyncedAt}
+                  <span class="text-xs text-neutral-500">{locale.t('settings.sync.last_synced', { time: locale.formatDateTime(prefsSync.lastSyncedAt) })}</span>
+                {/if}
+              </div>
+              {#if prefsSync.lastSyncError}
+                <p class="text-xs text-red-400">{prefsSync.lastSyncError}</p>
+              {/if}
             {:else}
-              <p class="text-xs text-neutral-500">{locale.t('settings.lan.no_accounts_found')}</p>
+              <p class="text-xs text-neutral-500">{locale.t('settings.sync.browser_only_note')}</p>
             {/if}
+            <p class="text-[11px] text-neutral-500">{locale.t('settings.sync.scope_desc')}</p>
 
-            <!-- Add account button (moderators can create accounts too) -->
-            <button
-              class="w-full px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer {lanAuthBusy ? 'bg-neutral-700 text-neutral-500' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}"
-              disabled={lanAuthBusy}
-              onclick={() => { lanNewUser = ''; lanNewPass = ''; lanAuthError = null; showAddAccountModal = true; }}
-            >{locale.t('settings.lan.add_account')}</button>
+            <div class="h-px bg-neutral-800"></div>
 
-            {#if lanAuthError}
-              <p class="text-xs text-red-400 mt-1">{lanAuthError}</p>
-            {/if}
+            <!-- Export / Import -->
+            <div class="space-y-2">
+              <p class="text-xs text-neutral-400">{locale.t('settings.sync.transfer_desc')}</p>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onclick={handleExportPrefs}
+                  disabled={prefsExporting}
+                  class="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-100 rounded-lg text-sm transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {prefsExporting ? locale.t('settings.sync.exporting') : locale.t('settings.sync.export_button')}
+                </button>
+                <button
+                  type="button"
+                  onclick={handleImportPrefs}
+                  disabled={prefsImporting}
+                  class="px-4 py-2 border border-neutral-700 text-neutral-300 hover:border-indigo-500 hover:text-indigo-300 rounded-lg text-sm transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {prefsImporting ? locale.t('settings.sync.importing') : locale.t('settings.sync.import_button')}
+                </button>
+              </div>
+              <div class="flex flex-wrap gap-3">
+                {#if prefsExportDone}
+                  <span class="text-xs text-emerald-400">{locale.t('settings.sync.exported')}</span>
+                {/if}
+                {#if prefsImportDone}
+                  <span class="text-xs text-emerald-400">{locale.t('settings.sync.imported')}</span>
+                {/if}
+              </div>
+              {#if prefsTransferError}
+                <p class="text-xs text-red-400">{prefsTransferError}</p>
+              {/if}
+              <input
+                type="file"
+                accept="application/json,.json"
+                class="hidden"
+                bind:this={prefsFileInput}
+                onchange={onPrefsFilePicked}
+              />
+            </div>
           </div>
+          {/if}
         </section>
         {/if}
 
@@ -2537,8 +2687,20 @@
           <div>
             <label class="block text-xs text-neutral-400 mb-1">{locale.t('settings.appearance.language')}</label>
             <select
-              bind:value={locale.current}
-              onchange={() => locale.saveSettings()}
+              value={locale.current}
+              onchange={(e) => {
+                const next = (e.target as HTMLSelectElement).value as Locale;
+                if (next !== locale.current) {
+                  locale.current = next;
+                  void locale.saveSettings().catch((err) => {
+                    console.error("Failed to save language preference:", err);
+                    gallery.showToast(
+                      locale.t('settings.appearance.language_save_failed', { message: String(err) }),
+                      'error',
+                    );
+                  });
+                }
+              }}
               class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:border-indigo-500 transition-colors"
             >
               {#each LOCALE_OPTIONS as opt}
@@ -2782,6 +2944,23 @@
             <div>
               <label for="advanced-mode" class="text-sm text-neutral-200">{locale.t('settings.advanced_mode.label')}</label>
               <p class="text-[10px] text-neutral-500 mt-0.5">{locale.t('settings.advanced_mode.desc')}</p>
+            </div>
+          </div>
+
+          <div class="flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="preflight-model-check"
+              checked={generation.preflightModelCheck}
+              onchange={(e) => {
+                generation.preflightModelCheck = (e.target as HTMLInputElement).checked;
+                generation.saveSettings();
+              }}
+              class="w-4 h-4 mt-0.5 accent-indigo-500 rounded"
+            />
+            <div>
+              <label for="preflight-model-check" class="text-sm text-neutral-200">{locale.t('settings.performance.preflight_model_check')}</label>
+              <p class="text-[10px] text-neutral-500 mt-0.5">{locale.t('settings.performance.preflight_model_check_desc')}</p>
             </div>
           </div>
 
