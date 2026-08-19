@@ -7,8 +7,10 @@
 
   let {
     onSetupComplete,
+    onSkip,
   }: {
     onSetupComplete: (mode: "app" | "browser") => void;
+    onSkip: () => void;
   } = $props();
 
   let phase = $state<"detecting" | "ready" | "installing" | "validating-remote" | "choose-mode" | "done" | "error">(
@@ -43,6 +45,7 @@
   let progressMessage = $state("");
   let progressPercent = $state(0);
   let errorMessage = $state("");
+  let showSkipConfirm = $state(false);
 
   // Install location
   let defaultInstallPath = $state("");
@@ -455,6 +458,17 @@
         <p class="text-neutral-400 text-sm mb-6">
           {locale.t("setup.intro")}
         </p>
+
+        <div class="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+          <p class="text-xs leading-relaxed text-amber-200">{locale.t("setup.skip_warning")}</p>
+          <button
+            type="button"
+            class="mt-3 min-h-11 w-full rounded-lg border border-amber-500/40 bg-neutral-900 px-3 py-2 text-sm text-amber-200 transition-colors hover:bg-amber-500/10"
+            onclick={() => showSkipConfirm = true}
+          >
+            {locale.t("setup.skip")}
+          </button>
+        </div>
 
         <div class="mb-6 rounded-lg border border-neutral-800 bg-neutral-950/50 p-2">
           <div class="grid grid-cols-2 gap-2">
@@ -903,4 +917,17 @@
       {locale.t('setup.tagline')}
     </p>
   </div>
+
+  {#if showSkipConfirm}
+    <div class="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-4" role="presentation" onclick={(event) => { if (event.target === event.currentTarget) showSkipConfirm = false; }}>
+      <div class="w-full max-w-sm rounded-xl border border-amber-500/40 bg-neutral-900 p-5 shadow-2xl" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="skip-setup-title">
+        <h2 id="skip-setup-title" class="text-lg font-semibold text-neutral-100">{locale.t("setup.skip_confirm_title")}</h2>
+        <p class="mt-2 text-sm leading-relaxed text-neutral-400">{locale.t("setup.skip_confirm_desc")}</p>
+        <div class="mt-5 flex gap-2">
+          <button type="button" class="touch-target flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-200" onclick={() => showSkipConfirm = false}>{locale.t("common.cancel")}</button>
+          <button type="button" class="touch-target flex-1 rounded-lg border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-sm text-amber-200" onclick={onSkip}>{locale.t("setup.skip_anyway")}</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>

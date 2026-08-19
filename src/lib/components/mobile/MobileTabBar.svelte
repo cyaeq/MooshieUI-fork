@@ -2,8 +2,9 @@
   import { progress } from "../../stores/progress.svelte.js";
   import { connection } from "../../stores/connection.svelte.js";
   import { locale } from "../../stores/locale.svelte.js";
+  import { mobileNavigation, type MobileTab } from "../../stores/mobileNavigation.svelte.js";
 
-export type MobileTab = "generate" | "gallery" | "modelhub" | "artists" | "characters" | "settings";
+  export type { MobileTab } from "../../stores/mobileNavigation.svelte.js";
 
   interface Props {
     current: MobileTab;
@@ -20,10 +21,11 @@ export type MobileTab = "generate" | "gallery" | "modelhub" | "artists" | "chara
         { id: "gallery", labelKey: "nav.gallery" },
         ...(showModelhub ? [{ id: "modelhub", labelKey: "nav.modelhub" }] : []),
         { id: "artists", labelKey: "nav.artists" },
+        { id: "prompts", labelKey: "bottom_panel.tab.prompts" },
         { id: "characters", labelKey: "artist_gallery.tab_characters" },
         { id: "settings", labelKey: "nav.settings" },
       ] as { id: MobileTab; labelKey: string }[]
-    )
+    ).filter((tab) => mobileNavigation.isEnabled(tab.id))
   );
 
   function tabLabel(id: MobileTab, labelKey: string): string {
@@ -32,6 +34,7 @@ export type MobileTab = "generate" | "gallery" | "modelhub" | "artists" | "chara
       gallery: "Gallery",
       modelhub: "Models",
       artists: "Artists",
+      prompts: "Prompts",
       characters: "Characters",
       settings: "Settings",
     };
@@ -61,6 +64,8 @@ export type MobileTab = "generate" | "gallery" | "modelhub" | "artists" | "chara
           <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         {:else if tab.id === "artists"}
           <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+        {:else if tab.id === "prompts"}
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h10"/></svg>
         {:else if tab.id === "characters"}
           <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3.5 2.5-6 6-6"/><path d="M10 20c0-3.5 2.5-6 6-6"/><path d="M14 20h8"/></svg>
         {:else}

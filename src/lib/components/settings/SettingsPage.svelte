@@ -20,6 +20,7 @@
   import LlmProviderPanel from "./LlmProviderPanel.svelte";
   import { ipcInvoke, ipcListen, isTauri, isBrowserMode, authHeaders, clearAuthToken, ipcOpenDirectoryDialog } from "../../utils/ipc.js";
   import { useMobileLayout, isMobileUA, setForceDesktopOverride } from "../../utils/device.js";
+  import { mobileNavigation, MOBILE_OPTIONAL_TABS, type MobileTab } from "../../stores/mobileNavigation.svelte.js";
   import {
     applyTheme,
     THEME_PALETTES,
@@ -51,6 +52,16 @@
     setForceDesktopOverride(useMobileLayout);
     location.reload();
   }
+
+  const mobileTabLabelKeys: Record<MobileTab, string> = {
+    generate: "nav.generate",
+    gallery: "nav.gallery",
+    modelhub: "nav.modelhub",
+    artists: "nav.artists",
+    prompts: "bottom_panel.tab.prompts",
+    characters: "artist_gallery.tab_characters",
+    settings: "nav.settings",
+  };
 
   // Reopen the first-run setup wizard. check_setup auto-recovers the completion
   // marker (main.py present), so we can't clear backend state to force it;
@@ -2481,6 +2492,26 @@
                   {useMobileLayout ? locale.t('settings.appearance.layout_use_desktop') : locale.t('settings.appearance.layout_use_mobile')}
                 </button>
               </div>
+            </div>
+          {/if}
+          {#if mobileFriendly}
+            <div class="rounded-lg border border-neutral-700 bg-neutral-950/60 p-4">
+              <p class="text-xs font-medium text-neutral-200">{locale.t("settings.appearance.mobile_tabs_title")}</p>
+              <p class="mt-1 text-[10px] text-neutral-500">{locale.t("settings.appearance.mobile_tabs_desc")}</p>
+              <div class="mt-3 grid grid-cols-2 gap-2">
+                {#each MOBILE_OPTIONAL_TABS as tab}
+                  <label class="flex min-h-11 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs text-neutral-300">
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4 accent-indigo-500"
+                      checked={mobileNavigation.isEnabled(tab)}
+                      onchange={(event) => mobileNavigation.setEnabled(tab, event.currentTarget.checked)}
+                    />
+                    <span>{locale.t(mobileTabLabelKeys[tab])}</span>
+                  </label>
+                {/each}
+              </div>
+              <p class="mt-2 text-[10px] text-neutral-600">{locale.t("settings.appearance.mobile_tabs_required")}</p>
             </div>
           {/if}
           <p class="text-xs font-medium text-neutral-300">{locale.t("settings.appearance.builtin_theme")}</p>

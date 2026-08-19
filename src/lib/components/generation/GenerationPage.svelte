@@ -909,7 +909,7 @@
   // The handle (the thin grab bar with `···`) is rendered inside the panel container, positioned at the
   // edge that faces the viewport; this is how much of the panel container we leave visible so the user
   // can grab the handle to drag the panel open.
-  const MOBILE_HANDLE_PEEK_PX = 14;
+  const MOBILE_HANDLE_PEEK_PX = 60;
 
   function mobilePanelTransform(panel: "left" | "right" | "bottom"): string {
     // When another panel is actively being dragged, slide this panel fully off-screen so its handle
@@ -2122,24 +2122,15 @@
         >
         {#if mobileFriendly}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div
-            role="button"
-            tabindex="0"
-            onpointerdown={(e) => onMobileHandleDown("left", e)}
-            onpointermove={(e) => onMobileHandleMove("left", e)}
-            onpointerup={(e) => onMobileHandleUp("left", e)}
-            onpointercancel={() => onMobileHandleCancel("left")}
-            ondblclick={toggleLeftPanel}
-            class="absolute right-0 top-24 bottom-4 z-20 w-3.5 rounded-l-full border border-neutral-700/80 bg-neutral-800/90 hover:bg-indigo-700/70 transition-colors touch-none flex items-center justify-center"
+          <button
+            type="button"
+            onclick={toggleLeftPanel}
+            class="absolute right-2 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-700/80 bg-neutral-800/95 text-neutral-300 shadow-lg hover:bg-indigo-700/70 transition-colors touch-target"
             title={leftCollapsed ? locale.t('generation.panel.expand_left') : locale.t('generation.panel.collapse_left')}
             aria-label={leftCollapsed ? locale.t('generation.panel.expand_left') : locale.t('generation.panel.collapse_left')}
           >
-            <div class="flex flex-col gap-1 text-neutral-300">
-              <span class="block w-1 h-1 rounded-full bg-current"></span>
-              <span class="block w-1 h-1 rounded-full bg-current"></span>
-              <span class="block w-1 h-1 rounded-full bg-current"></span>
-            </div>
-          </div>
+            <svg class="h-5 w-5 {leftCollapsed ? '' : 'rotate-180'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
         {/if}
         <div class="{mobileFriendly ? 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden pl-3 pr-5 pt-20 pb-6 flex flex-col gap-2' : 'contents'}">
         {#if controlsSide === "left" && !mobileFriendly}
@@ -2301,24 +2292,15 @@
       >
         {#if mobileFriendly}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div
-            role="button"
-            tabindex="0"
-            onpointerdown={(e) => onMobileHandleDown("right", e)}
-            onpointermove={(e) => onMobileHandleMove("right", e)}
-            onpointerup={(e) => onMobileHandleUp("right", e)}
-            onpointercancel={() => onMobileHandleCancel("right")}
-            ondblclick={toggleRightPanel}
-            class="absolute left-0 top-24 bottom-4 z-20 w-3.5 rounded-r-full border border-neutral-700/80 bg-neutral-800/90 hover:bg-indigo-700/70 transition-colors touch-none flex items-center justify-center"
+          <button
+            type="button"
+            onclick={toggleRightPanel}
+            class="absolute left-2 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-700/80 bg-neutral-800/95 text-neutral-300 shadow-lg hover:bg-indigo-700/70 transition-colors touch-target"
             title={rightCollapsed ? locale.t('generation.panel.expand_right') : locale.t('generation.panel.collapse_right')}
             aria-label={rightCollapsed ? locale.t('generation.panel.expand_right') : locale.t('generation.panel.collapse_right')}
           >
-            <div class="flex flex-col gap-1 text-neutral-300">
-              <span class="block w-1 h-1 rounded-full bg-current"></span>
-              <span class="block w-1 h-1 rounded-full bg-current"></span>
-              <span class="block w-1 h-1 rounded-full bg-current"></span>
-            </div>
-          </div>
+            <svg class="h-5 w-5 {rightCollapsed ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
         {/if}
         <div class="{mobileFriendly ? 'flex-1 min-h-0 overflow-y-auto pl-5 pr-3 pt-20 pb-6 space-y-2' : 'contents'}">
         {#if controlsSide === "right" && !mobileFriendly}
@@ -2438,24 +2420,15 @@
         style="transform: {mobilePanelTransform('bottom')}; transition: {mobilePanelTransition('bottom')};"
       >
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          role="button"
-          tabindex="0"
-          onpointerdown={(e) => onMobileHandleDown("bottom", e)}
-          onpointermove={(e) => onMobileHandleMove("bottom", e)}
-          onpointerup={(e) => onMobileHandleUp("bottom", e)}
-          onpointercancel={() => onMobileHandleCancel("bottom")}
-          ondblclick={toggleBottomPanel}
-          class="shrink-0 mx-8 h-3.5 rounded-b-full border border-neutral-700/80 bg-neutral-800/90 hover:bg-indigo-700/70 transition-colors touch-none flex items-center justify-center"
+        <button
+          type="button"
+          onclick={toggleBottomPanel}
+          class="shrink-0 mx-auto mt-2 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-700/80 bg-neutral-800/95 text-neutral-300 shadow-lg hover:bg-indigo-700/70 transition-colors touch-target"
           title={bottomCollapsed ? locale.t('generation.panel.expand_bottom') : locale.t('generation.panel.collapse_bottom')}
           aria-label={bottomCollapsed ? locale.t('generation.panel.expand_bottom') : locale.t('generation.panel.collapse_bottom')}
         >
-          <div class="flex gap-1 text-neutral-300">
-            <span class="block w-1 h-1 rounded-full bg-current"></span>
-            <span class="block w-1 h-1 rounded-full bg-current"></span>
-            <span class="block w-1 h-1 rounded-full bg-current"></span>
-          </div>
-        </div>
+          <svg class="h-5 w-5 {bottomCollapsed ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
         <div class="flex-1 min-h-0 border-t border-neutral-800/50 overflow-hidden">
           <BottomPanel onupscale={upscaleImage} oninpaint={inpaintImage} onrefine={refineImage} oncontextmenu={handleSessionContextMenu} />
         </div>

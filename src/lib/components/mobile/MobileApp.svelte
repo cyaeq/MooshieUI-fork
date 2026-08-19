@@ -1,5 +1,6 @@
 <script lang="ts">
-  import MobileTabBar, { type MobileTab } from "./MobileTabBar.svelte";
+  import MobileTabBar from "./MobileTabBar.svelte";
+  import type { MobileTab } from "../../stores/mobileNavigation.svelte.js";
   import MobileGeneratePage from "./MobileGeneratePage.svelte";
   import MobileSettingsPage from "./MobileSettingsPage.svelte";
   import GalleryPage from "../gallery/GalleryPage.svelte";
@@ -69,6 +70,14 @@
         <ArtistGalleryPage
           manifestUrl={connection.artistGalleryManifestUrl}
           initialTab="artists"
+          oninsertCharacter={handleCharacterInsert}
+        />
+      </div>
+    {:else if currentTab === "prompts"}
+      <div class="h-full overflow-hidden">
+        <ArtistGalleryPage
+          manifestUrl={connection.artistGalleryManifestUrl}
+          initialTab="prompts"
           oninsertCharacter={handleCharacterInsert}
         />
       </div>

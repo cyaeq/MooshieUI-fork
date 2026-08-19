@@ -139,7 +139,7 @@
   const FETCH_TIMEOUT_MS = 45_000;
   const GENERATION_DONE_TOAST_VISIBLE_MS = 6_000;
   const GENERATION_DONE_TOAST_EXIT_MS = 220;
-  type PrimaryPage = "generate" | "gallery" | "modelhub" | "artists" | "characters" | "settings";
+  type PrimaryPage = "generate" | "gallery" | "modelhub" | "artists" | "prompts" | "characters" | "settings";
   type GenerationDoneToast = {
     id: number;
     imageUrl: string;
@@ -2395,6 +2395,13 @@
     await initApp();
   }
 
+  async function onSetupSkipped() {
+    // Deliberately session-only: check_setup remains false, so the wizard returns
+    // the next time the app is opened.
+    setupComplete = true;
+    await initApp();
+  }
+
   let autoStartEnabled = $state(true); // will be read from config
 
   async function initApp() {
@@ -3157,7 +3164,7 @@
     ></div>
   </div>
 {:else if !setupComplete}
-  <SetupWizard onSetupComplete={onSetupDone} />
+  <SetupWizard onSetupComplete={onSetupDone} onSkip={onSetupSkipped} />
 {:else if useMobileLayout}
   <MobileApp
     canUseModelhub={canUseModelhub}
