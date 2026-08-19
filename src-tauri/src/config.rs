@@ -109,7 +109,7 @@ pub struct AppConfig {
     pub gallery_path: Option<String>,
     /// Run the UI in the default web browser instead of the Tauri window.
     pub browser_mode: bool,
-    /// Port for the embedded UI web server (used in browser mode). Defaults to 3200.
+    /// Port for the embedded UI web server (used in browser mode). Defaults to 3201.
     pub ui_server_port: u16,
     /// Enable LAN access (bind to 0.0.0.0 instead of 127.0.0.1). Only effective in browser mode.
     pub lan_enabled: bool,
@@ -240,7 +240,7 @@ impl Default for AppConfig {
             civitai_api_key: None,
             gallery_path: None,
             browser_mode: false,
-            ui_server_port: 3200,
+            ui_server_port: 3201,
             lan_enabled: false,
             lan_access_token: String::new(),
             attention_backend: "default".to_string(),

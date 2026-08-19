@@ -339,7 +339,7 @@
   /** Copy `http://<lan-ip>:<port>/?token=<token>` to the clipboard. */
   async function copyLanAccessLink() {
     if (!config?.lan_access_token || lanAddresses.length === 0) return;
-    const port = config.ui_server_port || 3200;
+    const port = config.ui_server_port || 3201;
     const base = lanAddresses[0]!.replace(/^https?:\/\//, "").replace(/:\d+$/, "");
     const url = `http://${base}:${port}/?token=${encodeURIComponent(config.lan_access_token)}`;
     try {
@@ -1333,6 +1333,8 @@
   let originalAttentionBackend = "";
   let originalExtraArgs = "";
   let originalModelPaths = "";
+  let originalUiServerPort = 3201;
+  let originalLanEnabled = false;
 
   async function loadConfig() {
     config = await getConfig();
@@ -1456,6 +1458,8 @@
     originalAttentionBackend = config.attention_backend;
     originalExtraArgs = config.extra_args.join(" ");
     originalModelPaths = config.extra_model_paths ?? "";
+    originalUiServerPort = config.ui_server_port;
+    originalLanEnabled = config.lan_enabled;
   }
 
   function checkRestartNeeded() {
@@ -1466,6 +1470,8 @@
       config.server_mode !== originalMode ||
       config.vram_mode !== originalVramMode ||
       config.attention_backend !== originalAttentionBackend ||
+      config.ui_server_port !== originalUiServerPort ||
+      config.lan_enabled !== originalLanEnabled ||
       config.extra_args.join(" ") !== originalExtraArgs ||
       (config.extra_model_paths ?? "") !== originalModelPaths;
   }
@@ -2036,6 +2042,20 @@
                 </label>
               </div>
               <p class="text-[11px] text-neutral-500">{locale.t('settings.lan.restart_note')}</p>
+              <div class="flex items-center justify-between gap-4 pt-2 border-t border-neutral-800">
+                <label for="lan-ui-port" class="text-xs text-neutral-300 font-medium">
+                  {locale.t('settings.connection.port')}
+                </label>
+                <input
+                  id="lan-ui-port"
+                  type="number"
+                  min="1"
+                  max="65535"
+                  bind:value={config.ui_server_port}
+                  onchange={() => autoSave()}
+                  class="w-28 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-right text-sm text-neutral-200 focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
               {#if config.lan_enabled}
                 <div class="space-y-3 pt-2 border-t border-neutral-800">
                   <p class="text-xs text-amber-400">

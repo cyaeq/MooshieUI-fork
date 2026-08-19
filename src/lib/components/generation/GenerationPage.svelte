@@ -2109,7 +2109,7 @@
     {/if}
 
     {#if leftHasSections || controlsSide === "left" || draggingSection}
-      {#if !leftCollapsed || mobileFriendly}
+      {#if !leftCollapsed}
         <div
           bind:this={leftColumnRef}
           use:wheelScrollLock
@@ -2279,7 +2279,7 @@
       </div>
     {/if}
 
-    {#if (rightHasSections || controlsSide === "right" || draggingSection) && (!rightCollapsed || mobileFriendly)}
+    {#if (rightHasSections || controlsSide === "right" || draggingSection) && !rightCollapsed}
       <div
         bind:this={rightColumnRef}
         use:wheelScrollLock
@@ -2367,11 +2367,35 @@
           </div>
         {/if}
         </div>
-      </div>
+        </div>
     {/if}
     </div>
 
     <!-- Bottom panel (LoRAs / Images / Prompts) — full width, below the side panels -->
+    {#if mobileFriendly && leftCollapsed && (leftHasSections || controlsSide === "left")}
+      <button
+        type="button"
+        onclick={toggleLeftPanel}
+        class="fixed left-2 top-1/2 z-40 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-700/80 bg-neutral-800/95 text-neutral-300 shadow-lg hover:bg-indigo-700/70 transition-colors touch-target"
+        title={locale.t('generation.panel.expand_left')}
+        aria-label={locale.t('generation.panel.expand_left')}
+      >
+        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    {/if}
+
+    {#if mobileFriendly && rightCollapsed && (rightHasSections || controlsSide === "right")}
+      <button
+        type="button"
+        onclick={toggleRightPanel}
+        class="fixed right-2 top-1/2 z-40 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-700/80 bg-neutral-800/95 text-neutral-300 shadow-lg hover:bg-indigo-700/70 transition-colors touch-target"
+        title={locale.t('generation.panel.expand_right')}
+        aria-label={locale.t('generation.panel.expand_right')}
+      >
+        <svg class="h-5 w-5 rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    {/if}
+
     {#if !mobileFriendly && !canvas.isCanvasMode}
       <div class="relative shrink-0 flex items-center group">
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -2402,15 +2426,7 @@
     {/if}
   </div>
 
-  {#if mobileFriendly}
-    <!--
-      Mobile bottom panel — always rendered so the grab handle stays in the DOM throughout a drag.
-      The OUTER mask is a stable, transparent, pointer-events:none clipping region between the mode
-      switcher and the bottom navigation. The INNER content (handle + BottomPanel) is what actually
-      translates: when closed, only the handle peeks at the bottom of the mask area (just above the
-      nav); when open, it slides up to fill the mask. Because the mask itself never moves, the
-      panel's background can't slide over the bottom navigation.
-    -->
+  {#if mobileFriendly && !bottomCollapsed}
     <div
       class="fixed left-0 right-0 overflow-hidden pointer-events-none"
       style="top: 4rem; bottom: calc(env(safe-area-inset-bottom) + 4rem); z-index: {mobilePanelZIndex('bottom')};"
@@ -2434,6 +2450,16 @@
         </div>
       </div>
     </div>
+  {:else if mobileFriendly}
+    <button
+      type="button"
+      onclick={toggleBottomPanel}
+      class="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] left-1/2 z-40 flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border border-neutral-700/80 bg-neutral-800/95 text-neutral-300 shadow-lg hover:bg-indigo-700/70 transition-colors touch-target"
+      title={locale.t('generation.panel.expand_bottom')}
+      aria-label={locale.t('generation.panel.expand_bottom')}
+    >
+      <svg class="h-5 w-5 rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
   {/if}
 
   {#if draggingSection && dragCloneHtml}
