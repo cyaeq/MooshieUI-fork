@@ -22,7 +22,11 @@ function isScrollableY(el: HTMLElement): boolean {
   return overflowY === "auto" || overflowY === "scroll";
 }
 
-export function wheelScrollLock(node: HTMLElement) {
+export function wheelScrollLock(node: HTMLElement, enabled = true) {
+  if (!enabled) {
+    return { destroy() {} };
+  }
+
   let lockedTarget: HTMLElement | null = null;
   let lastWheelAt = 0;
 

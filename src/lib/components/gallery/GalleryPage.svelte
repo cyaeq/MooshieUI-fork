@@ -330,7 +330,7 @@
   });
 </script>
 
-<div class="p-3 md:p-6 h-full overflow-y-auto will-change-scroll">
+<div class="studio-page studio-gallery-page p-3 md:p-6 h-full overflow-y-auto will-change-scroll">
   {#if gallery.loading}
     <div class="flex items-center justify-center h-full text-neutral-500">{locale.t("gallery.loading")}</div>
   {:else if gallery.images.length === 0}
@@ -353,7 +353,7 @@
         </div>
       {/if}
 
-      <div class="rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 space-y-3">
+      <div class="studio-gallery-toolbar rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 space-y-3">
         {#if isMobile}
         <div class="flex items-center justify-between">
           <span class="text-xs text-neutral-400">{locale.t("gallery.filter")}</span>

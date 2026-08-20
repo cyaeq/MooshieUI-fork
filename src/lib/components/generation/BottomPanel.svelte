@@ -429,9 +429,9 @@
   }
 </script>
 
-<div class="flex flex-col h-full min-w-0">
+<div class="studio-material-tray flex flex-col h-full min-w-0">
   <!-- Tab bar (scroll horizontally when many/long tabs) -->
-  <div class="flex items-center gap-0.5 px-2 pt-1 pb-0.5 border-b border-neutral-800 shrink-0 overflow-x-auto overflow-y-hidden">
+  <div class="studio-material-tabs flex items-center gap-0.5 px-2 pt-1 pb-0.5 border-b border-neutral-800 shrink-0 overflow-x-auto overflow-y-hidden">
     {#each visibleTabs as tab}
       <button
         onclick={() => { activeTab = tab; }}

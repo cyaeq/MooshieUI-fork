@@ -3,6 +3,7 @@
   import { isTauri, isBrowserMode, authHeaders } from "../../utils/ipc.js";
   import { stopComfyui } from "../../utils/api.js";
   import { locale } from "../../stores/locale.svelte.js";
+  import { updatePreferences } from "../../stores/updatePreferences.svelte.js";
 
   // @ts-ignore — injected by Vite at build time
   const currentVersion: string = __APP_VERSION__ ?? "dev";
@@ -36,7 +37,7 @@
   // The role may resolve after mount, so we use $effect to react to canSeeUpdate.
   let serverCheckDone = false;
   $effect(() => {
-    if (isBrowserMode && canSeeUpdate && !serverCheckDone) {
+    if (isBrowserMode && canSeeUpdate && updatePreferences.showAutomaticNotifications && !serverCheckDone) {
       serverCheckDone = true;
       checkServerUpdate();
     }
@@ -78,6 +79,8 @@
   }
 
   onMount(async () => {
+    if (!updatePreferences.showAutomaticNotifications) return;
+
     // Check if a previous update didn't apply correctly (desktop only)
     const pending = localStorage.getItem("mooshieui_pending_update");
     if (pending) {
@@ -157,8 +160,8 @@
   }
 </script>
 
-{#if updateState !== "idle" && !dismissed}
-  <div class="mb-1 flex shrink-0 items-center gap-3 rounded-[var(--app-panel-radius)] border px-4 py-2.5 text-sm shadow-lg shadow-black/20 backdrop-blur-sm
+{#if updatePreferences.showAutomaticNotifications && updateState !== "idle" && !dismissed}
+  <div class="studio-update-notification flex items-center gap-3 rounded-[var(--app-panel-radius)] border px-4 py-2.5 text-sm shadow-lg shadow-black/20 backdrop-blur-sm
     {updateState === 'error' || updateState === 'version_mismatch'
       ? 'border-red-800/60 bg-red-950/85 text-red-100'
       : 'border-indigo-800/60 bg-indigo-950/85 text-indigo-100'}">

@@ -974,7 +974,7 @@
   });
 </script>
 
-<div class="relative">
+<div class="studio-prompt-textarea relative">
   <!-- Always rendered so the textarea never shifts; buttons stay disabled until
        text is selected, which guards against inserting empty weight wrappers. -->
   <div class="mb-2 flex items-center gap-1.5">

@@ -1,5 +1,29 @@
 export type ThemeMode = "dark" | "light";
 export type ThemePalette = "mooshie" | "nord" | "solarized" | "gruvbox" | "catppuccin";
+export type ButtonQuality = "low" | "standard" | "high";
+
+const BUTTON_QUALITY_KEY = "mooshieui.buttonQuality.v1";
+
+export function normalizeButtonQuality(value: string | null | undefined): ButtonQuality {
+  if (value === "low" || value === "high") return value;
+  // Migrate the previous shape-changing levels to equivalent effect levels.
+  if (value === "soft") return "high";
+  if (value === "crisp") return "low";
+  return "standard";
+}
+
+/** Apply the button shadow-quality preference without coupling it to AppConfig. */
+export function applyButtonQuality(value?: string | null): ButtonQuality {
+  const quality = normalizeButtonQuality(value ?? localStorage.getItem(BUTTON_QUALITY_KEY));
+  delete document.documentElement.dataset.buttonQuality;
+  document.documentElement.dataset.buttonShadowQuality = quality;
+  try {
+    localStorage.setItem(BUTTON_QUALITY_KEY, quality);
+  } catch {
+    // Browser storage can be unavailable in private/embedded contexts.
+  }
+  return quality;
+}
 
 export interface ThemeTone {
   main: string;

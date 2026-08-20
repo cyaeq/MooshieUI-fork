@@ -398,7 +398,7 @@
   }
 </script>
 
-<div class="relative flex items-center justify-center h-full bg-neutral-950 text-neutral-100 overflow-hidden">
+<div class="studio-setup-shell relative flex items-center justify-center h-full bg-neutral-950 text-neutral-100 overflow-hidden">
   <!-- Terminal background overlay (visible during installation) -->
   {#if phase === "installing" || phase === "validating-remote" || phase === "choose-mode" || phase === "done" || phase === "error"}
     <div
@@ -415,7 +415,7 @@
   {/if}
 
   <!-- Main content (on top of terminal) -->
-  <div class="relative z-10 max-w-lg w-full mx-4 max-h-[95vh] overflow-y-auto">
+  <div class="studio-setup-panel relative z-10 w-full max-w-3xl mx-3 sm:mx-6 max-h-[95vh] overflow-y-auto">
     <!-- Logo / Title -->
     <div class="text-center mb-8">
       <img
@@ -431,7 +431,7 @@
       </p>
     </div>
 
-    <div class="bg-neutral-900 rounded-xl border border-neutral-800 p-6">
+    <div class="studio-setup-card bg-neutral-900 rounded-xl border border-neutral-800 p-5 sm:p-7 lg:p-8">
       {#if phase === "detecting"}
         <div class="text-center py-8">
           <div

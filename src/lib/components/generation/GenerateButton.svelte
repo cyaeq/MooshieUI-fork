@@ -29,9 +29,10 @@
 
   interface Props {
     canvasEditorRef?: { getRasterComposite: () => HTMLCanvasElement | null; getMaskCanvas: () => HTMLCanvasElement | null };
+    mobileFriendly?: boolean;
   }
 
-  let { canvasEditorRef }: Props = $props();
+  let { canvasEditorRef, mobileFriendly = false }: Props = $props();
   let errorMsg = $state<string | null>(null);
   let isSubmitting = $state(false);
   let orderedRunPromptIds = $state<string[]>([]);
@@ -538,51 +539,51 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="flex gap-3">
-  <button
-    onclick={handleGenerate}
-    disabled={!canGenerate}
-    title={generateButtonTitle}
-    class="flex-1 py-3 rounded-xl font-semibold text-sm transition-colors
-      {canGenerate
-        ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-        : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'}"
-  >
-    {#if progress.queueCount > 0}
-      {locale.t('generation.generate_queue', { count: progress.queueCount })}
-    {:else if orderedWildcardRunCount > 1}
-      {locale.t('generation.generate_ordered', { count: orderedWildcardRunCount })}
-    {:else}
-      {locale.t('generation.generate')}
-    {/if}
-  </button>
+<div class="studio-generate-control {mobileFriendly ? 'studio-generate-control-mobile' : 'studio-generate-control-desktop'}">
+  <div class="studio-generate-actions {mobileFriendly ? 'studio-generate-actions-mobile' : 'studio-generate-actions-desktop'} flex gap-3">
+    <button
+      onclick={handleGenerate}
+      disabled={!canGenerate}
+      title={generateButtonTitle}
+      class="studio-generate-primary py-3 rounded-xl font-semibold text-sm transition-colors
+        {canGenerate
+          ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20'
+          : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'}"
+    >
+      {#if progress.queueCount > 0}
+        {locale.t('generation.generate_queue', { count: progress.queueCount })}
+      {:else if orderedWildcardRunCount > 1}
+        {locale.t('generation.generate_ordered', { count: orderedWildcardRunCount })}
+      {:else}
+        {locale.t('generation.generate')}
+      {/if}
+    </button>
 
-  {#if progress.isGenerating}
-    <button
-      onclick={handleCancelCurrent}
-      oncontextmenu={handleCancelAll}
-      class="px-5 py-3 rounded-xl font-semibold text-sm bg-red-700 hover:bg-red-600 text-white transition-colors"
-      title={locale.t('generation.cancel_hint')}
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
-      </svg>
-    </button>
-  {:else}
-    <button
-      disabled
-      title={locale.t('generation.cancel_hint')}
-      class="px-5 py-3 rounded-xl font-semibold text-sm bg-neutral-800 text-neutral-600 cursor-not-allowed transition-colors"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
-      </svg>
-    </button>
+    {#if progress.isGenerating}
+      <button
+        onclick={handleCancelCurrent}
+        oncontextmenu={handleCancelAll}
+        class="studio-generate-cancel inline-flex items-center justify-center px-5 py-3 rounded-xl font-semibold text-sm bg-red-700 hover:bg-red-600 text-white transition-colors"
+        title={locale.t('generation.cancel_hint')}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="block w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18"></path>
+        </svg>
+      </button>
+    {:else}
+      <button
+        disabled
+        title={locale.t('generation.cancel_hint')}
+        class="studio-generate-cancel inline-flex items-center justify-center px-5 py-3 rounded-xl font-semibold text-sm bg-neutral-800 text-neutral-600 cursor-not-allowed transition-colors"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="block w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18"></path>
+        </svg>
+      </button>
+    {/if}
+  </div>
+
+  {#if errorMsg}
+    <p class="studio-generate-error text-xs text-red-400 text-center mt-1">{errorMsg}</p>
   {/if}
 </div>
-
-{#if errorMsg}
-  <p class="text-xs text-red-400 text-center mt-1">{errorMsg}</p>
-{/if}

@@ -296,8 +296,8 @@
   });
 </script>
 
-<div class="flex h-full min-h-0 w-full flex-col overflow-hidden bg-neutral-950 text-neutral-100">
-  <header class="flex-none border-b border-neutral-800 bg-neutral-900/60 px-4 py-3">
+<div class="studio-animadex-page flex h-full min-h-0 w-full flex-col overflow-hidden bg-neutral-950 text-neutral-100">
+  <header class="studio-animadex-header flex-none border-b border-neutral-800 bg-neutral-900/60 px-4 py-3">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <p class="text-xs text-neutral-500">

@@ -39,7 +39,7 @@
   import { notifications } from "./lib/stores/notifications.svelte.js";
   import NotificationBell from "./lib/components/ui/NotificationBell.svelte";
   import logoUrl from "./lib/assets/logo.png";
-  import { applyTheme, getActiveThemeLogoUrl, onThemeApplied } from "./lib/utils/theme.js";
+  import { applyTheme, applyButtonQuality, getActiveThemeLogoUrl, onThemeApplied } from "./lib/utils/theme.js";
   import { serializeSegmentTags } from "./lib/utils/promptSegmentDetail.js";
 
   import { lazyThumbnail } from "./lib/utils/lazyThumbnail.js";
@@ -685,6 +685,7 @@
 
   let startupStatus = $state<string>("");
   let startupStatusKind = $state<"idle" | "manual" | "starting" | "connecting" | "error">("idle");
+  let connectionStatusOpen = $state(false);
   let externalComfyOpen = $state(false);
   let externalComfyPayload = $state<ComfyServerErrorPayload>({ error: "" });
   let comfyServerUrl = $state("http://127.0.0.1:8188");
@@ -757,6 +758,43 @@
       message: parsed.error ?? fallbackMessage,
     });
     startupStatusKind = "error";
+  }
+
+  $effect(() => {
+    if (connection.connected) {
+      connectionStatusOpen = false;
+    } else if (startupStatusKind === "manual" || startupStatusKind === "error") {
+      connectionStatusOpen = true;
+    }
+  });
+
+  async function startComfyFromStatus() {
+    try {
+      startupStatus = locale.t("app.status.starting_comfyui");
+      startupStatusKind = "starting";
+      const result = await ipcInvoke<string>("start_comfyui");
+      if (result === "spawned") {
+        startupStatus = locale.t("app.status.starting_comfyui");
+        startupStatusKind = "starting";
+      } else if (result === "already_running" || result === "skipped") {
+        startupStatus = locale.t("app.status.connecting");
+        startupStatusKind = "connecting";
+        try {
+          const checkpoints = await refreshModelsWithRetry();
+          if (checkpoints.length > 0) {
+            connection.connected = true;
+            generation.applyDefaultsIfNeeded(checkpoints, models.vaes);
+          }
+          startupStatus = "";
+          startupStatusKind = "idle";
+        } catch (refreshError) {
+          console.error("Model refresh failed (already running):", refreshError);
+        }
+      }
+    } catch (e) {
+      startupStatus = locale.t("app.status.failed_to_start", { message: String(e) });
+      startupStatusKind = "error";
+    }
   }
 
   /**
@@ -2413,6 +2451,10 @@
     // dropped event); the banner still reports the real startup state.
     setTimeout(() => { startup.locked = false; }, 120_000);
 
+    // Button finish is local-only, so it can be applied even if backend config
+    // is temporarily unavailable.
+    applyButtonQuality();
+
     // Apply UI preferences (theme, font scale) immediately
     try {
       const cfg = await getConfig();
@@ -3174,7 +3216,7 @@
     onTabChange={(tab) => (mobileCurrentTab = tab)}
   />
 {:else}
-<div class="flex h-full bg-neutral-950 text-neutral-100 md:gap-3 md:p-3 {visionSimClass}">
+<div class="studio-app-shell flex h-full bg-neutral-950 text-neutral-100 md:gap-3 md:p-3 {visionSimClass}">
   <!-- SVG filters for color vision simulation -->
   <svg style="display: none">
     <defs>
@@ -3191,9 +3233,9 @@
   </svg>
 
   <!-- Sidebar column: logo panel + nav -->
-  <div class="flex w-14 shrink-0 flex-col gap-1.5 self-stretch md:gap-3">
+  <div class="studio-app-rail flex w-14 shrink-0 flex-col gap-1.5 self-stretch md:gap-3">
     <div
-      class="theme-logo-panel flex shrink-0 items-center justify-center border-r border-neutral-800 bg-neutral-900 px-1.5 py-2 md:rounded-2xl md:border md:shadow-2xl md:shadow-black/30"
+      class="studio-app-logo theme-logo-panel flex shrink-0 items-center justify-center border-r border-neutral-800 bg-neutral-900 px-1.5 py-2 md:rounded-2xl md:border md:shadow-2xl md:shadow-black/30"
     >
       <div
         class="flex size-8 items-center justify-center rounded-lg bg-neutral-800/60 text-neutral-400"
@@ -3204,7 +3246,7 @@
     </div>
 
     <nav
-      class="flex min-h-0 flex-1 flex-col items-stretch gap-1.5 border-r border-neutral-800 bg-neutral-900 px-1.5 py-3 md:rounded-2xl md:border md:shadow-2xl md:shadow-black/30"
+      class="studio-app-nav flex min-h-0 flex-1 flex-col items-stretch gap-1.5 border-r border-neutral-800 bg-neutral-900 px-1.5 py-3 md:rounded-2xl md:border md:shadow-2xl md:shadow-black/30"
     >
     <div class="relative mx-auto">
       <button
@@ -3428,15 +3470,55 @@
 
     <NotificationBell onOpenSettings={() => (currentPage = "settings")} />
 
-    <!-- Connection status dot -->
-    <div
-      class="w-3 h-3 rounded-full mb-2 mx-auto transition-colors {connection.connected
-        ? 'bg-green-500'
-        : startupStatus
-          ? 'bg-amber-500 animate-pulse'
-          : 'bg-red-500'}"
-      title={connection.connected ? locale.t('nav.connected') : startupStatus || locale.t('nav.disconnected')}
-    ></div>
+    <!-- Connection status lives in the rail so it does not consume canvas height. -->
+    <div class="relative mx-auto">
+      <button
+        type="button"
+        class="studio-connection-button flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-neutral-200"
+        onclick={() => (connectionStatusOpen = !connectionStatusOpen)}
+        aria-expanded={connectionStatusOpen}
+        aria-label={connection.connected ? locale.t('nav.connected') : startupStatus || locale.t('nav.disconnected')}
+        title={connection.connected ? locale.t('nav.connected') : startupStatus || locale.t('nav.disconnected')}
+      >
+        <span class="h-2.5 w-2.5 rounded-full transition-colors {connection.connected
+          ? 'bg-green-500'
+          : startupStatus
+            ? 'bg-amber-500 animate-pulse'
+            : 'bg-red-500'}"></span>
+      </button>
+      {#if connectionStatusOpen}
+        <div class="studio-connection-popover absolute bottom-0 left-full z-70 ml-3 w-80 rounded-lg border border-neutral-700 bg-neutral-900/98 p-3 text-left shadow-2xl shadow-black/50 backdrop-blur-xl">
+          <div class="flex items-start gap-2.5">
+            {#if startupStatusKind === "starting" || startupStatusKind === "connecting"}
+              <span class="mt-0.5 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-amber-400 border-t-transparent"></span>
+            {:else}
+              <span class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full {connection.connected ? 'bg-green-500' : startupStatus ? 'bg-amber-500' : 'bg-red-500'}"></span>
+            {/if}
+            <div class="min-w-0 flex-1">
+              <p class="text-xs font-semibold text-neutral-100">{connection.connected ? locale.t('nav.connected') : locale.t('nav.disconnected')}</p>
+              <p class="mt-1 break-words text-[11px] leading-relaxed text-neutral-400">{connection.connected ? comfyServerUrl : startupStatus || locale.t('nav.disconnected')}</p>
+            </div>
+            <button
+              type="button"
+              class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
+              onclick={() => (connectionStatusOpen = false)}
+              aria-label={locale.t('common.close')}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          {#if !connection.connected && (startupStatusKind === "manual" || startupStatusKind === "error")}
+            <button
+              type="button"
+              class="mt-3 min-h-9 w-full rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500"
+              onclick={startComfyFromStatus}
+            >
+              {locale.t("app.start_comfyui")}
+            </button>
+          {/if}
+        </div>
+      {/if}
+    </div>
 
     <!-- Report a problem -->
     <button
@@ -3497,7 +3579,7 @@
   </div>
 
   <!-- Main content -->
-  <main class="flex min-w-0 flex-1 flex-col overflow-hidden md:rounded-2xl md:border md:border-neutral-800 md:bg-neutral-900 md:p-1 md:shadow-2xl md:shadow-black/30">
+  <main class="studio-app-main flex min-w-0 flex-1 flex-col overflow-hidden md:rounded-2xl md:border md:border-neutral-800 md:bg-neutral-900 md:p-1 md:shadow-2xl md:shadow-black/30">
     <UpdateNotification {userRole} />
     <DownloadBanner />
     <ExternalComfyModal
@@ -3525,51 +3607,7 @@
         gallery.showToast(locale.t("photopea.saved"), "success");
       }}
     />
-    {#if startupStatus && !connection.connected}
-      <div class="mb-1 flex shrink-0 items-center gap-2 rounded-[var(--app-panel-radius)] border border-amber-800/60 bg-amber-950/85 px-4 py-2.5 text-sm text-amber-100 shadow-lg shadow-black/20 backdrop-blur-sm">
-        {#if startupStatusKind === "manual" || startupStatusKind === "error"}
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          {startupStatus}
-          <button
-            class="ml-2 px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs transition-colors cursor-pointer"
-            onclick={async () => {
-              try {
-                startupStatus = locale.t("app.status.starting_comfyui");
-                startupStatusKind = "starting";
-                const result = await ipcInvoke<string>("start_comfyui");
-                if (result === "spawned") {
-                  startupStatus = locale.t("app.status.starting_comfyui");
-                  startupStatusKind = "starting";
-                } else if (result === "already_running" || result === "skipped") {
-                  startupStatus = locale.t("app.status.connecting");
-                  startupStatusKind = "connecting";
-                  try {
-                    const checkpoints = await refreshModelsWithRetry();
-                    if (checkpoints.length > 0) {
-                      connection.connected = true;
-                      generation.applyDefaultsIfNeeded(checkpoints, models.vaes);
-                    }
-                    startupStatus = "";
-                    startupStatusKind = "idle";
-                  } catch (refreshError) {
-                    console.error("Model refresh failed (already running):", refreshError);
-                  }
-                }
-              } catch (e) {
-                startupStatus = locale.t("app.status.failed_to_start", { message: String(e) });
-                startupStatusKind = "error";
-              }
-            }}
-          >
-            {locale.t("app.start_comfyui")}
-          </button>
-        {:else}
-          <div class="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
-          {startupStatus}
-        {/if}
-      </div>
-    {/if}
-    <div class="relative flex-1 overflow-hidden md:min-h-0 md:rounded-xl md:bg-neutral-950">
+    <div class="studio-page-frame relative flex-1 overflow-hidden md:min-h-0 md:rounded-xl md:bg-neutral-950">
     {#if startup.locked}
       <div
         class="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-neutral-950/70 backdrop-blur-[2px]"

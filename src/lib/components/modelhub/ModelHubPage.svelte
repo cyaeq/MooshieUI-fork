@@ -1154,16 +1154,16 @@
   });
 </script>
 
-<div class="h-full overflow-y-auto p-6" style="will-change: scroll-position;" bind:this={scrollHost} onscroll={handleScroll}>
+<div class="studio-page studio-modelhub-page h-full overflow-y-auto p-6" style="will-change: scroll-position;" bind:this={scrollHost} onscroll={handleScroll}>
   <div class="mx-auto space-y-4">
-    <div class="flex flex-col gap-1">
+    <div class="studio-modelhub-heading flex flex-col gap-1">
       <h2 class="text-lg font-semibold text-neutral-100">{locale.t("modelhub.title")}</h2>
       <p class="text-xs text-neutral-400">
         {locale.t("modelhub.civitai.description")}
       </p>
     </div>
 
-    <div class="flex flex-wrap gap-2">
+    <div class="studio-modelhub-sources flex flex-wrap gap-2">
       <button
         class="px-3 py-1.5 text-xs rounded border transition-colors {source === 'civitai' ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300' : 'border-neutral-700 text-neutral-300 hover:border-neutral-500'}"
         onclick={() => (source = "civitai")}
@@ -1178,7 +1178,7 @@
       </button>
     </div>
 
-    <section class="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 space-y-3">
+    <section class="studio-modelhub-credentials rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 space-y-3">
       <div class="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3 items-end">
         <div>
           <div class="text-xs mb-1 {keyRecommended ? 'text-red-400' : 'text-neutral-400'}">{locale.t("modelhub.civitai.api_key")} {keyRecommended ? locale.t("modelhub.civitai.required") : locale.t("modelhub.civitai.optional")}</div>
@@ -1216,7 +1216,7 @@
     </section>
 
     {#if source === "civitai"}
-      <section class="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 space-y-3">
+      <section class="studio-modelhub-search rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 space-y-3">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <div class="lg:col-span-2">
             <div class="text-xs text-neutral-400 mb-1">{locale.t("modelhub.civitai.search")}</div>

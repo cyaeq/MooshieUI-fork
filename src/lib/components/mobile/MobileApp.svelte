@@ -54,7 +54,7 @@
   });
 </script>
 
-<div class="mobile-shell flex flex-col h-full w-full bg-neutral-950 text-neutral-100 overflow-hidden tap-highlight-none">
+<div class="studio-mobile-shell mobile-shell flex flex-col h-full w-full bg-neutral-950 text-neutral-100 overflow-hidden tap-highlight-none">
   <DownloadBanner />
   <main class="flex-1 min-h-0 overflow-hidden">
     {#if currentTab === "generate"}

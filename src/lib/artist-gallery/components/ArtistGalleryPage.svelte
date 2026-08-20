@@ -598,8 +598,8 @@
   });
 </script>
 
-<div class="flex h-full w-full flex-col overflow-hidden bg-neutral-950 text-neutral-100">
-  <div class="flex-none border-b border-neutral-800 bg-neutral-900/80 px-4 pt-3">
+<div class="studio-page studio-artist-page flex h-full w-full flex-col overflow-hidden bg-neutral-950 text-neutral-100">
+  <div class="studio-artist-tabs flex-none border-b border-neutral-800 bg-neutral-900/80 px-4 pt-3">
     <div class="mb-3 flex max-w-full gap-1 overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-950/80 p-1 w-fit overscroll-x-contain">
       <button
         type="button"
@@ -613,7 +613,7 @@
         class="rounded-md px-3 py-1 text-xs font-medium transition-colors {explorerTab === 'prompts' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
         onclick={() => (explorerTab = 'prompts')}
       >
-        Prompts
+        {locale.t('generation.prompts.title')}
       </button>
       <button
         type="button"
@@ -630,7 +630,7 @@
   {:else if explorerTab === 'prompts'}
     <PromptFavouritesPanel />
   {:else}
-  <header class="flex-none border-b border-neutral-800 bg-neutral-900/60 px-3 py-3 sm:px-4">
+  <header class="studio-artist-header flex-none border-b border-neutral-800 bg-neutral-900/60 px-3 py-3 sm:px-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-lg font-semibold">{locale.t('artist_gallery.title')}</h1>
@@ -649,7 +649,7 @@
 
     <!-- Search + sort + page size toolbar -->
     {#if store.manifest}
-      <div class="mt-3 flex flex-wrap items-center gap-2">
+      <div class="studio-artist-toolbar mt-3 flex flex-wrap items-center gap-2">
         <!-- Search -->
         <div class="relative min-w-0 w-full flex-1 sm:max-w-xs">
           <input

@@ -11,6 +11,8 @@
   import { prefsSync } from "../../stores/prefsSync.svelte.js";
   import { models } from "../../stores/models.svelte.js";
   import { promptAssistant } from "../../stores/promptAssistant.svelte.js";
+  import { updatePreferences } from "../../stores/updatePreferences.svelte.js";
+  import { generationLayout } from "../../stores/generationLayout.svelte.js";
   import PromptAssistantSetupModal from "../generation/PromptAssistantSetupModal.svelte";
   import OpenModelFolders from "./OpenModelFolders.svelte";
   import ModelManagerModal from "./ModelManagerModal.svelte";
@@ -27,8 +29,10 @@
     THEME_TONE_FIELDS,
     DEFAULT_THEME_TONE_DARK,
     DEFAULT_THEME_TONE_LIGHT,
+    applyButtonQuality,
+    normalizeButtonQuality,
   } from "../../utils/theme.js";
-  import type { ThemeProfile, ThemeTone } from "../../utils/theme.js";
+  import type { ButtonQuality, ThemeProfile, ThemeTone } from "../../utils/theme.js";
   import { onMount, onDestroy } from "svelte";
   import { marked } from "marked";
   import DOMPurify from "dompurify";
@@ -121,6 +125,7 @@
   let restartNeeded = $state(false);
   let restarting = $state(false);
   let search = $state("");
+  let activeSection = $state("appearance");
 
   let tagUrlInput = $state("");
   let tagFileLoading = $state(false);
@@ -1253,6 +1258,11 @@
     }
   }
   let dyslexicFont = $state(localStorage.getItem("mooshieui.dyslexicFont") === "true");
+  let buttonQuality = $state<ButtonQuality>(normalizeButtonQuality(localStorage.getItem("mooshieui.buttonQuality.v1")));
+
+  function setButtonQuality(value: string) {
+    buttonQuality = applyButtonQuality(value);
+  }
 
   $effect(() => {
     document.documentElement.classList.toggle("dyslexic-font", dyslexicFont);
@@ -1323,6 +1333,22 @@
     if (!s) return false;
     const q = search.toLowerCase();
     return locale.t(s.labelKey).toLowerCase().includes(q) || s.keywords.includes(q);
+  }
+
+  const visibleSections = $derived(sections.filter((section) => {
+    if (section.key === "appMode" && (!isAdmin || mobileFriendly)) return false;
+    if (["connection", "performance", "paths"].includes(section.key) && !isAdmin) return false;
+    if (["models", "modelRequests", "civitai"].includes(section.key) && !canManageServer) return false;
+    return sectionVisible(section.key);
+  }));
+
+  function focusSettingsSection(key: string) {
+    activeSection = key;
+    const section = sections.find((item) => item.key === key);
+    const label = section ? locale.t(section.labelKey) : "";
+    const target = Array.from(document.querySelectorAll<HTMLElement>(".studio-settings-page section"))
+      .find((item) => label && item.textContent?.includes(label));
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   // Track original values for restart-needing settings
@@ -1912,10 +1938,10 @@
   }
 </script>
 
-<div class="h-full flex flex-col overflow-hidden">
+<div class="studio-page studio-settings-page h-full flex flex-col overflow-hidden">
   <!-- Persistent top bar -->
   {#if config}
-    <div class="shrink-0 px-6 py-3 bg-neutral-900 border-b border-neutral-800 flex items-center gap-3">
+    <div class="studio-settings-commandbar shrink-0 px-6 py-3 bg-neutral-900 border-b border-neutral-800 flex items-center gap-3">
       <h1 class="text-lg font-medium text-neutral-100 shrink-0">{locale.t('settings.title')}</h1>
 
       <input
@@ -1925,7 +1951,7 @@
         class="flex-1 min-w-0 bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500 transition-colors"
       />
 
-      <div class="ml-auto flex items-center gap-3 shrink-0">
+      <div class="studio-settings-actions ml-auto flex items-center gap-3 shrink-0">
       {#if canManageServer}
       {#if restartNeeded}
         <div class="flex items-center gap-1.5 text-amber-200 text-xs mr-2">
@@ -1968,11 +1994,39 @@
 
   <!-- Scrollable content -->
   <div
-    class="flex-1 overflow-y-auto {mobileFriendly ? 'p-4' : 'p-6'}"
+    class="studio-settings-scroll flex-1 overflow-y-auto {mobileFriendly ? 'p-4' : 'p-6'}"
     bind:this={settingsScrollEl}
     onscroll={onSettingsScroll}
   >
-    <div class="columns-1 {mobileFriendly ? '' : 'lg:columns-2 xl:columns-3'} gap-4">
+    <div class="studio-settings-layout flex items-start gap-6">
+      <aside class="studio-settings-sidebar shrink-0" aria-label={locale.t('settings.title')}>
+        <div class="studio-settings-sidebar-inner">
+          <p class="studio-settings-sidebar-title">{locale.t('settings.title')}</p>
+          <div class="studio-settings-sidebar-search">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
+            <input
+              type="text"
+              bind:value={search}
+              placeholder={locale.t('settings.search_placeholder')}
+              aria-label={locale.t('settings.search_placeholder')}
+            />
+          </div>
+          <nav class="studio-settings-nav" aria-label={locale.t('settings.title')}>
+            {#each visibleSections as section}
+              <button
+                type="button"
+                class:active={activeSection === section.key}
+                onclick={() => focusSettingsSection(section.key)}
+              >
+                <span>{locale.t(section.labelKey)}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+              </button>
+            {/each}
+          </nav>
+        </div>
+      </aside>
+      <div class="studio-settings-content flex-1 min-w-0">
+        <div class="studio-settings-content-inner max-w-5xl">
       {#if loading}
         <div class="flex flex-col items-center justify-center py-12 text-neutral-500 gap-3">
           <div class="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
@@ -2497,6 +2551,73 @@
 
           {#if !collapsed.appearance}
           <div class="px-5 pb-5 space-y-4">
+          <div class="rounded-lg border border-neutral-700 bg-neutral-950/60 p-4">
+            <div>
+              <p class="text-xs font-medium text-neutral-200">{locale.t('settings.appearance.generation_layout_title')}</p>
+              <p class="mt-1 text-[10px] text-neutral-500">{locale.t('settings.appearance.generation_layout_desc')}</p>
+            </div>
+            <div class="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                class="rounded-lg border px-3 py-2 text-left text-xs transition-colors {generationLayout.style === 'studio'
+                  ? 'border-indigo-500/60 bg-indigo-600/15 text-indigo-200'
+                  : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-500'}"
+                onclick={() => generationLayout.setStyle('studio')}
+              >
+                <span class="block font-medium">{locale.t('settings.appearance.generation_layout_studio')}</span>
+                <span class="mt-1 block text-[10px] opacity-70">{locale.t('settings.appearance.generation_layout_studio_desc')}</span>
+              </button>
+              <button
+                type="button"
+                class="rounded-lg border px-3 py-2 text-left text-xs transition-colors {generationLayout.style === 'focus'
+                  ? 'border-indigo-500/60 bg-indigo-600/15 text-indigo-200'
+                  : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-500'}"
+                onclick={() => generationLayout.setStyle('focus')}
+              >
+                <span class="block font-medium">{locale.t('settings.appearance.generation_layout_focus')}</span>
+                <span class="mt-1 block text-[10px] opacity-70">{locale.t('settings.appearance.generation_layout_focus_desc')}</span>
+              </button>
+            </div>
+            {#if generationLayout.style === 'focus'}
+              <div class="mt-3">
+                <label class="block text-[10px] text-neutral-500 mb-1">{locale.t('settings.appearance.generation_controls_side')}</label>
+                <select
+                  value={generationLayout.controlsSide}
+                  onchange={(event) => generationLayout.setControlsSide((event.currentTarget as HTMLSelectElement).value as 'left' | 'right')}
+                  class="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-neutral-100"
+                >
+                  <option value="left">{locale.t('settings.appearance.generation_controls_left')}</option>
+                  <option value="right">{locale.t('settings.appearance.generation_controls_right')}</option>
+                </select>
+              </div>
+            {/if}
+              <div class="mt-3 border-t border-neutral-800 pt-3">
+                <p class="text-xs font-medium text-neutral-200">{locale.t('settings.appearance.mobile_panel_controls_title')}</p>
+                <p class="mt-1 text-[10px] text-neutral-500">{locale.t('settings.appearance.mobile_panel_controls_desc')}</p>
+                <div class="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    class="rounded-lg border px-3 py-2 text-left text-xs transition-colors {generationLayout.mobilePanelControls === 'quick'
+                      ? 'border-indigo-500/60 bg-indigo-600/15 text-indigo-200'
+                      : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-500'}"
+                    onclick={() => generationLayout.setMobilePanelControls('quick')}
+                  >
+                    <span class="block font-medium">{locale.t('settings.appearance.mobile_panel_controls_quick')}</span>
+                    <span class="mt-1 block text-[10px] opacity-70">{locale.t('settings.appearance.mobile_panel_controls_quick_desc')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-lg border px-3 py-2 text-left text-xs transition-colors {generationLayout.mobilePanelControls === 'edge'
+                      ? 'border-indigo-500/60 bg-indigo-600/15 text-indigo-200'
+                      : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-500'}"
+                    onclick={() => generationLayout.setMobilePanelControls('edge')}
+                  >
+                    <span class="block font-medium">{locale.t('settings.appearance.mobile_panel_controls_edge')}</span>
+                    <span class="mt-1 block text-[10px] opacity-70">{locale.t('settings.appearance.mobile_panel_controls_edge_desc')}</span>
+                  </button>
+                </div>
+              </div>
+          </div>
           {#if deviceSupportsMobileLayout}
             <div class="rounded-lg border border-neutral-700 bg-neutral-950/60 p-4">
               <div class="flex items-center justify-between gap-3">
@@ -2581,6 +2702,21 @@
                 step="0.05"
                 class="w-full accent-indigo-500"
               />
+            </div>
+
+            <div class="col-span-2">
+              <label for="button-quality" class="block text-xs text-neutral-400 mb-1">{locale.t('settings.appearance.button_quality')}</label>
+              <select
+                id="button-quality"
+                value={buttonQuality}
+                onchange={(event) => setButtonQuality((event.currentTarget as HTMLSelectElement).value)}
+                class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:border-indigo-500 transition-colors"
+              >
+                <option value="low">{locale.t('settings.appearance.button_quality_low')}</option>
+                <option value="standard">{locale.t('settings.appearance.button_quality_standard')}</option>
+                <option value="high">{locale.t('settings.appearance.button_quality_high')}</option>
+              </select>
+              <p class="mt-1 text-[10px] text-neutral-500">{locale.t('settings.appearance.button_quality_desc')}</p>
             </div>
           </div>
 
@@ -4145,6 +4281,25 @@
               </button>
             </div>
 
+            <div class="flex items-center justify-between gap-4 rounded-lg border border-neutral-800 bg-neutral-950/70 px-3 py-3">
+              <div class="min-w-0">
+                <p class="text-sm text-neutral-200">{locale.t('settings.about.update_notifications')}</p>
+                <p class="mt-0.5 text-xs leading-relaxed text-neutral-500">{locale.t('settings.about.update_notifications_desc')}</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={updatePreferences.showAutomaticNotifications}
+                aria-label={locale.t('settings.about.update_notifications')}
+                class="relative h-6 w-11 shrink-0 rounded-full border transition-colors {updatePreferences.showAutomaticNotifications
+                  ? 'border-indigo-500 bg-indigo-600'
+                  : 'border-neutral-600 bg-neutral-700'}"
+                onclick={() => updatePreferences.setShowAutomaticNotifications(!updatePreferences.showAutomaticNotifications)}
+              >
+                <span class="absolute left-0.5 top-0.5 h-4.5 w-4.5 rounded-full bg-white shadow transition-transform {updatePreferences.showAutomaticNotifications ? 'translate-x-5' : 'translate-x-0'}"></span>
+              </button>
+            </div>
+
             <!-- What's New -->
             <details class="rounded-lg border border-neutral-800 bg-neutral-950 overflow-hidden" ontoggle={(e) => { if ((e.target as HTMLDetailsElement).open) loadReleaseNotes(); }}>
               <summary class="px-3 py-2 text-xs font-medium text-neutral-300 hover:text-neutral-100 cursor-pointer select-none transition-colors">
@@ -4343,6 +4498,8 @@
           </div>
         {/if}
       {/if}
+        </div>
+      </div>
     </div>
   </div>
 </div>

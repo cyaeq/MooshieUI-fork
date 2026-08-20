@@ -394,6 +394,12 @@ html.light {
   --color-neutral-200: #262626;
   --color-neutral-100: #171717;
   --color-neutral-50: #0a0a0a;
+  --theme-background: var(--color-neutral-950);
+  --theme-text: var(--color-neutral-100);
+  --theme-surface-950: var(--theme-background);
+  --theme-surface-900: color-mix(in srgb, var(--theme-background) 88%, var(--theme-sub) 12%);
+  --theme-surface-800: color-mix(in srgb, var(--theme-background) 76%, var(--theme-sub) 24%);
+  --theme-border-700: color-mix(in srgb, var(--theme-background) 70%, var(--theme-text) 30%);
 }
 
 html.light[data-palette="nord"] {
@@ -504,6 +510,75 @@ html.light select, html.light option {
   background-color: var(--color-neutral-800) !important;
   color: var(--color-neutral-100) !important;
   color-scheme: light;
+}
+
+/* Settings and studio surfaces must remain readable in light mode. These
+   semantic overrides also cover custom palettes whose neutral tokens are
+   intentionally user-defined. */
+html.light .studio-settings-scroll,
+html.light .studio-settings-sidebar,
+html.light .studio-settings-content section {
+  background: color-mix(in srgb, var(--theme-background) 96%, var(--theme-sub) 4%) !important;
+}
+
+html.light .studio-settings-nav button {
+  color: var(--theme-text) !important;
+}
+
+html.light .studio-settings-nav button:hover {
+  background: color-mix(in srgb, var(--theme-accent-500) 9%, var(--theme-background)) !important;
+  color: var(--theme-text) !important;
+}
+
+html.light .studio-settings-nav button.active {
+  background: color-mix(in srgb, var(--theme-accent-500) 14%, var(--theme-background)) !important;
+  color: var(--theme-text) !important;
+}
+
+/* Shadow quality is deliberately visual-only: it never changes button size,
+   radius, border, or layout. Standard leaves the existing design untouched. */
+html[data-button-shadow-quality="low"] button[class*="shadow"],
+html[data-button-shadow-quality="low"] .studio-generate-primary,
+html[data-button-shadow-quality="low"] .studio-app-nav button[class*="bg-indigo"] {
+  box-shadow: none !important;
+  filter: none;
+}
+
+html[data-button-shadow-quality="high"] button:not([class*="rounded-full"]):not([role="switch"]):not(:disabled) {
+  filter:
+    drop-shadow(0 1px 1px color-mix(in srgb, black 20%, transparent))
+    drop-shadow(0 4px 7px color-mix(in srgb, var(--theme-accent-500) 10%, transparent));
+}
+
+html[data-button-shadow-quality="low"] button,
+html[data-button-shadow-quality="high"] button {
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, filter 160ms ease, transform 160ms ease;
+}
+
+/* Light surfaces should use a neutral edge, not the white inner highlight
+   that reads as a halo around rounded controls. */
+html.light .studio-page section,
+html.light .studio-page [class~="bg-neutral-900/60"],
+html.light .studio-page [class~="bg-neutral-900/50"] {
+  box-shadow: none;
+}
+
+html.light .studio-artist-tabs > div,
+html.light .studio-artist-toolbar > div,
+html.light .studio-artist-toolbar input,
+html.light .studio-artist-toolbar select,
+html.light .studio-artist-toolbar button,
+html.light .studio-artist-tabs input,
+html.light .studio-artist-tabs select {
+  border-color: color-mix(in srgb, var(--theme-text) 22%, var(--theme-background)) !important;
+  box-shadow: none !important;
+}
+
+html.light .studio-artist-tabs,
+html.light .studio-artist-header,
+html.light .studio-artist-tabs > div {
+  border-color: color-mix(in srgb, var(--theme-text) 22%, var(--theme-background)) !important;
+  background: color-mix(in srgb, var(--theme-background) 92%, var(--theme-sub) 8%) !important;
 }
 
 html.light ::-webkit-scrollbar-thumb { background: #d4d4d4; }
@@ -825,4 +900,1168 @@ html.light .lightbox-backdrop {
 }
 .tap-highlight-none {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Studio workspace -------------------------------------------------------
+   The generation surface is intentionally denser than the surrounding app:
+   the preview gets a quiet canvas, while controls read as one inspector. */
+.studio-generation-shell {
+  --studio-canvas: color-mix(in srgb, var(--theme-background) 94%, white 6%);
+  --studio-surface: color-mix(in srgb, var(--theme-background) 84%, var(--theme-sub) 16%);
+  --studio-raised: color-mix(in srgb, var(--theme-background) 74%, var(--theme-sub) 26%);
+  --studio-line: color-mix(in srgb, var(--theme-background) 58%, var(--theme-sub) 42%);
+  --studio-muted: color-mix(in srgb, var(--theme-text) 56%, transparent);
+  background: var(--studio-canvas);
+}
+
+.studio-mobile-shell {
+  background: var(--theme-background);
+}
+
+.studio-setup-shell {
+  background:
+    radial-gradient(circle at 22% 12%, color-mix(in srgb, var(--theme-accent-500) 13%, transparent), transparent 34rem),
+    color-mix(in srgb, var(--theme-background) 96%, white 4%);
+}
+
+.studio-setup-panel {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--theme-accent-500) 42%, transparent) transparent;
+}
+
+.studio-setup-card {
+  border-color: color-mix(in srgb, var(--theme-border-700) 78%, transparent) !important;
+  background: color-mix(in srgb, var(--theme-surface-900) 94%, black 6%) !important;
+  box-shadow: 0 28px 80px color-mix(in srgb, black 38%, transparent), inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
+}
+
+@media (min-width: 900px) {
+  .studio-setup-panel {
+    max-height: 92vh;
+  }
+
+  .studio-setup-card input,
+  .studio-setup-card select,
+  .studio-setup-card button {
+    min-height: 2.5rem;
+  }
+}
+
+.studio-app-shell {
+  background: color-mix(in srgb, var(--theme-background) 94%, white 6%);
+}
+
+.studio-app-rail {
+  position: relative;
+}
+
+.studio-app-logo,
+.studio-app-nav,
+.studio-app-main {
+  border-color: color-mix(in srgb, var(--studio-line, var(--theme-border-700)) 78%, transparent) !important;
+  background: color-mix(in srgb, var(--theme-surface-900) 92%, black 8%) !important;
+}
+
+.studio-app-logo {
+  min-height: 3.5rem;
+}
+
+.studio-app-logo > div {
+  border: 1px solid color-mix(in srgb, var(--theme-accent-500) 26%, transparent);
+  background: color-mix(in srgb, var(--theme-accent-500) 8%, var(--theme-surface-800));
+}
+
+.studio-app-nav button {
+  border: 1px solid transparent;
+  border-radius: 0.65rem;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.studio-app-nav button:hover {
+  transform: translateY(-1px);
+}
+
+.studio-app-nav button[class*="bg-indigo-600"] {
+  border-color: color-mix(in srgb, var(--theme-accent-300) 38%, transparent);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--theme-accent-500) 18%, transparent);
+}
+
+.studio-app-main {
+  box-shadow: 0 24px 70px color-mix(in srgb, black 25%, transparent) !important;
+}
+
+.studio-page-frame {
+  background: var(--theme-background) !important;
+}
+
+.studio-mobile-tabbar {
+  border-top-color: color-mix(in srgb, var(--theme-accent-500) 18%, var(--studio-line, #404040));
+  box-shadow: 0 -8px 22px color-mix(in srgb, black 12%, transparent);
+}
+
+.studio-mobile-tabbar button[aria-current="page"] {
+  background: color-mix(in srgb, var(--theme-accent-500) 13%, transparent);
+  color: var(--theme-accent-400);
+}
+
+.studio-mobile-quick-actions {
+  pointer-events: auto;
+}
+
+.studio-mobile-quick-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  height: 2.1rem;
+  min-height: 2.1rem;
+  border: 1px solid color-mix(in srgb, var(--studio-line, #404040) 86%, transparent);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--studio-surface, #171717) 94%, black 6%);
+  color: var(--color-neutral-300);
+  box-shadow: 0 4px 12px color-mix(in srgb, black 12%, transparent);
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.studio-mobile-quick-action:active,
+.studio-mobile-quick-action:hover {
+  border-color: color-mix(in srgb, var(--theme-accent-500) 55%, var(--studio-line, #404040));
+  background: color-mix(in srgb, var(--theme-accent-500) 16%, var(--studio-surface, #171717));
+  color: var(--theme-accent-300);
+}
+
+.studio-mobile-quick-action.is-open {
+  border-color: color-mix(in srgb, var(--theme-accent-500) 48%, var(--studio-line, #404040));
+  background: color-mix(in srgb, var(--theme-accent-500) 13%, var(--studio-surface, #171717));
+  color: var(--theme-accent-300);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-accent-500) 12%, transparent), 0 4px 14px color-mix(in srgb, var(--theme-accent-500) 10%, transparent);
+}
+
+.studio-mobile-edge-handle {
+  touch-action: none;
+  opacity: 0.78;
+}
+
+.studio-generation-shell[data-studio-mode="mobile"][data-mobile-panel-controls="quick"] .studio-mobile-edge-handle {
+  display: none;
+}
+
+.studio-generation-shell .studio-workbench {
+  background: var(--studio-canvas);
+}
+
+.studio-generation-shell .studio-focus-workbench .studio-panel-left,
+.studio-generation-shell .studio-focus-workbench .studio-panel-right {
+  width: clamp(20rem, 28vw, 28rem) !important;
+  max-width: 42vw;
+  background: color-mix(in srgb, var(--studio-surface) 72%, var(--studio-canvas));
+}
+
+.studio-generation-shell .studio-focus-workbench .studio-preview-stage {
+  padding: clamp(1rem, 2.2vw, 2rem);
+}
+
+.studio-generation-shell .studio-focus-workbench .studio-focus-materials {
+  /* Keep a usable viewport for the resource browser. The inspector above it
+     may be tall, so this area must have a real scrollable height instead of
+     being compressed by flexbox to the remaining few pixels. */
+  flex: 0 0 clamp(28rem, 68vh, 48rem) !important;
+  height: clamp(28rem, 68vh, 48rem);
+  min-height: 0;
+  max-height: none;
+}
+
+.studio-generation-shell .studio-focus-materials > .studio-material-tray {
+  min-height: 0;
+  height: 100%;
+}
+
+.studio-command-bar {
+  min-height: 3.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--studio-line) 74%, transparent);
+  background: color-mix(in srgb, var(--studio-surface) 88%, black 12%);
+  box-shadow: 0 8px 24px color-mix(in srgb, black 12%, transparent);
+}
+
+.studio-command-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.studio-command-actions .studio-generate-control {
+  min-width: 0;
+}
+
+.studio-command-brand {
+  flex: 0 0 auto;
+  width: 13rem;
+}
+
+.studio-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 0.55rem;
+  background: var(--theme-accent-500);
+  color: var(--theme-accent-foreground);
+  font-size: 0.8rem;
+  font-weight: 800;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--theme-accent-500) 26%, transparent);
+}
+
+.studio-command-modes {
+  scrollbar-width: none;
+}
+
+.studio-command-modes::-webkit-scrollbar {
+  display: none;
+}
+
+.studio-status-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: #34d399;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #34d399 14%, transparent);
+}
+
+.studio-generation-shell .studio-panel {
+  background: color-mix(in srgb, var(--studio-canvas) 86%, black 14%);
+  border-color: color-mix(in srgb, var(--studio-line) 68%, transparent) !important;
+}
+
+.studio-generation-shell .studio-preview-stage {
+  background: var(--studio-canvas);
+}
+
+.studio-generation-shell .studio-inline-controls {
+  background: color-mix(in srgb, var(--studio-canvas) 94%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--studio-line) 56%, transparent);
+}
+
+.studio-generation-shell .studio-inline-mode-switch {
+  display: none;
+}
+
+.studio-startup-banner {
+  max-width: 100%;
+  min-height: 3.5rem;
+  border-color: color-mix(in srgb, #f59e0b 52%, var(--studio-line)) !important;
+  background: linear-gradient(90deg, color-mix(in srgb, #7c2d12 86%, var(--theme-background)), color-mix(in srgb, #451a03 68%, var(--theme-background))) !important;
+}
+
+.studio-startup-banner button {
+  min-height: 2.25rem;
+  border-radius: 0.6rem;
+  background: var(--theme-accent-500) !important;
+  color: var(--theme-accent-foreground) !important;
+}
+
+.studio-generation-shell .studio-preview-frame {
+  border-color: color-mix(in srgb, var(--studio-line) 86%, transparent) !important;
+  border-radius: 1rem;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, white 3%, transparent) 25%, transparent 25%) 0 0 / 16px 16px,
+    linear-gradient(315deg, color-mix(in srgb, white 3%, transparent) 25%, transparent 25%) 0 0 / 16px 16px,
+    var(--studio-surface) !important;
+  box-shadow: 0 16px 42px color-mix(in srgb, black 17%, transparent), inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
+}
+
+.studio-generation-shell .studio-preview-frame:focus-within,
+.studio-generation-shell .studio-preview-frame:hover {
+  border-color: color-mix(in srgb, var(--theme-accent-500) 46%, var(--studio-line)) !important;
+}
+
+.studio-generation-shell .studio-preview-stage > div {
+  min-height: 0;
+}
+
+/* Parameter sections share one inspector language instead of looking like
+   unrelated cards. The attribute selector handles the existing Tailwind
+   utility token without changing each feature component. */
+.studio-generation-shell [class~="bg-neutral-900/40"][class~="border-neutral-800"] {
+  background: color-mix(in srgb, var(--studio-surface) 92%, transparent) !important;
+  border-color: color-mix(in srgb, var(--studio-line) 76%, transparent) !important;
+  border-radius: 0.85rem;
+  box-shadow: 0 1px 0 color-mix(in srgb, white 4%, transparent);
+}
+
+.studio-generation-shell [class~="bg-neutral-900/40"][class~="border-neutral-800"] > div:first-child {
+  min-height: 2.75rem;
+}
+
+.studio-generation-shell [class~="bg-neutral-900/40"][class~="border-neutral-800"] > div:first-child button {
+  color: var(--theme-text);
+  letter-spacing: 0.01em;
+}
+
+.studio-generation-shell [class~="bg-neutral-900/40"][class~="border-neutral-800"] > div:first-child:hover {
+  background: color-mix(in srgb, var(--studio-raised) 72%, transparent);
+}
+
+.studio-generation-shell input:not([type="checkbox"]):not([type="radio"]),
+.studio-generation-shell textarea,
+.studio-generation-shell select {
+  border-radius: 0.65rem;
+  border-color: color-mix(in srgb, var(--studio-line) 82%, transparent);
+  background-color: color-mix(in srgb, var(--studio-raised) 72%, transparent);
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.studio-generation-shell input:not([type="checkbox"]):not([type="radio"]):focus,
+.studio-generation-shell textarea:focus,
+.studio-generation-shell select:focus {
+  border-color: var(--theme-accent-500);
+  background-color: color-mix(in srgb, var(--studio-raised) 90%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-accent-500) 16%, transparent);
+  outline: none;
+}
+
+.studio-generation-shell .studio-mode-switch {
+  border-color: color-mix(in srgb, var(--studio-line) 72%, transparent);
+  background: color-mix(in srgb, var(--studio-surface) 96%, black 4%);
+  box-shadow: 0 7px 22px color-mix(in srgb, black 14%, transparent);
+}
+
+.studio-generation-shell .studio-mode-switch button {
+  min-height: 2.5rem;
+  border-radius: 0.6rem;
+  font-weight: 600;
+}
+
+.studio-generation-shell .studio-mode-switch button[class*="bg-indigo-600"] {
+  background: color-mix(in srgb, var(--theme-accent-600) 88%, var(--studio-surface)) !important;
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--theme-accent-500) 14%, transparent);
+}
+
+.studio-generation-shell .studio-generate-dock {
+  padding-top: 3.5rem;
+}
+
+.studio-generation-shell .studio-generate-dock button {
+  min-height: 3rem;
+  border-radius: 0.8rem;
+  box-shadow: 0 10px 26px color-mix(in srgb, black 34%, transparent);
+}
+
+.studio-generate-control-desktop {
+  position: relative;
+}
+
+.studio-generate-control-desktop .studio-generate-actions {
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.studio-generate-control-desktop .studio-generate-actions > button {
+  min-height: 2.35rem;
+  border-radius: 0.6rem;
+}
+
+.studio-generate-control-desktop .studio-generate-primary {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 7.5rem;
+  max-width: 13rem;
+  padding: 0.55rem 1rem;
+  font-size: 0.75rem;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--theme-accent-500) 18%, transparent);
+}
+
+.studio-generate-control-desktop .studio-generate-cancel {
+  width: 2.35rem;
+  min-width: 2.35rem;
+  padding-inline: 0;
+}
+
+.studio-generate-control-desktop .studio-generate-error {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 20;
+  width: max-content;
+  max-width: 18rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid color-mix(in srgb, #ef4444 48%, var(--studio-line));
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, #450a0a 88%, var(--theme-background));
+  box-shadow: 0 8px 20px color-mix(in srgb, black 35%, transparent);
+}
+
+.studio-connection-button {
+  border: 1px solid transparent;
+}
+
+.studio-connection-button:hover {
+  border-color: color-mix(in srgb, var(--theme-border-700) 80%, transparent);
+}
+
+.studio-connection-popover {
+  max-width: min(20rem, calc(100vw - 5rem));
+}
+
+.studio-focus-generate {
+  position: sticky;
+  bottom: 0;
+  z-index: 12;
+  margin-inline: -0.75rem;
+  padding: 0.65rem 0.75rem calc(0.65rem + env(safe-area-inset-bottom));
+  border-top: 1px solid color-mix(in srgb, var(--studio-line) 74%, transparent);
+  background: color-mix(in srgb, var(--studio-canvas) 94%, black 6%);
+  box-shadow: 0 -12px 24px color-mix(in srgb, black 24%, transparent);
+}
+
+.studio-focus-generate .studio-generate-control-desktop {
+  position: relative;
+}
+
+.studio-focus-generate .studio-generate-error {
+  position: static;
+  width: auto;
+  max-width: none;
+  margin-top: 0.45rem;
+}
+
+.studio-focus-generate .studio-generate-control-desktop,
+.studio-focus-generate .studio-generate-actions-desktop {
+  width: 100%;
+}
+
+.studio-focus-generate .studio-generate-actions-desktop {
+  justify-content: stretch;
+}
+
+.studio-focus-generate .studio-generate-actions-desktop .studio-generate-primary {
+  flex: 1 1 auto;
+  max-width: none;
+}
+
+.studio-focus-generate .studio-generate-cancel {
+  flex: 0 0 auto;
+  min-width: 6.25rem;
+}
+
+@media (max-width: 900px) {
+  .studio-generation-shell .studio-focus-workbench .studio-panel-left,
+  .studio-generation-shell .studio-focus-workbench .studio-panel-right {
+    width: 38vw !important;
+    min-width: 17.5rem;
+    max-width: 42vw;
+  }
+
+  .studio-focus-generate .studio-generate-actions-desktop {
+    gap: 0.4rem;
+  }
+
+  .studio-focus-generate .studio-generate-cancel {
+    min-width: 0;
+    padding-inline: 0.9rem;
+  }
+}
+
+.studio-update-notification {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 80;
+  width: min(30rem, calc(100vw - 2.5rem));
+  margin: 0;
+  border-radius: 0.75rem;
+}
+
+.studio-generation-shell .studio-generate-actions {
+  align-items: stretch;
+}
+
+.studio-generation-shell .studio-generate-actions-desktop {
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.studio-generation-shell .studio-generate-actions-desktop .studio-generate-primary {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 7.5rem;
+  max-width: 13rem;
+  min-height: 2.35rem;
+  padding: 0.55rem 1rem;
+  border-radius: 0.6rem;
+  font-size: 0.75rem;
+}
+
+.studio-generation-shell .studio-generate-actions-desktop .studio-generate-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  width: 2.35rem;
+  min-width: 2.35rem;
+  min-height: 2.35rem;
+  padding-inline: 0;
+  border-radius: 0.6rem;
+}
+
+.studio-generation-shell .studio-generate-cancel svg {
+  transform: translateZ(0);
+}
+
+.studio-settings-scroll {
+  padding: 0 !important;
+  background: color-mix(in srgb, var(--theme-background) 97%, black 3%);
+}
+
+.studio-settings-layout {
+  min-height: 100%;
+}
+
+.studio-settings-sidebar {
+  position: sticky;
+  top: 0;
+  width: clamp(15rem, 22vw, 20rem);
+  min-height: calc(100vh - 3.75rem);
+  align-self: flex-start;
+  border-right: 1px solid color-mix(in srgb, var(--studio-line, #404040) 72%, transparent);
+  background: color-mix(in srgb, var(--theme-background) 98%, black 2%);
+}
+
+.studio-settings-sidebar-inner {
+  padding: 1.5rem 0 2rem;
+}
+
+.studio-settings-sidebar-title {
+  padding: 0 1.5rem 1rem;
+  color: var(--theme-text);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.studio-settings-sidebar-search {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 1rem 1rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--studio-line, #404040) 86%, transparent);
+  border-radius: 999px;
+  color: var(--color-neutral-500);
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.studio-settings-sidebar-search:focus-within {
+  border-color: color-mix(in srgb, var(--theme-accent-500) 72%, var(--studio-line, #404040));
+  color: var(--theme-accent-400);
+}
+
+.studio-settings-sidebar-search svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
+}
+
+.studio-settings-sidebar-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--theme-text);
+  font-size: 0.875rem;
+}
+
+.studio-settings-sidebar-search input::placeholder {
+  color: var(--color-neutral-500);
+}
+
+.studio-settings-nav {
+  display: flex;
+  flex-direction: column;
+}
+
+.studio-settings-nav button {
+  position: relative;
+  display: flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem 0.75rem 1.5rem;
+  border-right: 2px solid transparent;
+  color: var(--color-neutral-300);
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 550;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.studio-settings-nav button:hover {
+  background: color-mix(in srgb, var(--studio-surface, #171717) 75%, transparent);
+  color: var(--color-neutral-100);
+}
+
+.studio-settings-nav button.active {
+  border-right-color: var(--theme-accent-500);
+  background: color-mix(in srgb, var(--theme-accent-500) 11%, var(--studio-surface, #171717));
+  color: var(--color-neutral-100);
+}
+
+.studio-settings-nav svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  color: var(--color-neutral-500);
+}
+
+.studio-settings-content {
+  padding: 2rem clamp(1.5rem, 3vw, 3rem) 4rem 0;
+}
+
+.studio-settings-content-inner {
+  margin-inline: 0;
+  max-width: none !important;
+}
+
+@media (min-width: 901px) {
+  /* Settings is an application workspace, so its split view should start at
+     the content rail instead of inheriting the centered page container. */
+  .studio-settings-page > div {
+    width: 100%;
+    max-width: none !important;
+    margin-inline: 0 !important;
+  }
+
+  .studio-settings-page .studio-settings-scroll {
+    padding: 0 !important;
+  }
+
+  .studio-settings-page .studio-settings-layout {
+    width: 100%;
+  }
+}
+
+.studio-settings-content section {
+  scroll-margin-top: 1.25rem;
+  border-radius: 0.875rem !important;
+  border-color: color-mix(in srgb, var(--studio-line, #404040) 60%, transparent) !important;
+  background: color-mix(in srgb, var(--theme-background) 91%, var(--studio-surface, #171717) 9%) !important;
+  box-shadow: none !important;
+}
+
+.studio-settings-content section > button:first-child {
+  min-height: 3.75rem;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 900px) {
+  .studio-settings-layout {
+    display: block;
+  }
+
+  .studio-settings-sidebar {
+    display: none;
+  }
+
+  .studio-settings-content {
+    padding: 1rem 1rem calc(5rem + env(safe-area-inset-bottom));
+  }
+}
+
+@media (min-width: 901px) {
+  .studio-settings-commandbar > h1,
+  .studio-settings-commandbar > input {
+    display: none;
+  }
+
+  .studio-settings-commandbar {
+    justify-content: flex-end;
+  }
+}
+
+.studio-generation-shell .studio-generate-actions-mobile {
+  width: 100%;
+}
+
+/* Focus mode intentionally gives the action row the full width of its inspector.
+   Keep these overrides after the shared desktop sizing rules above. */
+.studio-generation-shell .studio-focus-generate .studio-generate-actions-desktop .studio-generate-primary {
+  flex: 1 1 auto;
+  width: auto;
+  max-width: none;
+}
+
+.studio-generation-shell .studio-focus-generate .studio-generate-actions-desktop .studio-generate-cancel {
+  width: 2.75rem;
+  min-width: 2.75rem;
+  padding-inline: 0;
+}
+
+@media (max-width: 900px) {
+  .studio-generation-shell .studio-focus-generate .studio-generate-actions-desktop .studio-generate-cancel {
+    width: 2.75rem;
+    min-width: 2.75rem;
+    padding-inline: 0;
+  }
+}
+
+.studio-generation-shell .studio-generate-actions-mobile .studio-generate-primary {
+  flex: 1 1 auto;
+  min-height: 3.5rem;
+}
+
+.studio-generation-shell .studio-generate-actions-mobile .studio-generate-cancel {
+  width: 3.5rem;
+  min-height: 3.5rem;
+  padding-inline: 0;
+}
+
+.studio-generation-shell .studio-generate-actions > button:first-child {
+  background: var(--theme-accent-500);
+  color: var(--theme-accent-foreground);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--theme-accent-500) 22%, transparent);
+}
+
+.studio-generation-shell .studio-generate-actions > button:first-child:hover {
+  background: var(--theme-accent-400);
+}
+
+.studio-generation-shell .studio-generate-actions > button:last-child {
+  min-width: 3rem;
+}
+
+.studio-generation-shell .studio-prompt-editor {
+  gap: 0.7rem;
+}
+
+.studio-generation-shell .studio-prompt-primary,
+.studio-generation-shell .studio-prompt-negative {
+  padding: 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--studio-line) 70%, transparent);
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--studio-raised) 46%, transparent);
+}
+
+.studio-generation-shell .studio-prompt-primary {
+  border-color: color-mix(in srgb, var(--theme-accent-500) 24%, var(--studio-line));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--theme-accent-500) 8%, transparent);
+}
+
+.studio-generation-shell .studio-prompt-textarea textarea {
+  min-height: 8rem;
+  line-height: 1.55;
+  background: color-mix(in srgb, var(--studio-surface) 80%, transparent) !important;
+}
+
+.studio-generation-shell .studio-material-tray {
+  background: color-mix(in srgb, var(--studio-surface) 96%, black 4%);
+}
+
+.studio-generation-shell .studio-material-tabs {
+  min-height: 2.8rem;
+  background: color-mix(in srgb, var(--studio-surface) 88%, black 12%);
+}
+
+.studio-generation-shell .studio-material-tabs button {
+  min-height: 2.25rem;
+}
+
+.studio-generation-shell .studio-mobile-bottom-panel > div {
+  background: color-mix(in srgb, var(--studio-surface) 96%, black 4%);
+  border-top: 1px solid var(--studio-line);
+}
+
+.studio-page {
+  background: color-mix(in srgb, var(--theme-background) 95%, white 5%);
+}
+
+.studio-page > div {
+  max-width: 96rem;
+  margin-inline: auto;
+}
+
+.studio-page section,
+.studio-page [class~="bg-neutral-900/60"],
+.studio-page [class~="bg-neutral-900/50"] {
+  border-color: color-mix(in srgb, var(--theme-border-700) 76%, transparent) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 3%, transparent);
+}
+
+.studio-page h1,
+.studio-page h2 {
+  letter-spacing: -0.015em;
+}
+
+.studio-modelhub-page > div {
+  max-width: 90rem;
+}
+
+.studio-gallery-page > div {
+  max-width: 100rem;
+  margin-inline: auto;
+}
+
+.studio-gallery-toolbar,
+.studio-modelhub-credentials,
+.studio-modelhub-search {
+  backdrop-filter: blur(14px);
+  background: color-mix(in srgb, var(--theme-surface-900) 92%, transparent) !important;
+}
+
+.studio-gallery-toolbar input:not([type="checkbox"]):not([type="range"]),
+.studio-gallery-toolbar select,
+.studio-modelhub-page input,
+.studio-modelhub-page select,
+.studio-settings-commandbar input,
+.studio-artist-toolbar input {
+  border-color: color-mix(in srgb, var(--theme-border-700) 82%, transparent) !important;
+  background: color-mix(in srgb, var(--theme-surface-800) 88%, black 12%) !important;
+}
+
+.studio-gallery-toolbar button,
+.studio-modelhub-sources button,
+.studio-artist-tabs button,
+.studio-artist-toolbar button {
+  min-height: 2rem;
+}
+
+.studio-modelhub-heading {
+  padding: 0.25rem 0.15rem 0;
+}
+
+.studio-modelhub-sources {
+  padding: 0.25rem;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid color-mix(in srgb, var(--theme-border-700) 76%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--theme-surface-900) 88%, black 12%);
+}
+
+.studio-modelhub-sources button {
+  border-radius: 0.55rem;
+}
+
+.studio-artist-page {
+  padding-inline: 0;
+}
+
+.studio-artist-page > div,
+.studio-artist-page > header {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+
+.studio-artist-tabs,
+.studio-artist-header {
+  backdrop-filter: blur(16px);
+  border-color: color-mix(in srgb, var(--theme-border-700) 76%, transparent) !important;
+  background: color-mix(in srgb, var(--theme-surface-900) 92%, black 8%) !important;
+}
+
+.studio-artist-tabs > div {
+  scrollbar-width: none;
+  border-color: color-mix(in srgb, var(--theme-border-700) 76%, transparent) !important;
+  background: color-mix(in srgb, var(--theme-background) 88%, black 12%) !important;
+}
+
+.studio-artist-tabs > div::-webkit-scrollbar {
+  display: none;
+}
+
+.studio-artist-toolbar > div {
+  border-color: color-mix(in srgb, var(--theme-border-700) 72%, transparent) !important;
+  background: color-mix(in srgb, var(--theme-surface-900) 88%, transparent) !important;
+}
+
+.studio-animadex-page {
+  background: color-mix(in srgb, var(--theme-background) 95%, white 5%);
+}
+
+.studio-animadex-header {
+  backdrop-filter: blur(16px);
+  border-color: color-mix(in srgb, var(--theme-border-700) 76%, transparent) !important;
+  background: color-mix(in srgb, var(--theme-surface-900) 92%, black 8%) !important;
+}
+
+.studio-animadex-header > div {
+  max-width: none;
+  margin-inline: 0;
+}
+
+.studio-animadex-header input {
+  border-color: color-mix(in srgb, var(--theme-border-700) 82%, transparent) !important;
+  background: color-mix(in srgb, var(--theme-surface-800) 88%, black 12%) !important;
+}
+
+.studio-settings-page > div:first-child {
+  border-bottom-color: color-mix(in srgb, var(--theme-border-700) 78%, transparent) !important;
+  background: color-mix(in srgb, var(--theme-surface-900) 92%, black 8%) !important;
+}
+
+.studio-settings-commandbar {
+  min-height: 3.75rem;
+}
+
+.studio-settings-actions button {
+  min-height: 2.25rem;
+  white-space: nowrap;
+}
+
+.studio-settings-page section {
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--theme-surface-900) 95%, transparent) !important;
+}
+
+@media (min-width: 900px) {
+  .studio-generation-shell[data-studio-mode="desktop"] .studio-preview-stage {
+    padding: clamp(1.25rem, 2.2vw, 2.75rem);
+  }
+
+  .studio-generation-shell[data-studio-mode="desktop"] .studio-preview-stage > div {
+    width: min(100%, 72rem);
+    margin-inline: auto;
+  }
+}
+
+@media (min-width: 1200px) {
+  .studio-generation-shell[data-studio-mode="desktop"] .studio-workbench:not(.studio-focus-workbench) .studio-panel-left {
+    max-width: 31vw;
+  }
+
+  .studio-generation-shell[data-studio-mode="desktop"] .studio-workbench:not(.studio-focus-workbench) .studio-panel-right {
+    max-width: 29vw;
+  }
+
+  .studio-generation-shell[data-studio-mode="desktop"] .studio-workbench:not(.studio-focus-workbench) .studio-panel input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .studio-generation-shell[data-studio-mode="desktop"] .studio-workbench:not(.studio-focus-workbench) .studio-panel select {
+    min-height: 2.55rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .studio-command-actions {
+    display: none;
+  }
+
+  .studio-update-notification {
+    right: 0.75rem;
+    bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
+    width: calc(100vw - 1.5rem);
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .studio-update-notification > span {
+    min-width: 0;
+    flex: 1 1 12rem;
+  }
+
+  .studio-update-notification > button {
+    min-height: 2.25rem;
+  }
+
+  .studio-generation-shell[data-studio-mode="mobile"] .studio-preview-stage {
+    padding-inline: 0.75rem;
+    padding-bottom: 1rem;
+  }
+
+  .studio-generation-shell[data-studio-mode="mobile"] .studio-mode-switch {
+    padding: 0.3rem;
+    border-radius: 0.85rem;
+  }
+
+  .studio-generation-shell[data-studio-mode="mobile"] .studio-mode-switch button {
+    min-height: 2.75rem;
+    padding-inline: 0.35rem;
+    font-size: 0.68rem;
+  }
+
+  .studio-generation-shell[data-studio-mode="mobile"] .studio-mobile-quick-action {
+    width: 2.75rem;
+    height: 2.5rem;
+    min-height: 2.5rem;
+  }
+
+  .studio-generation-shell[data-studio-mode="mobile"] [class~="bg-neutral-900/40"][class~="border-neutral-800"] {
+    border-radius: 0.95rem;
+  }
+
+  .studio-generation-shell[data-studio-mode="mobile"] [class~="bg-neutral-900/40"][class~="border-neutral-800"] > div:first-child {
+    min-height: 3rem;
+  }
+
+  .studio-generation-shell[data-studio-mode="mobile"] .studio-preview-frame {
+    border-radius: 0.85rem;
+    box-shadow: 0 10px 24px color-mix(in srgb, black 16%, transparent);
+  }
+
+  .studio-generation-shell[data-studio-mode="mobile"] .studio-prompt-textarea textarea {
+    min-height: 9rem;
+    font-size: 0.9rem;
+  }
+
+  .studio-generation-shell[data-studio-mode="mobile"] .studio-generate-actions > button {
+    min-height: 3.25rem;
+  }
+
+  .studio-page {
+    padding-inline: 0.75rem;
+  }
+
+  .studio-gallery-page,
+  .studio-modelhub-page {
+    padding: 0.75rem !important;
+  }
+
+  .studio-gallery-page > div,
+  .studio-modelhub-page > div {
+    gap: 0.75rem;
+  }
+
+  .studio-gallery-toolbar,
+  .studio-modelhub-credentials,
+  .studio-modelhub-search {
+    padding: 0.75rem;
+    border-radius: 0.85rem;
+  }
+
+  .studio-gallery-toolbar button,
+  .studio-gallery-toolbar select,
+  .studio-gallery-toolbar input:not([type="range"]):not([type="checkbox"]),
+  .studio-modelhub-page button,
+  .studio-modelhub-page select,
+  .studio-modelhub-page input {
+    min-height: 2.75rem;
+  }
+
+  .studio-modelhub-heading {
+    padding-inline: 0.15rem;
+  }
+
+  .studio-modelhub-sources {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .studio-modelhub-sources button {
+    min-width: 0;
+  }
+
+  .studio-artist-page {
+    padding-inline: 0;
+  }
+
+  .studio-artist-tabs {
+    padding-inline: 0.75rem;
+    padding-top: 0.65rem;
+  }
+
+  .studio-artist-tabs > div {
+    width: 100%;
+    margin-bottom: 0.65rem;
+  }
+
+  .studio-animadex-header {
+    padding-inline: 0.75rem;
+  }
+
+  .studio-animadex-header > div:first-child {
+    align-items: stretch;
+  }
+
+  .studio-animadex-header > div:first-child > div:last-child {
+    max-width: none;
+  }
+
+  .studio-artist-tabs button {
+    flex: 1 0 auto;
+    min-height: 2.5rem;
+    padding-inline: 0.75rem;
+  }
+
+  .studio-artist-header {
+    max-height: min(52vh, 28rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .studio-artist-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studio-artist-toolbar > div {
+    width: 100%;
+    max-width: none;
+    min-height: 2.75rem;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .studio-artist-toolbar > div::-webkit-scrollbar {
+    display: none;
+  }
+
+  .studio-artist-toolbar button {
+    min-height: 2.35rem;
+    flex: 0 0 auto;
+  }
+
+  .studio-settings-page {
+    padding-inline: 0;
+  }
+
+  /* The shared studio-page rule centers direct children on desktop. The
+     mobile settings workspace must use the full viewport width instead. */
+  .studio-settings-page > div {
+    width: 100%;
+    max-width: none;
+    margin-inline: 0;
+  }
+
+  .studio-settings-commandbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+    padding: 0.75rem !important;
+    gap: 0.65rem;
+  }
+
+  .studio-settings-commandbar h1 {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+  }
+
+  .studio-settings-commandbar > input {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-height: 2.75rem;
+  }
+
+  .studio-settings-actions {
+    grid-column: 2;
+    grid-row: 1;
+    gap: 0.4rem;
+  }
+
+  .studio-settings-actions > div {
+    display: none;
+  }
+
+  .studio-settings-actions button {
+    min-height: 2.5rem;
+    padding-inline: 0.65rem;
+    font-size: 0.75rem;
+  }
+
+  .studio-generation-shell[data-studio-mode="mobile"] .studio-inline-controls {
+    display: none;
+  }
 }

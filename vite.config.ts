@@ -15,5 +15,10 @@ export default defineConfig({
     strictPort: true,
     host: host || false,
     hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,
+    watch: {
+      // Tauri build artifacts (e.g. locked .exe in target/) crash the Vite
+      // file watcher with EBUSY — never watch the Rust side.
+      ignored: ["**/src-tauri/**"],
+    },
   },
 });

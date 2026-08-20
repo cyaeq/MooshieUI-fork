@@ -36,6 +36,7 @@
   import { lazyThumbnail } from "../../utils/lazyThumbnail.js";
   import type { OutputImage, InterrogationResult } from "../../types/index.js";
   import { onMount, onDestroy, tick } from "svelte";
+  import { fly } from "svelte/transition";
   import BottomPanel from "./BottomPanel.svelte";
   import ContextMenu from "../ui/ContextMenu.svelte";
   import type { ContextMenuItem } from "../ui/ContextMenu.svelte";
@@ -43,6 +44,7 @@
   import { interrogateGalleryImage, interrogateImage } from "../../utils/api.js";
   import { ipcListen, isTauri } from "../../utils/ipc.js";
   import { progress } from "../../stores/progress.svelte.js";
+  import { generationLayout } from "../../stores/generationLayout.svelte.js";
   import {
     isDroppableSection,
     handleMetadataImport,
@@ -314,6 +316,11 @@
   }
 
   function sectionsForSide(side: SectionSide): SectionId[] {
+    if (!mobileFriendly && generationLayout.style === "focus") {
+      return generationLayout.controlsSide === side
+        ? sectionOrder.filter((id) => sectionVisible(id))
+        : [];
+    }
     return sectionOrder.filter((id) => sectionVisible(id) && sectionSides[id] === side);
   }
 
@@ -321,7 +328,13 @@
   const rightSections = $derived(sectionsForSide("right"));
   const leftHasSections = $derived(leftSections.length > 0);
   const rightHasSections = $derived(rightSections.length > 0);
-  const controlsSide = $derived(leftHasSections ? "left" : "right");
+  const focusLayout = $derived(!mobileFriendly && generationLayout.style === "focus");
+  const controlsSide = $derived(focusLayout ? generationLayout.controlsSide : leftHasSections ? "left" : "right");
+  const mobileCommandInset = $derived(
+    generationLayout.mobilePanelControls === "quick"
+      ? "calc(env(safe-area-inset-top) + 7rem)"
+      : "calc(env(safe-area-inset-top) + 4.25rem)"
+  );
 
   // Sections for rendering — excludes the dragged section so drop zone indices match computeDropTarget
   const leftRenderSections = $derived(leftSections.filter((id) => id !== draggingSection));
@@ -792,9 +805,12 @@
           left?: number; right?: number; bottom?: number;
           leftCollapsed?: boolean; rightCollapsed?: boolean; bottomCollapsed?: boolean;
         };
+        const savedLeft = typeof s.left === "number" ? s.left : LEFT_DEFAULT;
+        const savedRight = typeof s.right === "number" ? s.right : RIGHT_DEFAULT;
         return {
-          left: typeof s.left === "number" ? Math.min(LEFT_MAX, Math.max(LEFT_MIN, s.left)) : LEFT_DEFAULT,
-          right: typeof s.right === "number" ? Math.min(RIGHT_MAX, Math.max(RIGHT_MIN, s.right)) : RIGHT_DEFAULT,
+          // Migrate the former compact defaults while preserving deliberate user resizing.
+          left: savedLeft === 320 ? LEFT_DEFAULT : Math.min(LEFT_MAX, Math.max(LEFT_MIN, savedLeft)),
+          right: savedRight === 290 ? RIGHT_DEFAULT : Math.min(RIGHT_MAX, Math.max(RIGHT_MIN, savedRight)),
           bottom: typeof s.bottom === "number" ? Math.min(BOTTOM_MAX, Math.max(BOTTOM_MIN, s.bottom)) : BOTTOM_DEFAULT,
           leftCollapsed: s.leftCollapsed === true,
           rightCollapsed: s.rightCollapsed === true,
@@ -812,12 +828,12 @@
   }
 
   const LEFT_DEFAULT = 360;
-  const RIGHT_DEFAULT = 310;
+  const RIGHT_DEFAULT = 330;
   const BOTTOM_DEFAULT = 180;
-  const LEFT_MIN = 260;
-  const LEFT_MAX = 520;
-  const RIGHT_MIN = 240;
-  const RIGHT_MAX = 450;
+  const LEFT_MIN = 300;
+  const LEFT_MAX = 480;
+  const RIGHT_MIN = 280;
+  const RIGHT_MAX = 440;
   const BOTTOM_MIN = 100;
   const BOTTOM_MAX = 500;
 
@@ -924,16 +940,11 @@
     const p = panelProgress(panel);
     const closed = 1 - p;
     if (panel === "left") {
-      // Left panel: at progress=0 push container left by (100% - peek) so only the right-edge handle is visible.
       return `translateX(calc(${(-closed * 100).toFixed(3)}% + ${(closed * MOBILE_HANDLE_PEEK_PX).toFixed(3)}px))`;
     }
     if (panel === "right") {
-      // Right panel mirrors the left.
       return `translateX(calc(${(closed * 100).toFixed(3)}% - ${(closed * MOBILE_HANDLE_PEEK_PX).toFixed(3)}px))`;
     }
-    // Bottom panel: container is anchored from top=4rem (just under the mode switcher) to bottom=(4rem + safe-area)
-    // so the bottom navigation bar stays visible. At progress=0 we translate the container down by
-    // (containerHeight - handlePeek) so only the top handle peeks above the bottom nav.
     return `translateY(calc(${(closed * 100).toFixed(3)}% - ${(closed * MOBILE_HANDLE_PEEK_PX).toFixed(3)}px))`;
   }
 
@@ -997,6 +1008,7 @@
     const deltaX = e.clientX - mobileHandleStartX;
     const deltaY = e.clientY - mobileHandleStartY;
     if (!mobileHandleAxisLocked(panel, deltaX, deltaY)) return;
+    e.preventDefault();
     const viewportW = Math.max(window.innerWidth, 1);
     const viewportH = Math.max(window.innerHeight, 1);
 
@@ -2081,16 +2093,53 @@
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class="flex flex-col h-full select-none {draggingSection ? 'cursor-grabbing' : ''}"
+    class="studio-generation-shell flex flex-col h-full select-none {draggingSection ? 'cursor-grabbing' : ''}"
+    data-studio-mode={mobileFriendly ? 'mobile' : 'desktop'}
+    data-mobile-panel-controls={mobileFriendly ? generationLayout.mobilePanelControls : undefined}
     onmousemove={onPointerMove}
     onmouseup={onPointerUp}
     onmouseleave={onPointerUp}
   >
+    {#if !mobileFriendly}
+      <header class="studio-command-bar shrink-0 flex items-center gap-4 px-4 py-2.5">
+        <div class="studio-command-brand hidden sm:flex items-center gap-2 min-w-0">
+          <span class="truncate text-sm font-semibold tracking-wide text-neutral-100">Mooshie Studio</span>
+          <span class="hidden lg:inline text-[10px] uppercase tracking-[0.16em] text-neutral-500">{locale.t('nav.generate')}</span>
+        </div>
+        <div class="studio-command-modes flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+          {#each modes as mode}
+            <button
+              type="button"
+              onclick={() => {
+                generation.mode = mode.id;
+                if (mode.id !== "inpainting") canvas.isCanvasMode = false;
+              }}
+              class="studio-command-mode shrink-0 px-3 py-1.5 text-[11px] font-medium rounded-md transition-colors {generation.mode === mode.id
+                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-950/40'
+                : 'text-neutral-500 hover:bg-neutral-800/80 hover:text-neutral-200'}"
+            >
+              {mode.label()}
+            </button>
+          {/each}
+        </div>
+        <div class="studio-command-actions shrink-0">
+          {#if !focusLayout}
+            <GenerateButton canvasEditorRef={canvasEditorRef} mobileFriendly={false} />
+          {/if}
+        </div>
+      </header>
+    {/if}
     <!-- Main row: side panels + preview. The bottom panel spans the full width below this row. -->
-    <div class="flex flex-1 min-h-0">
+    <div
+      class="studio-workbench flex flex-1 min-h-0 {focusLayout ? 'studio-focus-workbench' : ''}"
+      data-controls-side={focusLayout ? controlsSide : undefined}
+    >
     {#if mobileFriendly}
-      <div class="fixed top-2 left-1/2 -translate-x-1/2 z-50 w-[min(96vw,34rem)] px-2">
-        <div class="w-full flex gap-1 bg-neutral-900 rounded-lg p-1 border border-neutral-700 shadow">
+      <div
+        class="studio-mobile-command-overlay fixed left-1/2 -translate-x-1/2 z-50 w-[min(96vw,34rem)] px-2 pointer-events-none"
+        style="top: max(env(safe-area-inset-top), 0.5rem);"
+      >
+        <div class="studio-mode-switch w-full flex gap-1 bg-neutral-900 rounded-lg p-1 border border-neutral-700 shadow pointer-events-auto">
           {#each modes as mode}
             <button
               onclick={() => {
@@ -2098,13 +2147,44 @@
                 if (mode.id !== "inpainting") canvas.isCanvasMode = false;
               }}
               class="min-w-0 flex-1 whitespace-nowrap text-[11px] leading-none px-2.5 py-2 rounded-md transition-colors {generation.mode === mode.id
-                ? 'bg-neutral-700 text-white'
+                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-950/40'
                 : 'text-neutral-400 hover:text-neutral-200'}"
             >
               {mode.label()}
             </button>
-          {/each}
+            {/each}
         </div>
+        {#if generationLayout.mobilePanelControls === "quick"}
+          <div class="studio-mobile-quick-actions mt-1.5 flex items-center justify-center gap-1.5">
+            <button
+              type="button"
+              class="studio-mobile-quick-action touch-target {leftCollapsed ? '' : 'is-open'}"
+              onclick={toggleLeftPanel}
+              title={leftCollapsed ? locale.t('generation.panel.expand_left') : locale.t('generation.panel.collapse_left')}
+              aria-label={leftCollapsed ? locale.t('generation.panel.expand_left') : locale.t('generation.panel.collapse_left')}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h7"/><circle cx="18" cy="15" r="3"/><path d="M18 13.5v3"/><path d="M16.5 15h3"/></svg>
+            </button>
+            <button
+              type="button"
+              class="studio-mobile-quick-action touch-target {bottomCollapsed ? '' : 'is-open'}"
+              onclick={toggleBottomPanel}
+              title={bottomCollapsed ? locale.t('generation.panel.expand_bottom') : locale.t('generation.panel.collapse_bottom')}
+              aria-label={bottomCollapsed ? locale.t('generation.panel.expand_bottom') : locale.t('generation.panel.collapse_bottom')}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 15 3-3 2 2 3-4 3 4"/></svg>
+            </button>
+            <button
+              type="button"
+              class="studio-mobile-quick-action touch-target {rightCollapsed ? '' : 'is-open'}"
+              onclick={toggleRightPanel}
+              title={rightCollapsed ? locale.t('generation.panel.expand_right') : locale.t('generation.panel.collapse_right')}
+              aria-label={rightCollapsed ? locale.t('generation.panel.expand_right') : locale.t('generation.panel.collapse_right')}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16"/><path d="M4 9h16"/><path d="M4 15h16"/><path d="M4 19h16"/><circle cx="8" cy="7" r="1"/><circle cx="8" cy="17" r="1"/></svg>
+            </button>
+          </div>
+        {/if}
       </div>
     {/if}
 
@@ -2112,8 +2192,8 @@
       {#if !leftCollapsed}
         <div
           bind:this={leftColumnRef}
-          use:wheelScrollLock
-          class="{mobileFriendly
+          use:wheelScrollLock={!focusLayout}
+          class="studio-panel studio-panel-left {mobileFriendly
             ? 'fixed left-0 right-0 top-0 bg-neutral-950 flex flex-col overflow-hidden will-change-transform'
             : 'overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] px-3 pt-2 flex flex-col gap-2 shrink-0 border-r'} {draggingSection && pendingDrop?.side === 'left' ? 'border-indigo-500/50' : 'border-transparent'} {compare.enabled ? 'compare-cell-glow' : ''}"
           style={mobileFriendly
@@ -2125,18 +2205,23 @@
           <button
             type="button"
             onclick={toggleLeftPanel}
-            class="absolute right-2 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-700/80 bg-neutral-800/95 text-neutral-300 shadow-lg hover:bg-indigo-700/70 transition-colors touch-target"
+            class="studio-mobile-edge-handle absolute right-0 top-1/2 -translate-y-1/2 z-20 w-6 h-12 flex items-center justify-center rounded-l border border-r-0 transition-colors {leftCollapsed
+              ? 'bg-indigo-600 border-indigo-500/70 text-white hover:bg-indigo-500'
+              : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700'}"
             title={leftCollapsed ? locale.t('generation.panel.expand_left') : locale.t('generation.panel.collapse_left')}
             aria-label={leftCollapsed ? locale.t('generation.panel.expand_left') : locale.t('generation.panel.collapse_left')}
           >
-            <svg class="h-5 w-5 {leftCollapsed ? '' : 'rotate-180'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform {leftCollapsed ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
         {/if}
-        <div class="{mobileFriendly ? 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden pl-3 pr-5 pt-20 pb-6 flex flex-col gap-2' : 'contents'}">
+        <div
+          class="{mobileFriendly ? 'studio-mobile-panel-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden pl-3 pr-5 pb-6 flex flex-col gap-2' : 'contents'}"
+          style={mobileFriendly ? `padding-top: ${mobileCommandInset};` : undefined}
+        >
         {#if controlsSide === "left" && !mobileFriendly}
-          <div class="sticky top-0 z-10 bg-neutral-950 -mx-3 px-3 -mt-2 pt-2 pb-2">
+          <div class="studio-inline-controls sticky top-0 z-10 bg-neutral-950 -mx-3 px-3 -mt-2 pt-2 pb-2">
             <div class="flex gap-1.5 items-center">
-              <div class="flex gap-1 bg-neutral-900 rounded-lg p-1 flex-1">
+              <div class="studio-inline-mode-switch flex gap-1 bg-neutral-900 rounded-lg p-1 flex-1">
                 {#each modes as mode}
                   <button
                     onclick={() => {
@@ -2144,7 +2229,7 @@
                       if (mode.id !== "inpainting") canvas.isCanvasMode = false;
                     }}
                     class="flex-1 text-xs py-1.5 rounded-md transition-colors {generation.mode === mode.id
-                      ? 'bg-neutral-700 text-white'
+                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-950/40'
                       : 'text-neutral-400 hover:text-neutral-200'}"
                   >
                     {mode.label()}
@@ -2190,12 +2275,15 @@
           {@render sectionDropZone("left", i + 1)}
         {/each}
 
-        {#if controlsSide === "left"}
-          <div class="sticky bottom-0 z-20 mt-auto border-t border-neutral-800 bg-neutral-950 rounded-t-lg px-3 pt-3 pb-5">
-            <h3 class="text-xs text-neutral-400 mb-1.5 font-medium">{locale.t('generation.generate')}</h3>
-            <GenerateButton canvasEditorRef={canvasEditorRef} />
+        {#if focusLayout && controlsSide === "left" && !canvas.isCanvasMode}
+          <div class="studio-focus-materials min-h-0 overflow-hidden border-t border-neutral-800/60 pt-2">
+            <BottomPanel onupscale={upscaleImage} oninpaint={inpaintImage} onrefine={refineImage} oncontextmenu={handleSessionContextMenu} />
+          </div>
+          <div class="studio-focus-generate shrink-0">
+            <GenerateButton canvasEditorRef={canvasEditorRef} mobileFriendly={false} />
           </div>
         {/if}
+
         </div>
         </div>
       {/if}
@@ -2224,14 +2312,18 @@
     {/if}
 
     {#if canvas.isCanvasMode}
-      <div class="flex-1 min-w-0 flex flex-col overflow-hidden">
+      <div
+        class="flex-1 min-w-0 flex flex-col overflow-hidden"
+        style={mobileFriendly ? `padding-top: ${mobileCommandInset};` : undefined}
+      >
         <CanvasEditor bind:this={canvasEditorRef} />
       </div>
     {:else}
       <div class="flex-1 min-w-0 flex flex-col overflow-hidden">
         <!-- Preview area -->
         <div
-          class="relative flex-1 min-h-0 p-6 {mobileFriendly ? 'pt-20' : ''} flex flex-col gap-4 overflow-hidden"
+          class="studio-preview-stage relative flex-1 min-h-0 p-6 flex flex-col gap-4 overflow-hidden"
+          style={mobileFriendly ? `padding-top: calc(${mobileCommandInset} + 0.75rem);` : undefined}
         >
           <ProgressBar />
           <!-- The preview is a square (aspect-square), so it must be sized to the
@@ -2245,11 +2337,25 @@
             </div>
           </div>
 
+          {#if mobileFriendly}
+            <div
+              class="studio-generate-dock absolute inset-x-0 bottom-0 z-30 px-4 pb-[calc(env(safe-area-inset-bottom)+4.5rem)] pt-6 bg-gradient-to-t from-neutral-950 via-neutral-950/80 to-transparent pointer-events-none"
+              transition:fly={{ y: 24, duration: 200 }}
+            >
+              <div class="pointer-events-auto">
+                <GenerateButton canvasEditorRef={canvasEditorRef} mobileFriendly />
+              </div>
+            </div>
+          {/if}
+
           <!-- The H3 guide covers the preview rather than the screen, on purpose:
                it is read while writing the prompt, so the side panels must stay
                lit and clickable. Padding mirrors this container's own. -->
           {#if h3Guide.open && generation.mode === "video"}
-            <div class="absolute inset-0 z-20 p-6 {mobileFriendly ? 'pt-20' : ''}">
+            <div
+              class="absolute inset-0 z-20 p-6"
+              style={mobileFriendly ? `padding-top: calc(${mobileCommandInset} + 0.75rem);` : undefined}
+            >
               <H3PromptGuidePanel onClose={() => h3Guide.hide()} />
             </div>
           {/if}
@@ -2279,11 +2385,11 @@
       </div>
     {/if}
 
-    {#if (rightHasSections || controlsSide === "right" || draggingSection) && !rightCollapsed}
+      {#if (rightHasSections || controlsSide === "right" || draggingSection) && !rightCollapsed}
       <div
         bind:this={rightColumnRef}
-        use:wheelScrollLock
-        class="{mobileFriendly
+        use:wheelScrollLock={!focusLayout}
+        class="studio-panel studio-panel-right {mobileFriendly
           ? 'fixed left-0 right-0 top-0 bg-neutral-950 flex flex-col overflow-hidden will-change-transform'
           : 'overflow-y-auto [scrollbar-gutter:stable] p-3 flex flex-col gap-2 shrink-0 border-l'} {draggingSection && pendingDrop?.side === 'right' ? 'border-indigo-500/50' : 'border-transparent'} {compare.enabled ? 'compare-cell-glow' : ''}"
         style={mobileFriendly
@@ -2295,18 +2401,23 @@
           <button
             type="button"
             onclick={toggleRightPanel}
-            class="absolute left-2 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-700/80 bg-neutral-800/95 text-neutral-300 shadow-lg hover:bg-indigo-700/70 transition-colors touch-target"
+            class="studio-mobile-edge-handle absolute left-0 top-1/2 -translate-y-1/2 z-20 w-6 h-12 flex items-center justify-center rounded-r border border-l-0 transition-colors {rightCollapsed
+              ? 'bg-indigo-600 border-indigo-500/70 text-white hover:bg-indigo-500'
+              : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700'}"
             title={rightCollapsed ? locale.t('generation.panel.expand_right') : locale.t('generation.panel.collapse_right')}
             aria-label={rightCollapsed ? locale.t('generation.panel.expand_right') : locale.t('generation.panel.collapse_right')}
           >
-            <svg class="h-5 w-5 {rightCollapsed ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform {rightCollapsed ? '' : 'rotate-180'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
         {/if}
-        <div class="{mobileFriendly ? 'flex-1 min-h-0 overflow-y-auto pl-5 pr-3 pt-20 pb-6 space-y-2' : 'contents'}">
+        <div
+          class="{mobileFriendly ? 'studio-mobile-panel-scroll flex-1 min-h-0 overflow-y-auto pl-5 pr-3 pb-6 space-y-2' : 'contents'}"
+          style={mobileFriendly ? `padding-top: ${mobileCommandInset};` : undefined}
+        >
         {#if controlsSide === "right" && !mobileFriendly}
-          <div class="sticky top-0 z-10 bg-neutral-950 -mx-3 px-3 -mt-3 pt-3 pb-2">
+          <div class="studio-inline-controls sticky top-0 z-10 bg-neutral-950 -mx-3 px-3 -mt-3 pt-3 pb-2">
             <div class="flex gap-1.5 items-center">
-              <div class="flex gap-1 bg-neutral-900 rounded-lg p-1 flex-1">
+              <div class="studio-inline-mode-switch flex gap-1 bg-neutral-900 rounded-lg p-1 flex-1">
                 {#each modes as mode}
                   <button
                     onclick={() => {
@@ -2314,7 +2425,7 @@
                       if (mode.id !== "inpainting") canvas.isCanvasMode = false;
                     }}
                     class="flex-1 text-xs py-1.5 rounded-md transition-colors {generation.mode === mode.id
-                      ? 'bg-neutral-700 text-white'
+                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-950/40'
                       : 'text-neutral-400 hover:text-neutral-200'}"
                   >
                     {mode.label()}
@@ -2360,43 +2471,46 @@
           {@render sectionDropZone("right", i + 1)}
         {/each}
 
-        {#if controlsSide === "right"}
-          <div class="sticky bottom-0 z-20 mt-auto border-t border-neutral-800 bg-neutral-950 rounded-t-lg px-3 pt-3 pb-5">
-            <h3 class="text-xs text-neutral-400 mb-1.5 font-medium">{locale.t('generation.generate')}</h3>
-            <GenerateButton canvasEditorRef={canvasEditorRef} />
+        {#if focusLayout && controlsSide === "right" && !canvas.isCanvasMode}
+          <div class="studio-focus-materials min-h-0 overflow-hidden border-t border-neutral-800/60 pt-2">
+            <BottomPanel onupscale={upscaleImage} oninpaint={inpaintImage} onrefine={refineImage} oncontextmenu={handleSessionContextMenu} />
+          </div>
+          <div class="studio-focus-generate shrink-0">
+            <GenerateButton canvasEditorRef={canvasEditorRef} mobileFriendly={false} />
           </div>
         {/if}
+
         </div>
         </div>
     {/if}
     </div>
 
     <!-- Bottom panel (LoRAs / Images / Prompts) — full width, below the side panels -->
-    {#if mobileFriendly && leftCollapsed && (leftHasSections || controlsSide === "left")}
+    {#if mobileFriendly && generationLayout.mobilePanelControls === "edge" && leftCollapsed && (leftHasSections || controlsSide === "left")}
       <button
         type="button"
         onclick={toggleLeftPanel}
-        class="fixed left-2 top-1/2 z-40 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-700/80 bg-neutral-800/95 text-neutral-300 shadow-lg hover:bg-indigo-700/70 transition-colors touch-target"
+        class="studio-mobile-edge-handle fixed left-0 top-1/2 z-40 -translate-y-1/2 w-6 h-12 flex items-center justify-center rounded-r border border-l-0 bg-indigo-600 border-indigo-500/70 text-white hover:bg-indigo-500 transition-colors"
         title={locale.t('generation.panel.expand_left')}
         aria-label={locale.t('generation.panel.expand_left')}
       >
-        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
     {/if}
 
-    {#if mobileFriendly && rightCollapsed && (rightHasSections || controlsSide === "right")}
+    {#if mobileFriendly && generationLayout.mobilePanelControls === "edge" && rightCollapsed && (rightHasSections || controlsSide === "right")}
       <button
         type="button"
         onclick={toggleRightPanel}
-        class="fixed right-2 top-1/2 z-40 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-700/80 bg-neutral-800/95 text-neutral-300 shadow-lg hover:bg-indigo-700/70 transition-colors touch-target"
+        class="studio-mobile-edge-handle fixed right-0 top-1/2 z-40 -translate-y-1/2 w-6 h-12 flex items-center justify-center rounded-l border border-r-0 bg-indigo-600 border-indigo-500/70 text-white hover:bg-indigo-500 transition-colors"
         title={locale.t('generation.panel.expand_right')}
         aria-label={locale.t('generation.panel.expand_right')}
       >
-        <svg class="h-5 w-5 rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
     {/if}
 
-    {#if !mobileFriendly && !canvas.isCanvasMode}
+    {#if !mobileFriendly && !canvas.isCanvasMode && !focusLayout}
       <div class="relative shrink-0 flex items-center group">
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
@@ -2428,8 +2542,8 @@
 
   {#if mobileFriendly && !bottomCollapsed}
     <div
-      class="fixed left-0 right-0 overflow-hidden pointer-events-none"
-      style="top: 4rem; bottom: calc(env(safe-area-inset-bottom) + 4rem); z-index: {mobilePanelZIndex('bottom')};"
+      class="studio-mobile-bottom-panel fixed left-0 right-0 overflow-hidden pointer-events-none"
+      style="top: {mobileCommandInset}; bottom: calc(env(safe-area-inset-bottom) + 4rem); z-index: {mobilePanelZIndex('bottom')};"
     >
       <div
         class="absolute inset-0 bg-neutral-950 pointer-events-auto flex flex-col will-change-transform shadow-[0_-8px_24px_rgba(0,0,0,0.4)]"
@@ -2439,26 +2553,28 @@
         <button
           type="button"
           onclick={toggleBottomPanel}
-          class="shrink-0 mx-auto mt-2 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-700/80 bg-neutral-800/95 text-neutral-300 shadow-lg hover:bg-indigo-700/70 transition-colors touch-target"
+          class="shrink-0 mx-auto mt-2 h-6 w-12 flex items-center justify-center rounded-t border border-b-0 transition-colors {bottomCollapsed
+            ? 'bg-indigo-600 border-indigo-500/70 text-white hover:bg-indigo-500'
+            : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700'}"
           title={bottomCollapsed ? locale.t('generation.panel.expand_bottom') : locale.t('generation.panel.collapse_bottom')}
           aria-label={bottomCollapsed ? locale.t('generation.panel.expand_bottom') : locale.t('generation.panel.collapse_bottom')}
         >
-          <svg class="h-5 w-5 {bottomCollapsed ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform {bottomCollapsed ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="flex-1 min-h-0 border-t border-neutral-800/50 overflow-hidden">
           <BottomPanel onupscale={upscaleImage} oninpaint={inpaintImage} onrefine={refineImage} oncontextmenu={handleSessionContextMenu} />
         </div>
       </div>
     </div>
-  {:else if mobileFriendly}
+  {:else if mobileFriendly && generationLayout.mobilePanelControls === "edge"}
     <button
       type="button"
       onclick={toggleBottomPanel}
-      class="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] left-1/2 z-40 flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border border-neutral-700/80 bg-neutral-800/95 text-neutral-300 shadow-lg hover:bg-indigo-700/70 transition-colors touch-target"
+      class="studio-mobile-edge-handle fixed bottom-[calc(env(safe-area-inset-bottom)+4rem)] left-1/2 z-40 h-6 w-12 -translate-x-1/2 flex items-center justify-center rounded-t border border-b-0 bg-indigo-600 border-indigo-500/70 text-white hover:bg-indigo-500 transition-colors"
       title={locale.t('generation.panel.expand_bottom')}
       aria-label={locale.t('generation.panel.expand_bottom')}
     >
-      <svg class="h-5 w-5 rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </button>
   {/if}
 

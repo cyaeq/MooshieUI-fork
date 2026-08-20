@@ -44,7 +44,7 @@
 </script>
 
 <nav
-  class="shrink-0 flex items-stretch gap-0.5 bg-neutral-950/95 backdrop-blur border-t border-neutral-800 px-1 pt-1 pb-[max(env(safe-area-inset-bottom),0.25rem)] tap-highlight-none"
+  class="studio-mobile-tabbar shrink-0 flex items-stretch gap-0.5 bg-neutral-950/95 backdrop-blur border-t border-neutral-800 px-1 pt-1 pb-[max(env(safe-area-inset-bottom),0.25rem)] tap-highlight-none"
 >
   {#each tabs as tab}
     {@const active = current === tab.id}

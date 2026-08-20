@@ -353,7 +353,7 @@
   }
 </script>
 
-<div class="relative w-full aspect-square bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 flex items-center justify-center overflow-hidden group">
+<div class="studio-preview-frame relative w-full aspect-square bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 flex items-center justify-center overflow-hidden group">
   {#if progress.lastOutputVideo}
     <!-- A finished video wins over the last sampled still frame. No context
          menu: openPreviewContextMenu is image-scoped, and the player's own

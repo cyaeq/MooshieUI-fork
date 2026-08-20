@@ -235,7 +235,7 @@
 
 </script>
 
-<div class="space-y-2">
+<div class="studio-prompt-editor space-y-2">
   {#if generation.stylePresetsEnabled}
     <div>
       <label class="block text-xs text-neutral-400 mb-1">{locale.t('generation.prompts.style_preset')}<InfoTip text={locale.t('generation.prompts.style_preset_tip')} /></label>
@@ -416,6 +416,7 @@
     {#if generation.isAnima}
       <div class="text-[10px] text-amber-400/80 mb-1">{locale.t('generation.prompts.anima_artist_tip')}</div>
     {/if}
+    <div class="studio-prompt-primary">
     <PromptTextarea
       bind:value={generation.positivePrompt}
       placeholder={generation.isAnima ? locale.t("generation.prompts.positive_placeholder_anima") : locale.t("generation.prompts.positive_placeholder")}
@@ -425,6 +426,7 @@
       tagAssist={!isVideoMode}
       highlightLoraWords={true}
     />
+    </div>
     {#if !isVideoMode && hasRegionalPrompting && !regionalPromptingSupported}
       <p class="mt-1 text-[10px] text-amber-300">
         {locale.t("generation.regional.unsupported")}
@@ -454,6 +456,7 @@
         <span class="ml-1 text-[10px] text-amber-400">({locale.t('generation.prompts.negative_disabled_for_model')})</span>
       {/if}
     </label>
+    <div class="studio-prompt-negative">
     <PromptTextarea
       bind:value={generation.negativePrompt}
       placeholder={locale.t('generation.prompts.negative_placeholder')}
@@ -462,6 +465,7 @@
       storageKey="mooshieui.promptHeight.negative"
       tagAssist={!isVideoMode}
     />
+    </div>
     <ExtraPromptBoxList side="negative" />
   </div>
   {/snippet}
