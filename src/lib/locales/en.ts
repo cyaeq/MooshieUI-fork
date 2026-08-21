@@ -1956,6 +1956,9 @@ const en: Record<string, string> = {
   "settings.about.modal_title": "About MooshieUI",
   "settings.about.modal_tagline": "A friendly desktop interface for AI image generation.",
   "settings.about.github_button": "GitHub Repository",
+  "settings.about.manual_update_notice": "Automatic updates are disabled for this unofficial build. Download new fork builds manually from Fork Releases, or switch to the official MooshieUI release.",
+  "settings.about.fork_updates": "Fork Releases",
+  "settings.about.official_updates": "Official Updates",
   "settings.about.gpu_garden_button": "gpu.garden",
   "settings.about.report_issue_button": "Report an Issue",
 

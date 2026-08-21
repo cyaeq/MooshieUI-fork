@@ -81,39 +81,25 @@ jobs:
       # Built as three separate `tauri build` invocations (one process per format)
       # instead of one `--target ... ` call with `targets: "all"`. Tauri's bundler
       # binary-patches a __TAURI_BUNDLE_TYPE marker into the compiled binary per
-      # package type (deb/rpm/appimage) so the updater plugin on the user's machine
-      # knows which installer to run; when all three formats are built in a single
+      # package type (deb/rpm/appimage); when all three formats are built in a single
       # process/job (as before), that patch/restore cycle shares mutable on-disk
       # state across formats. Isolating each build to its own process — mirroring
       # how the Windows job already isolates to `--bundles nsis` — removes that
-      # shared state entirely. AppImage is built first since it's the only format
-      # our updater manifest (latest.json) actually distributes.
+      # shared state entirely.
       - name: Build Tauri app (Linux, AppImage)
         if: runner.os != 'Windows'
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --target ${{ matrix.target }} --bundles appimage
 
       - name: Build Tauri app (Linux, deb)
         if: runner.os != 'Windows'
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --target ${{ matrix.target }} --bundles deb
 
       - name: Build Tauri app (Linux, rpm)
         if: runner.os != 'Windows'
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --target ${{ matrix.target }} --bundles rpm
 
       - name: Build Tauri app (Windows, NSIS only)
         if: runner.os == 'Windows'
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --target ${{ matrix.target }} --bundles nsis
 
       - name: Upload build artifacts
@@ -138,57 +124,10 @@ jobs:
       - name: Collect release files
         run: |
           mkdir -p release-files
-          find artifacts -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage*" -o -name "*.exe" -o -name "*.exe.sig" -o -name "*.msi*" -o -name "*.nsis.zip*" \) -exec cp {} release-files/ \;
+          find artifacts -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" -o -name "*.exe" -o -name "*.msi*" -o -name "*.nsis.zip*" \) -exec cp {} release-files/ \;
           echo "=== Release files ==="
           ls -lh release-files/ || echo "No release files found"
           [ -f "$(find release-files -type f -print -quit)" ] || { echo "ERROR: No release files collected, aborting"; exit 1; }
-
-      - name: Generate updater manifest (latest.json)
-        env:
-          TAG: ${{ github.event.inputs.tag || github.ref_name }}
-          REPO_URL: https://github.com/${{ github.repository }}/releases/download
-        run: |
-          VERSION="${TAG#v}"
-          PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-          # Discover updater artifact names from actual files to avoid tag/version mismatch issues.
-          LINUX_BUNDLE=$(find release-files -maxdepth 1 -type f -name "*.AppImage" -printf "%f\n" | head -n1)
-          WINDOWS_BUNDLE=$(find release-files -maxdepth 1 -type f -name "*x64-setup.exe" -printf "%f\n" | head -n1)
-
-          if [ -z "$LINUX_BUNDLE" ] || [ -z "$WINDOWS_BUNDLE" ]; then
-            echo "Missing updater artifacts: linux='$LINUX_BUNDLE' windows='$WINDOWS_BUNDLE'"
-            exit 1
-          fi
-
-          if [ ! -f "release-files/${LINUX_BUNDLE}.sig" ] || [ ! -f "release-files/${WINDOWS_BUNDLE}.sig" ]; then
-            echo "Missing updater signatures: linux='${LINUX_BUNDLE}.sig' windows='${WINDOWS_BUNDLE}.sig'"
-            exit 1
-          fi
-
-          APPIMAGE_SIG=$(cat "release-files/${LINUX_BUNDLE}.sig")
-          WINDOWS_SIG=$(cat "release-files/${WINDOWS_BUNDLE}.sig")
-
-          # Build latest.json with jq for proper escaping
-          jq -n \
-            --arg version "$VERSION" \
-            --arg notes "MooshieUI ${TAG}" \
-            --arg pub_date "$PUB_DATE" \
-            --arg linux_sig "$APPIMAGE_SIG" \
-            --arg linux_url "${REPO_URL}/${TAG}/${LINUX_BUNDLE}" \
-            --arg win_sig "$WINDOWS_SIG" \
-            --arg win_url "${REPO_URL}/${TAG}/${WINDOWS_BUNDLE}" \
-            '{
-              version: $version,
-              notes: $notes,
-              pub_date: $pub_date,
-              platforms: {
-                "linux-x86_64": { signature: $linux_sig, url: $linux_url },
-                "windows-x86_64": { signature: $win_sig, url: $win_url }
-              }
-            }' > release-files/latest.json
-
-          echo "=== latest.json ==="
-          cat release-files/latest.json
 
       - name: Preserve release files before checkout
         run: cp -r release-files /tmp/release-files

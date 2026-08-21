@@ -6127,7 +6127,7 @@ pub async fn fetch_release_notes(
 ) -> Result<Vec<ReleaseNote>, AppError> {
     let resp = state
         .http_client
-        .get("https://api.github.com/repos/Mooshieblob1/MooshieUI/releases")
+        .get("https://api.github.com/repos/cyaeq/MooshieUI-fork/releases")
         .query(&[("per_page", "20")])
         .header("Accept", "application/vnd.github+json")
         .header("User-Agent", "MooshieUI")
