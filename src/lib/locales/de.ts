@@ -151,6 +151,7 @@ const de: Record<string, string> = {
   "setup.error_last_output": "Letzte Ausgabe:",
   "setup.detecting_hardware": "Hardware wird erkannt...",
   "setup.welcome": "Willkommen! Lass uns loslegen.",
+  "setup.skip": "Skip for now", "setup.skip_warning": "Skipping setup is temporary. Most generation features will remain unavailable until ComfyUI and its dependencies are configured.", "setup.skip_confirm_title": "Skip initial setup?", "setup.skip_confirm_desc": "You can look around, but most features will not work. The setup page will appear again the next time you open MooshieUI.", "setup.skip_anyway": "Skip anyway",
   "setup.choose_folder_placeholder": "Ordner auswählen...",
   "setup.scanning_model_dirs": "Vorhandene Modellverzeichnisse werden gesucht...",
   "setup.footer": "MooshieUI — Die freundliche Oberfläche für ComfyUI",
@@ -217,6 +218,7 @@ const de: Record<string, string> = {
   "settings.appearance.layout_desc": "Wählen Sie zwischen dem touchoptimierten mobilen Layout und der vollständigen Desktop-Oberfläche.",
   "settings.appearance.layout_use_desktop": "Zum Desktop-Layout wechseln",
   "settings.appearance.layout_use_mobile": "Zum mobilen Layout wechseln",
+  "settings.appearance.mobile_tabs_title": "Mobile bottom bar", "settings.appearance.mobile_tabs_desc": "Choose which optional destinations appear in the mobile bottom bar.", "settings.appearance.mobile_tabs_required": "Generate and Settings are always shown.",
   "settings.appearance.theme": "Design",
   "settings.appearance.theme_dark": "Dunkel",
   "settings.appearance.theme_light": "Hell",
@@ -2983,6 +2985,50 @@ const de: Record<string, string> = {
   "generation.video.pick_for_slot": "Bild für {slot} auswählen",
 
   "generation.video.pick_refs_title": "Referenzbilder auswählen",
+
+  "app.exit.tooltip": "Anwendung beenden",
+  "app.exit.confirm": "MooshieUI beenden? Laufende Vorgänge werden gestoppt.",
+  "settings.lan.restart_note": "Starten Sie MooshieUI nach Änderungen am LAN-Zugriff neu, damit der Server die Netzwerkschnittstelle neu binden kann.",
+  "settings.sync.server_desc": "Übertragen Sie einen Einstellungs-Snapshot über diesen MooshieUI-Server. Es erfolgt keine automatische Übertragung.",
+  "settings.sync.upload_button": "Zum Server hochladen",
+  "settings.sync.uploading": "Wird hochgeladen...",
+  "settings.sync.upload_confirm": "Einstellungen dieses Browsers hochladen? Der vorhandene Server-Snapshot wird ersetzt.",
+  "settings.sync.uploaded": "Einstellungen zum Server hochgeladen",
+  "settings.sync.download_button": "Vom Server herunterladen",
+  "settings.sync.downloading": "Wird heruntergeladen...",
+  "settings.sync.download_confirm": "Server-Einstellungen herunterladen? Die Einstellungen dieses Browsers werden ersetzt.",
+  "settings.sync.downloaded": "Server-Einstellungen angewendet",
+  "settings.sync.no_server_data": "Auf diesem Server wurde noch kein Einstellungs-Snapshot hochgeladen.",
+  "settings.sync.browser_transfer_note": "Server-Upload und -Download sind im Browser-/LAN-Modus verfügbar. Lokaler JSON-Export und -Import bleiben unten verfügbar.",
+  "prompt_favourites.search_placeholder": "Gespeicherte Prompts durchsuchen",
+
+  "prompt_favourites.save_current": "Aktuellen speichern",
+
+  "prompt_favourites.new_group": "Neue Gruppe",
+
+  "prompt_favourites.export": "Exportieren",
+
+  "prompt_favourites.prompt_library": "Prompt-Bibliothek",
+
+  "prompt_favourites.history": "Verlauf",
+
+  "prompt_favourites.save": "Speichern",
+
+  "prompt_favourites.derive": "Ableiten",
+
+  "prompt_favourites.positive_prompt_dialog": "Positiver Prompt",
+
+  "prompt_favourites.rename_group": "Umbenennen",
+
+  "prompt_favourites.rename_group_dialog": "Gruppe umbenennen",
+
+  "prompt_favourites.delete_group": "Löschen",
+
+  "prompt_favourites.delete_group_confirm": "Gruppe \"{title}\" löschen? Ihre Prompts werden in die Bibliothek verschoben.",
+
+  "prompt_favourites.edit": "Bearbeiten",
+
+  "prompt_favourites.negative_prompt_dialog": "Negativer Prompt",
 
 };
 export default de;

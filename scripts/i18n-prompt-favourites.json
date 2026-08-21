@@ -1,0 +1,134 @@
+{
+  "en": {
+    "prompt_favourites.search_placeholder": "Search saved prompts",
+    "prompt_favourites.save_current": "Save current",
+    "prompt_favourites.new_group": "New group",
+    "prompt_favourites.export": "Export",
+    "prompt_favourites.prompt_library": "Prompt library",
+    "prompt_favourites.history": "History",
+    "prompt_favourites.save": "Save",
+    "prompt_favourites.derive": "Derive",
+    "prompt_favourites.positive_prompt_dialog": "Positive prompt"
+  },
+  "zh": {
+    "prompt_favourites.search_placeholder": "搜索已保存的提示词",
+    "prompt_favourites.save_current": "保存当前",
+    "prompt_favourites.new_group": "新建分组",
+    "prompt_favourites.export": "导出",
+    "prompt_favourites.prompt_library": "提示词库",
+    "prompt_favourites.history": "历史记录",
+    "prompt_favourites.save": "保存",
+    "prompt_favourites.derive": "派生",
+    "prompt_favourites.positive_prompt_dialog": "正向提示词"
+  },
+  "zh-tw": {
+    "prompt_favourites.search_placeholder": "搜尋已儲存的提示詞",
+    "prompt_favourites.save_current": "儲存目前",
+    "prompt_favourites.new_group": "新增分組",
+    "prompt_favourites.export": "匯出",
+    "prompt_favourites.prompt_library": "提示詞庫",
+    "prompt_favourites.history": "歷史記錄",
+    "prompt_favourites.save": "儲存",
+    "prompt_favourites.derive": "衍生",
+    "prompt_favourites.positive_prompt_dialog": "正向提示詞"
+  },
+  "de": {
+    "prompt_favourites.search_placeholder": "Gespeicherte Prompts durchsuchen",
+    "prompt_favourites.save_current": "Aktuellen speichern",
+    "prompt_favourites.new_group": "Neue Gruppe",
+    "prompt_favourites.export": "Exportieren",
+    "prompt_favourites.prompt_library": "Prompt-Bibliothek",
+    "prompt_favourites.history": "Verlauf",
+    "prompt_favourites.save": "Speichern",
+    "prompt_favourites.derive": "Ableiten",
+    "prompt_favourites.positive_prompt_dialog": "Positiver Prompt"
+  },
+  "es": {
+    "prompt_favourites.search_placeholder": "Buscar prompts guardados",
+    "prompt_favourites.save_current": "Guardar actual",
+    "prompt_favourites.new_group": "Nuevo grupo",
+    "prompt_favourites.export": "Exportar",
+    "prompt_favourites.prompt_library": "Biblioteca de prompts",
+    "prompt_favourites.history": "Historial",
+    "prompt_favourites.save": "Guardar",
+    "prompt_favourites.derive": "Derivar",
+    "prompt_favourites.positive_prompt_dialog": "Prompt positivo"
+  },
+  "fr": {
+    "prompt_favourites.search_placeholder": "Rechercher des prompts enregistrés",
+    "prompt_favourites.save_current": "Enregistrer actuel",
+    "prompt_favourites.new_group": "Nouveau groupe",
+    "prompt_favourites.export": "Exporter",
+    "prompt_favourites.prompt_library": "Bibliothèque de prompts",
+    "prompt_favourites.history": "Historique",
+    "prompt_favourites.save": "Enregistrer",
+    "prompt_favourites.derive": "Dériver",
+    "prompt_favourites.positive_prompt_dialog": "Prompt positif"
+  },
+  "it": {
+    "prompt_favourites.search_placeholder": "Cerca prompt salvati",
+    "prompt_favourites.save_current": "Salva corrente",
+    "prompt_favourites.new_group": "Nuovo gruppo",
+    "prompt_favourites.export": "Esporta",
+    "prompt_favourites.prompt_library": "Libreria prompt",
+    "prompt_favourites.history": "Cronologia",
+    "prompt_favourites.save": "Salva",
+    "prompt_favourites.derive": "Deriva",
+    "prompt_favourites.positive_prompt_dialog": "Prompt positivo"
+  },
+  "ja": {
+    "prompt_favourites.search_placeholder": "保存済みプロンプトを検索",
+    "prompt_favourites.save_current": "現在を保存",
+    "prompt_favourites.new_group": "新しいグループ",
+    "prompt_favourites.export": "エクスポート",
+    "prompt_favourites.prompt_library": "プロンプトライブラリ",
+    "prompt_favourites.history": "履歴",
+    "prompt_favourites.save": "保存",
+    "prompt_favourites.derive": "派生",
+    "prompt_favourites.positive_prompt_dialog": "ポジティブプロンプト"
+  },
+  "ko": {
+    "prompt_favourites.search_placeholder": "저장된 프롬프트 검색",
+    "prompt_favourites.save_current": "현재 저장",
+    "prompt_favourites.new_group": "새 그룹",
+    "prompt_favourites.export": "내보내기",
+    "prompt_favourites.prompt_library": "프롬프트 라이브러리",
+    "prompt_favourites.history": "기록",
+    "prompt_favourites.save": "저장",
+    "prompt_favourites.derive": "파생",
+    "prompt_favourites.positive_prompt_dialog": "긍정 프롬프트"
+  },
+  "pl": {
+    "prompt_favourites.search_placeholder": "Szukaj zapisanych promptów",
+    "prompt_favourites.save_current": "Zapisz bieżący",
+    "prompt_favourites.new_group": "Nowa grupa",
+    "prompt_favourites.export": "Eksportuj",
+    "prompt_favourites.prompt_library": "Biblioteka promptów",
+    "prompt_favourites.history": "Historia",
+    "prompt_favourites.save": "Zapisz",
+    "prompt_favourites.derive": "Wyprowadź",
+    "prompt_favourites.positive_prompt_dialog": "Pozytywny prompt"
+  },
+  "pt": {
+    "prompt_favourites.search_placeholder": "Pesquisar prompts salvos",
+    "prompt_favourites.save_current": "Salvar atual",
+    "prompt_favourites.new_group": "Novo grupo",
+    "prompt_favourites.export": "Exportar",
+    "prompt_favourites.prompt_library": "Biblioteca de prompts",
+    "prompt_favourites.history": "Histórico",
+    "prompt_favourites.save": "Salvar",
+    "prompt_favourites.derive": "Derivar",
+    "prompt_favourites.positive_prompt_dialog": "Prompt positivo"
+  },
+  "ru": {
+    "prompt_favourites.search_placeholder": "Поиск сохранённых промптов",
+    "prompt_favourites.save_current": "Сохранить текущий",
+    "prompt_favourites.new_group": "Новая группа",
+    "prompt_favourites.export": "Экспорт",
+    "prompt_favourites.prompt_library": "Библиотека промптов",
+    "prompt_favourites.history": "История",
+    "prompt_favourites.save": "Сохранить",
+    "prompt_favourites.derive": "Производный",
+    "prompt_favourites.positive_prompt_dialog": "Положительный промпт"
+  }
+}

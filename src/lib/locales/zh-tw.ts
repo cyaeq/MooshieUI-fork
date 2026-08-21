@@ -151,6 +151,7 @@ const zhTw: Record<string, string> = {
   "setup.error_last_output": "最後輸出：",
   "setup.detecting_hardware": "正在偵測硬體...",
   "setup.welcome": "歡迎！讓我們開始設定。",
+  "setup.skip": "暫時跳過", "setup.skip_warning": "跳過設定僅對本次工作階段有效。設定 ComfyUI 及其相依套件前，大部分生成功能將無法使用。", "setup.skip_confirm_title": "跳過首次設定？", "setup.skip_confirm_desc": "你可以先瀏覽介面，但大部分功能無法正常運作。下次重新開啟 MooshieUI 時仍會顯示設定頁面。", "setup.skip_anyway": "仍然跳過",
   "setup.choose_folder_placeholder": "選擇資料夾...",
   "setup.scanning_model_dirs": "正在掃描現有模型目錄...",
   "setup.footer": "MooshieUI — ComfyUI 的友善介面",
@@ -215,6 +216,7 @@ const zhTw: Record<string, string> = {
   "settings.appearance.layout_desc": "在觸控最佳化的行動裝置版面與完整桌面介面之間選擇。",
   "settings.appearance.layout_use_desktop": "切換至桌面版面",
   "settings.appearance.layout_use_mobile": "切換至行動版面",
+  "settings.appearance.mobile_tabs_title": "行動版底部列", "settings.appearance.mobile_tabs_desc": "選擇要顯示在行動版底部列中的選用頁面。", "settings.appearance.mobile_tabs_required": "「生成」和「設定」一律顯示。",
   "settings.appearance.theme": "主題",
   "settings.appearance.theme_dark": "深色",
   "settings.appearance.theme_light": "淺色",
@@ -2981,6 +2983,50 @@ const zhTw: Record<string, string> = {
   "generation.video.pick_for_slot": "為 {slot} 選擇圖像",
 
   "generation.video.pick_refs_title": "選擇參考圖像",
+
+  "app.exit.tooltip": "結束應用程式",
+  "app.exit.confirm": "確定結束 MooshieUI 嗎？進行中的工作將會停止。",
+  "settings.lan.restart_note": "變更區域網路存取後請重新啟動 MooshieUI，讓伺服器重新綁定正確的網路介面。",
+  "settings.sync.server_desc": "透過此 MooshieUI 伺服器傳輸偏好設定快照，不會自動上傳或下載。",
+  "settings.sync.upload_button": "上傳到伺服器",
+  "settings.sync.uploading": "正在上傳...",
+  "settings.sync.upload_confirm": "上傳此瀏覽器的偏好設定嗎？這會取代伺服器上的現有快照。",
+  "settings.sync.uploaded": "偏好設定已上傳到伺服器",
+  "settings.sync.download_button": "從伺服器下載",
+  "settings.sync.downloading": "正在下載...",
+  "settings.sync.download_confirm": "下載伺服器偏好設定嗎？這會取代目前瀏覽器中的偏好設定。",
+  "settings.sync.downloaded": "已套用伺服器偏好設定",
+  "settings.sync.no_server_data": "此伺服器尚未上傳偏好設定快照。",
+  "settings.sync.browser_transfer_note": "伺服器上傳與下載僅適用於瀏覽器/區域網路模式；下方仍可使用本機 JSON 匯出與匯入。",
+  "prompt_favourites.search_placeholder": "搜尋已儲存的提示詞",
+
+  "prompt_favourites.save_current": "儲存目前",
+
+  "prompt_favourites.new_group": "新增分組",
+
+  "prompt_favourites.export": "匯出",
+
+  "prompt_favourites.prompt_library": "提示詞庫",
+
+  "prompt_favourites.history": "歷史記錄",
+
+  "prompt_favourites.save": "儲存",
+
+  "prompt_favourites.derive": "衍生",
+
+  "prompt_favourites.positive_prompt_dialog": "正向提示詞",
+
+  "prompt_favourites.rename_group": "重新命名",
+
+  "prompt_favourites.rename_group_dialog": "重新命名分組",
+
+  "prompt_favourites.delete_group": "刪除",
+
+  "prompt_favourites.delete_group_confirm": "刪除分組「{title}」？其提示詞會移到提示詞庫。",
+
+  "prompt_favourites.edit": "編輯",
+
+  "prompt_favourites.negative_prompt_dialog": "負向提示詞",
 
 };
 export default zhTw;

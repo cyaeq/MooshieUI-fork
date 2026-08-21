@@ -15,7 +15,7 @@
   import { progress } from "./lib/stores/progress.svelte.js";
   import { gallery, isVideoImage } from "./lib/stores/gallery.svelte.js";
   import { models } from "./lib/stores/models.svelte.js";
-  import { uploadImageBytes, getConfig, readImageMetadata, getQueue, recoverPromptOutputs, readTempImage, getComfyuiVersion, type ComfyUiVersionInfo } from "./lib/utils/api.js";
+  import { uploadImageBytes, getConfig, readImageMetadata, getQueue, recoverPromptOutputs, readTempImage, getComfyuiVersion, quitApplication, type ComfyUiVersionInfo } from "./lib/utils/api.js";
   import { loadOutputImageForGenerationInput, uploadOutputImageForGenerationInput, sendImageToVideoFrame, addImageToVideoReference, videoReferenceSlotsFree } from "./lib/utils/galleryActions.js";
   import { H3_MAX_REF_IMAGES } from "./lib/utils/videoParams.js";
   import { prepareOutputImageForEditMode } from "./lib/utils/editImagePreparation.js";
@@ -25,7 +25,6 @@
   import { canvas } from "./lib/stores/canvas.svelte.js";
   import { accessibility } from "./lib/stores/accessibility.svelte.js";
   import { locale } from "./lib/stores/locale.svelte.js";
-  import { prefsSync } from "./lib/stores/prefsSync.svelte.js";
   import type { GenerationMode, GenerationParams, OutputImage, InterrogationResult } from "./lib/types/index.js";
   import UpdateNotification from "./lib/components/updater/UpdateNotification.svelte";
   import DownloadBanner from "./lib/components/downloads/DownloadBanner.svelte";
@@ -140,7 +139,7 @@
   const FETCH_TIMEOUT_MS = 45_000;
   const GENERATION_DONE_TOAST_VISIBLE_MS = 6_000;
   const GENERATION_DONE_TOAST_EXIT_MS = 220;
-  type PrimaryPage = "generate" | "gallery" | "modelhub" | "artists" | "characters" | "settings";
+  type PrimaryPage = "generate" | "gallery" | "modelhub" | "artists" | "prompts" | "characters" | "settings";
   type GenerationDoneToast = {
     id: number;
     imageUrl: string;
@@ -580,6 +579,7 @@
   let authChecked = $state(false);
   let userRole = $state<"admin" | "moderator" | "user" | "anonymous">("admin");
   let canUseModelhub = $state(true);
+  let canExitApplication = $state(false);
   let tokenConfigured = $state(true);
   let loginToken = $state("");
   let loginError = $state<string | null>(null);
@@ -590,6 +590,7 @@
       authChecked = true;
       userRole = "admin";
       canUseModelhub = true;
+      canExitApplication = false;
       return true;
     }
     try {
@@ -599,6 +600,7 @@
       const data = await resp.json();
       userRole = data.role ?? "anonymous";
       canUseModelhub = data.can_use_modelhub ?? false;
+      canExitApplication = data.can_exit_application === true;
       tokenConfigured = data.token_configured !== false;
       if (data.role === "anonymous" && data.auth_required) {
         authRequired = true;
@@ -628,6 +630,7 @@
       const data = await statusResp.json();
       userRole = data.role ?? "anonymous";
       canUseModelhub = data.can_use_modelhub ?? false;
+      canExitApplication = data.can_exit_application === true;
       tokenConfigured = data.token_configured !== false;
       if (data.role === "anonymous") {
         loginError = locale.t("auth.token_invalid");
@@ -644,6 +647,16 @@
       loginError = String(e);
     } finally {
       loginBusy = false;
+    }
+  }
+
+  async function handleExitApplication() {
+    if (!canExitApplication) return;
+    if (!window.confirm(locale.t("app.exit.confirm"))) return;
+    try {
+      await quitApplication();
+    } catch (error) {
+      gallery.showToast(String(error), "error");
     }
   }
   let versionTapCount = $state(0);
@@ -2382,6 +2395,13 @@
     await initApp();
   }
 
+  async function onSetupSkipped() {
+    // Deliberately session-only: check_setup remains false, so the wizard returns
+    // the next time the app is opened.
+    setupComplete = true;
+    await initApp();
+  }
+
   let autoStartEnabled = $state(true); // will be read from config
 
   async function initApp() {
@@ -2406,13 +2426,6 @@
 
     // Load persisted settings
     await Promise.all([generation.loadSettings(), autocomplete.loadSettings(), locale.loadSettings()]);
-
-    // Browser/LAN mode: pull the server-side preference snapshot (or seed it
-    // from current local state) once local settings have loaded and the auth
-    // token is available. No-op in Tauri desktop mode.
-    if (isBrowserMode) {
-      void prefsSync.loadAndApply();
-    }
 
     // Prompt assistant: detect hardware + pre-select recommended model at launch.
     promptAssistant.init();
@@ -3151,7 +3164,7 @@
     ></div>
   </div>
 {:else if !setupComplete}
-  <SetupWizard onSetupComplete={onSetupDone} />
+  <SetupWizard onSetupComplete={onSetupDone} onSkip={onSetupSkipped} />
 {:else if useMobileLayout}
   <MobileApp
     canUseModelhub={canUseModelhub}
@@ -3392,6 +3405,26 @@
         /></svg
       >
     </button>
+
+    {#if canExitApplication}
+      <button
+        class="w-8 h-8 rounded-lg flex items-center justify-center text-neutral-400 hover:bg-red-950 hover:text-red-300 transition-colors mx-auto"
+        onclick={handleExitApplication}
+        title={locale.t('app.exit.tooltip')}
+        aria-label={locale.t('app.exit.tooltip')}
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="w-4.5 h-4.5"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        ><path d="M12 2v10" /><path d="M18.4 6.6a9 9 0 1 1-12.77.04" /></svg>
+      </button>
+    {/if}
 
     <NotificationBell onOpenSettings={() => (currentPage = "settings")} />
 

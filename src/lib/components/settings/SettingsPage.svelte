@@ -1,12 +1,12 @@
 <script lang="ts">
   import type { AppConfig, LlmProviderState, QueueInfo } from "../../types/index.js";
-  import { getConfig, updateConfig, stopComfyui, startComfyui, fetchReleaseNotes, importImageDirectory, exportLogs, exportLogsContent, getGalleryPath, setGalleryPath, setStorageLimit, installAttentionBackend, checkAttentionBackend, clearAllQueues, getQueue, getGpuStats, getComfyuiVersion, updateComfyui } from "../../utils/api.js";
+  import { getConfig, updateConfig, stopComfyui, startComfyui, fetchReleaseNotes, importImageDirectory, exportLogs, exportLogsContent, getGalleryPath, setGalleryPath, setStorageLimit, installAttentionBackend, checkAttentionBackend, clearAllQueues, getQueue, getGpuStats, getComfyuiVersion, updateComfyui, getLanInfo } from "../../utils/api.js";
   import type { ReleaseNote, ImportResult, AttentionBackendStatus, BackendSupport, ComfyUiVersionInfo } from "../../utils/api.js";
   import { connection } from "../../stores/connection.svelte.js";
   import { autocomplete } from "../../stores/autocomplete.svelte.js";
   import { generation } from "../../stores/generation.svelte.js";
   import { accessibility } from "../../stores/accessibility.svelte.js";
-  import { locale, LOCALE_OPTIONS } from "../../stores/locale.svelte.js";
+  import { locale, LOCALE_OPTIONS, type Locale } from "../../stores/locale.svelte.js";
   import { gallery } from "../../stores/gallery.svelte.js";
   import { prefsSync } from "../../stores/prefsSync.svelte.js";
   import { models } from "../../stores/models.svelte.js";
@@ -20,6 +20,7 @@
   import LlmProviderPanel from "./LlmProviderPanel.svelte";
   import { ipcInvoke, ipcListen, isTauri, isBrowserMode, authHeaders, clearAuthToken, ipcOpenDirectoryDialog } from "../../utils/ipc.js";
   import { useMobileLayout, isMobileUA, setForceDesktopOverride } from "../../utils/device.js";
+  import { mobileNavigation, MOBILE_OPTIONAL_TABS, type MobileTab } from "../../stores/mobileNavigation.svelte.js";
   import {
     applyTheme,
     THEME_PALETTES,
@@ -51,6 +52,16 @@
     setForceDesktopOverride(useMobileLayout);
     location.reload();
   }
+
+  const mobileTabLabelKeys: Record<MobileTab, string> = {
+    generate: "nav.generate",
+    gallery: "nav.gallery",
+    modelhub: "nav.modelhub",
+    artists: "nav.artists",
+    prompts: "bottom_panel.tab.prompts",
+    characters: "artist_gallery.tab_characters",
+    settings: "nav.settings",
+  };
 
   // Reopen the first-run setup wizard. check_setup auto-recovers the completion
   // marker (main.py present), so we can't clear backend state to force it;
@@ -175,6 +186,7 @@
   let prefsImportDone = $state(false);
   let prefsTransferError = $state<string | null>(null);
   let prefsFileInput = $state<HTMLInputElement | null>(null);
+  let prefsServerMessage = $state<"uploaded" | "downloaded" | "no_data" | null>(null);
 
   // Clear queue state (mod/admin only)
   let clearQueueBusy = $state(false);
@@ -327,7 +339,7 @@
   /** Copy `http://<lan-ip>:<port>/?token=<token>` to the clipboard. */
   async function copyLanAccessLink() {
     if (!config?.lan_access_token || lanAddresses.length === 0) return;
-    const port = config.ui_server_port || 3200;
+    const port = config.ui_server_port || 3201;
     const base = lanAddresses[0]!.replace(/^https?:\/\//, "").replace(/:\d+$/, "");
     const url = `http://${base}:${port}/?token=${encodeURIComponent(config.lan_access_token)}`;
     try {
@@ -606,8 +618,9 @@
 
   async function loadLanInfo() {
     try {
-      const resp = await fetch("/internal-api/_auth/lan_info", { headers: authHeaders() });
-      const data = await resp.json();
+      const data = isTauri
+        ? await getLanInfo()
+        : await fetch("/internal-api/_auth/lan_info", { headers: authHeaders() }).then((resp) => resp.json());
       lanAddresses = data.addresses ?? [];
     } catch {
       lanAddresses = [];
@@ -889,6 +902,31 @@
     await prefsSync.importJSON(raw);
     prefsImportDone = true;
     setTimeout(() => (prefsImportDone = false), 4000);
+  }
+
+  async function uploadPrefsToServer() {
+    if (!isBrowserMode || prefsSync.serverTransfer) return;
+    if (!window.confirm(locale.t("settings.sync.upload_confirm"))) return;
+    prefsServerMessage = null;
+    prefsTransferError = null;
+    try {
+      await prefsSync.uploadToServer();
+      prefsServerMessage = "uploaded";
+    } catch (e) {
+      prefsTransferError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function downloadPrefsFromServer() {
+    if (!isBrowserMode || prefsSync.serverTransfer) return;
+    if (!window.confirm(locale.t("settings.sync.download_confirm"))) return;
+    prefsServerMessage = null;
+    prefsTransferError = null;
+    try {
+      prefsServerMessage = (await prefsSync.downloadFromServer()) ? "downloaded" : "no_data";
+    } catch (e) {
+      prefsTransferError = e instanceof Error ? e.message : String(e);
+    }
   }
 
   async function handleImportDirectory() {
@@ -1295,6 +1333,8 @@
   let originalAttentionBackend = "";
   let originalExtraArgs = "";
   let originalModelPaths = "";
+  let originalUiServerPort = 3201;
+  let originalLanEnabled = false;
 
   async function loadConfig() {
     config = await getConfig();
@@ -1401,9 +1441,7 @@
     loadInstallPath();
     getGalleryPath().then(p => { galleryPathDisplay = p; }).catch(() => {});
     void loadCacheCount();
-    if (isBrowserMode) {
-      loadLanInfo();
-    }
+    if (isAdmin) void loadLanInfo();
     startQueuePolling();
   });
 
@@ -1420,6 +1458,8 @@
     originalAttentionBackend = config.attention_backend;
     originalExtraArgs = config.extra_args.join(" ");
     originalModelPaths = config.extra_model_paths ?? "";
+    originalUiServerPort = config.ui_server_port;
+    originalLanEnabled = config.lan_enabled;
   }
 
   function checkRestartNeeded() {
@@ -1430,6 +1470,8 @@
       config.server_mode !== originalMode ||
       config.vram_mode !== originalVramMode ||
       config.attention_backend !== originalAttentionBackend ||
+      config.ui_server_port !== originalUiServerPort ||
+      config.lan_enabled !== originalLanEnabled ||
       config.extra_args.join(" ") !== originalExtraArgs ||
       (config.extra_model_paths ?? "") !== originalModelPaths;
   }
@@ -1982,7 +2024,6 @@
                 {/if}
               </p>
             {/if}
-            {#if config.browser_mode}
               <div class="flex items-center justify-between pt-2 border-t border-neutral-800">
                 <div>
                   <label class="text-xs text-neutral-300 font-medium">{locale.t('settings.lan.enable')}</label>
@@ -1999,6 +2040,21 @@
                   />
                   <div class="w-9 h-5 bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
                 </label>
+              </div>
+              <p class="text-[11px] text-neutral-500">{locale.t('settings.lan.restart_note')}</p>
+              <div class="flex items-center justify-between gap-4 pt-2 border-t border-neutral-800">
+                <label for="lan-ui-port" class="text-xs text-neutral-300 font-medium">
+                  {locale.t('settings.connection.port')}
+                </label>
+                <input
+                  id="lan-ui-port"
+                  type="number"
+                  min="1"
+                  max="65535"
+                  bind:value={config.ui_server_port}
+                  onchange={() => autoSave()}
+                  class="w-28 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-right text-sm text-neutral-200 focus:border-indigo-500 focus:outline-none"
+                />
               </div>
               {#if config.lan_enabled}
                 <div class="space-y-3 pt-2 border-t border-neutral-800">
@@ -2068,7 +2124,6 @@
                     {/if}
                   </div>
                 </div>
-              {/if}
             {/if}
           </div>
         </section>
@@ -2086,42 +2141,41 @@
           </button>
           {#if !collapsed.sync}
           <div class="px-5 pb-5 space-y-4">
-            <!-- Master toggle -->
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <p class="text-sm font-medium text-neutral-200">{locale.t('settings.sync.enable_label')}</p>
-                <p class="text-xs text-neutral-500 mt-0.5">{locale.t('settings.sync.enable_desc')}</p>
-              </div>
-              <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                <input
-                  type="checkbox"
-                  checked={prefsSync.enabled}
-                  onchange={(e) => prefsSync.setEnabled((e.target as HTMLInputElement).checked)}
-                  class="sr-only peer"
-                />
-                <div class="w-9 h-5 bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-              </label>
-            </div>
-
             {#if isBrowserMode}
-              <div class="flex flex-wrap items-center gap-3">
+              <p class="text-xs text-neutral-500">{locale.t('settings.sync.server_desc')}</p>
+              <div class="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onclick={() => void prefsSync.forceSyncNow()}
-                  disabled={prefsSync.syncing || !prefsSync.enabled}
+                  onclick={uploadPrefsToServer}
+                  disabled={prefsSync.serverTransfer !== null}
                   class="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-100 rounded-lg text-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {prefsSync.syncing ? locale.t('settings.sync.syncing') : locale.t('settings.sync.sync_now')}
+                  {prefsSync.serverTransfer === "upload" ? locale.t('settings.sync.uploading') : locale.t('settings.sync.upload_button')}
+                </button>
+                <button
+                  type="button"
+                  onclick={downloadPrefsFromServer}
+                  disabled={prefsSync.serverTransfer !== null}
+                  class="px-4 py-2 border border-neutral-700 text-neutral-300 hover:border-indigo-500 hover:text-indigo-300 rounded-lg text-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {prefsSync.serverTransfer === "download" ? locale.t('settings.sync.downloading') : locale.t('settings.sync.download_button')}
                 </button>
                 {#if prefsSync.lastSyncedAt}
                   <span class="text-xs text-neutral-500">{locale.t('settings.sync.last_synced', { time: locale.formatDateTime(prefsSync.lastSyncedAt) })}</span>
                 {/if}
               </div>
+              {#if prefsServerMessage === "uploaded"}
+                <p class="text-xs text-emerald-400">{locale.t('settings.sync.uploaded')}</p>
+              {:else if prefsServerMessage === "downloaded"}
+                <p class="text-xs text-emerald-400">{locale.t('settings.sync.downloaded')}</p>
+              {:else if prefsServerMessage === "no_data"}
+                <p class="text-xs text-amber-400">{locale.t('settings.sync.no_server_data')}</p>
+              {/if}
               {#if prefsSync.lastSyncError}
                 <p class="text-xs text-red-400">{prefsSync.lastSyncError}</p>
               {/if}
             {:else}
-              <p class="text-xs text-neutral-500">{locale.t('settings.sync.browser_only_note')}</p>
+              <p class="text-xs text-neutral-500">{locale.t('settings.sync.browser_transfer_note')}</p>
             {/if}
             <p class="text-[11px] text-neutral-500">{locale.t('settings.sync.scope_desc')}</p>
 
@@ -2458,6 +2512,26 @@
                   {useMobileLayout ? locale.t('settings.appearance.layout_use_desktop') : locale.t('settings.appearance.layout_use_mobile')}
                 </button>
               </div>
+            </div>
+          {/if}
+          {#if mobileFriendly}
+            <div class="rounded-lg border border-neutral-700 bg-neutral-950/60 p-4">
+              <p class="text-xs font-medium text-neutral-200">{locale.t("settings.appearance.mobile_tabs_title")}</p>
+              <p class="mt-1 text-[10px] text-neutral-500">{locale.t("settings.appearance.mobile_tabs_desc")}</p>
+              <div class="mt-3 grid grid-cols-2 gap-2">
+                {#each MOBILE_OPTIONAL_TABS as tab}
+                  <label class="flex min-h-11 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs text-neutral-300">
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4 accent-indigo-500"
+                      checked={mobileNavigation.isEnabled(tab)}
+                      onchange={(event) => mobileNavigation.setEnabled(tab, event.currentTarget.checked)}
+                    />
+                    <span>{locale.t(mobileTabLabelKeys[tab])}</span>
+                  </label>
+                {/each}
+              </div>
+              <p class="mt-2 text-[10px] text-neutral-600">{locale.t("settings.appearance.mobile_tabs_required")}</p>
             </div>
           {/if}
           <p class="text-xs font-medium text-neutral-300">{locale.t("settings.appearance.builtin_theme")}</p>

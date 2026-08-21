@@ -151,6 +151,7 @@ const ja: Record<string, string> = {
   "setup.error_last_output": "最終出力：",
   "setup.detecting_hardware": "ハードウェアを検出中...",
   "setup.welcome": "ようこそ！セットアップを始めましょう。",
+  "setup.skip": "Skip for now", "setup.skip_warning": "Skipping setup is temporary. Most generation features will remain unavailable until ComfyUI and its dependencies are configured.", "setup.skip_confirm_title": "Skip initial setup?", "setup.skip_confirm_desc": "You can look around, but most features will not work. The setup page will appear again the next time you open MooshieUI.", "setup.skip_anyway": "Skip anyway",
   "setup.choose_folder_placeholder": "フォルダを選択...",
   "setup.scanning_model_dirs": "既存のモデルディレクトリをスキャン中...",
   "setup.footer": "MooshieUI — ComfyUIのフレンドリーなインターフェース",
@@ -217,6 +218,7 @@ const ja: Record<string, string> = {
   "settings.appearance.layout_desc": "タッチ操作向けのモバイルレイアウトと、フルデスクトップインターフェースを切り替えます。",
   "settings.appearance.layout_use_desktop": "デスクトップレイアウトに切り替え",
   "settings.appearance.layout_use_mobile": "モバイルレイアウトに切り替え",
+  "settings.appearance.mobile_tabs_title": "Mobile bottom bar", "settings.appearance.mobile_tabs_desc": "Choose which optional destinations appear in the mobile bottom bar.", "settings.appearance.mobile_tabs_required": "Generate and Settings are always shown.",
   "settings.appearance.theme": "テーマ",
   "settings.appearance.theme_dark": "ダーク",
   "settings.appearance.theme_light": "ライト",
@@ -3006,6 +3008,50 @@ const ja: Record<string, string> = {
   "generation.video.pick_for_slot": "{slot} の画像を選択",
 
   "generation.video.pick_refs_title": "参照画像を選択",
+
+  "app.exit.tooltip": "アプリケーションを終了",
+  "app.exit.confirm": "MooshieUIを終了しますか？実行中の作業は停止します。",
+  "settings.lan.restart_note": "LANアクセスを変更した後は、正しいネットワークインターフェースに再バインドするためMooshieUIを再起動してください。",
+  "settings.sync.server_desc": "このMooshieUIサーバーを介して設定スナップショットを転送します。自動転送は行われません。",
+  "settings.sync.upload_button": "サーバーにアップロード",
+  "settings.sync.uploading": "アップロード中...",
+  "settings.sync.upload_confirm": "このブラウザの設定をアップロードしますか？サーバー上のスナップショットは置き換えられます。",
+  "settings.sync.uploaded": "設定をサーバーにアップロードしました",
+  "settings.sync.download_button": "サーバーからダウンロード",
+  "settings.sync.downloading": "ダウンロード中...",
+  "settings.sync.download_confirm": "サーバーの設定をダウンロードしますか？現在のブラウザ設定は置き換えられます。",
+  "settings.sync.downloaded": "サーバー設定を適用しました",
+  "settings.sync.no_server_data": "このサーバーにはまだ設定スナップショットがありません。",
+  "settings.sync.browser_transfer_note": "サーバーへのアップロードとダウンロードはブラウザ/LANモードで利用できます。ローカルJSONのエクスポートとインポートも下で利用できます。",
+  "prompt_favourites.search_placeholder": "保存済みプロンプトを検索",
+
+  "prompt_favourites.save_current": "現在を保存",
+
+  "prompt_favourites.new_group": "新しいグループ",
+
+  "prompt_favourites.export": "エクスポート",
+
+  "prompt_favourites.prompt_library": "プロンプトライブラリ",
+
+  "prompt_favourites.history": "履歴",
+
+  "prompt_favourites.save": "保存",
+
+  "prompt_favourites.derive": "派生",
+
+  "prompt_favourites.positive_prompt_dialog": "ポジティブプロンプト",
+
+  "prompt_favourites.rename_group": "名前を変更",
+
+  "prompt_favourites.rename_group_dialog": "グループ名を変更",
+
+  "prompt_favourites.delete_group": "削除",
+
+  "prompt_favourites.delete_group_confirm": "グループ「{title}」を削除しますか？プロンプトはライブラリに移動されます。",
+
+  "prompt_favourites.edit": "編集",
+
+  "prompt_favourites.negative_prompt_dialog": "ネガティブプロンプト",
 
 };
 export default ja;

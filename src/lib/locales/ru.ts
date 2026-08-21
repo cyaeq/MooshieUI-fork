@@ -151,6 +151,7 @@ const ru: Record<string, string> = {
   "setup.error_last_output": "Последний вывод:",
   "setup.detecting_hardware": "Обнаружение оборудования...",
   "setup.welcome": "Добро пожаловать! Давайте настроим.",
+  "setup.skip": "Skip for now", "setup.skip_warning": "Skipping setup is temporary. Most generation features will remain unavailable until ComfyUI and its dependencies are configured.", "setup.skip_confirm_title": "Skip initial setup?", "setup.skip_confirm_desc": "You can look around, but most features will not work. The setup page will appear again the next time you open MooshieUI.", "setup.skip_anyway": "Skip anyway",
   "setup.choose_folder_placeholder": "Выберите папку...",
   "setup.scanning_model_dirs": "Поиск существующих каталогов моделей...",
   "setup.footer": "MooshieUI — Дружественный интерфейс для ComfyUI",
@@ -215,6 +216,7 @@ const ru: Record<string, string> = {
   "settings.appearance.layout_desc": "Выберите между оптимизированным для сенсорного управления мобильным макетом и полным интерфейсом для настольных устройств.",
   "settings.appearance.layout_use_desktop": "Перейти к десктопному макету",
   "settings.appearance.layout_use_mobile": "Перейти к мобильному макету",
+  "settings.appearance.mobile_tabs_title": "Mobile bottom bar", "settings.appearance.mobile_tabs_desc": "Choose which optional destinations appear in the mobile bottom bar.", "settings.appearance.mobile_tabs_required": "Generate and Settings are always shown.",
   "settings.appearance.theme": "Тема",
   "settings.appearance.theme_dark": "Тёмная",
   "settings.appearance.theme_light": "Светлая",
@@ -2981,6 +2983,50 @@ const ru: Record<string, string> = {
   "generation.video.pick_for_slot": "Выбрать изображение для {slot}",
 
   "generation.video.pick_refs_title": "Выбрать референсные изображения",
+
+  "app.exit.tooltip": "Выйти из приложения",
+  "app.exit.confirm": "Выйти из MooshieUI? Все активные задачи будут остановлены.",
+  "settings.lan.restart_note": "Перезапустите MooshieUI после изменения доступа по LAN, чтобы сервер заново привязался к правильному сетевому интерфейсу.",
+  "settings.sync.server_desc": "Передавайте снимок настроек через этот сервер MooshieUI. Автоматическая передача отключена.",
+  "settings.sync.upload_button": "Загрузить на сервер",
+  "settings.sync.uploading": "Загрузка...",
+  "settings.sync.upload_confirm": "Загрузить настройки этого браузера? Снимок на сервере будет заменён.",
+  "settings.sync.uploaded": "Настройки загружены на сервер",
+  "settings.sync.download_button": "Скачать с сервера",
+  "settings.sync.downloading": "Скачивание...",
+  "settings.sync.download_confirm": "Скачать настройки с сервера? Настройки текущего браузера будут заменены.",
+  "settings.sync.downloaded": "Настройки сервера применены",
+  "settings.sync.no_server_data": "На этот сервер ещё не загружен снимок настроек.",
+  "settings.sync.browser_transfer_note": "Загрузка и скачивание с сервера доступны в режиме браузера/LAN. Локальный экспорт и импорт JSON доступны ниже.",
+  "prompt_favourites.search_placeholder": "Поиск сохранённых промптов",
+
+  "prompt_favourites.save_current": "Сохранить текущий",
+
+  "prompt_favourites.new_group": "Новая группа",
+
+  "prompt_favourites.export": "Экспорт",
+
+  "prompt_favourites.prompt_library": "Библиотека промптов",
+
+  "prompt_favourites.history": "История",
+
+  "prompt_favourites.save": "Сохранить",
+
+  "prompt_favourites.derive": "Производный",
+
+  "prompt_favourites.positive_prompt_dialog": "Положительный промпт",
+
+  "prompt_favourites.rename_group": "Переименовать",
+
+  "prompt_favourites.rename_group_dialog": "Переименовать группу",
+
+  "prompt_favourites.delete_group": "Удалить",
+
+  "prompt_favourites.delete_group_confirm": "Удалить группу «{title}»? Её промпты будут перемещены в библиотеку.",
+
+  "prompt_favourites.edit": "Изменить",
+
+  "prompt_favourites.negative_prompt_dialog": "Негативный промпт",
 
 };
 export default ru;

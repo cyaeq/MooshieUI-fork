@@ -933,6 +933,19 @@ export async function updateConfig(config: AppConfig): Promise<void> {
   return configUpdateChain;
 }
 
+export interface LanInfo {
+  addresses: string[];
+  port: number;
+}
+
+export async function getLanInfo(): Promise<LanInfo> {
+  return ipcInvoke("get_lan_info");
+}
+
+export async function quitApplication(): Promise<void> {
+  return ipcInvoke("quit_application");
+}
+
 export async function getGalleryPath(): Promise<string> {
   return ipcInvoke("get_gallery_path");
 }

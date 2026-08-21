@@ -151,6 +151,11 @@ const zh: Record<string, string> = {
   "setup.error_last_output": "报错输出：",
   "setup.detecting_hardware": "正在检测硬件...",
   "setup.welcome": "欢迎！让我们开始设置。",
+  "setup.skip": "暂时跳过",
+  "setup.skip_warning": "跳过设置仅对本次会话有效。未配置 ComfyUI 及其依赖前，大部分生成功能将无法使用。",
+  "setup.skip_confirm_title": "跳过首次设置？",
+  "setup.skip_confirm_desc": "你可以先浏览界面，但大部分功能无法正常工作。下次重新打开 MooshieUI 时仍会显示设置页面。",
+  "setup.skip_anyway": "仍然跳过",
   "setup.choose_folder_placeholder": "选择文件夹...",
   "setup.scanning_model_dirs": "正在扫描现有模型目录...",
   "setup.footer": "MooshieUI — ComfyUI 的新手友好界面",
@@ -215,6 +220,9 @@ const zh: Record<string, string> = {
   "settings.appearance.layout_desc": "在触控优化的移动端布局与完整的桌面界面之间选择。",
   "settings.appearance.layout_use_desktop": "切换到桌面布局",
   "settings.appearance.layout_use_mobile": "切换到移动端布局",
+  "settings.appearance.mobile_tabs_title": "移动端底栏",
+  "settings.appearance.mobile_tabs_desc": "选择要显示在移动端底栏中的可选页面。",
+  "settings.appearance.mobile_tabs_required": "“生成”和“设置”始终显示。",
   "settings.appearance.theme": "主题",
   "settings.appearance.theme_dark": "深夜模式",
   "settings.appearance.theme_light": "日间模式",
@@ -2982,6 +2990,51 @@ const zh: Record<string, string> = {
   "generation.video.pick_for_slot": "为 {slot} 选择图像",
 
   "generation.video.pick_refs_title": "选择参考图像",
+
+  "app.exit.tooltip": "退出应用",
+  "app.exit.confirm": "确定退出 MooshieUI 吗？进行中的任务将会停止。",
+  "settings.lan.restart_note": "更改局域网访问后请重启 MooshieUI，以便服务器重新绑定正确的网络接口。",
+  "settings.sync.server_desc": "通过此 MooshieUI 服务器传输偏好设置快照，不会自动上传或下载。",
+  "settings.sync.upload_button": "上传到服务器",
+  "settings.sync.uploading": "正在上传...",
+  "settings.sync.upload_confirm": "上传此浏览器的偏好设置吗？这会取代服务器上的现有快照。",
+  "settings.sync.uploaded": "偏好设置已上传到服务器",
+  "settings.sync.download_button": "从服务器下载",
+  "settings.sync.downloading": "正在下载...",
+  "settings.sync.download_confirm": "下载服务器偏好设置吗？这会取代当前浏览器中的偏好设置。",
+  "settings.sync.downloaded": "已应用服务器偏好设置",
+  "settings.sync.no_server_data": "此服务器尚未上传偏好设置快照。",
+  "settings.sync.browser_transfer_note": "服务器上传与下载仅适用于浏览器/局域网模式；下方仍可使用本地 JSON 导出与导入。",
+
+  "prompt_favourites.search_placeholder": "搜索已保存的提示词",
+
+  "prompt_favourites.save_current": "保存当前",
+
+  "prompt_favourites.new_group": "新建分组",
+
+  "prompt_favourites.export": "导出",
+
+  "prompt_favourites.prompt_library": "提示词库",
+
+  "prompt_favourites.history": "历史记录",
+
+  "prompt_favourites.save": "保存",
+
+  "prompt_favourites.derive": "派生",
+
+  "prompt_favourites.positive_prompt_dialog": "正向提示词",
+
+  "prompt_favourites.rename_group": "重命名",
+
+  "prompt_favourites.rename_group_dialog": "重命名分组",
+
+  "prompt_favourites.delete_group": "删除",
+
+  "prompt_favourites.delete_group_confirm": "删除分组「{title}」？其中的提示词会移到提示词库。",
+
+  "prompt_favourites.edit": "编辑",
+
+  "prompt_favourites.negative_prompt_dialog": "负面提示词",
 
 };
 export default zh;
