@@ -20,7 +20,8 @@
   import ModelRequestsPanel from "./ModelRequestsPanel.svelte";
   import QualityTagsEditor from "./QualityTagsEditor.svelte";
   import LlmProviderPanel from "./LlmProviderPanel.svelte";
-  import { ipcInvoke, ipcListen, isTauri, isBrowserMode, authHeaders, clearAuthToken, ipcOpenDirectoryDialog } from "../../utils/ipc.js";
+  import ServerDirectoryPicker from "./ServerDirectoryPicker.svelte";
+  import { ipcInvoke, ipcListen, isTauri, isBrowserMode, authHeaders, clearAuthToken } from "../../utils/ipc.js";
   import { useMobileLayout, isMobileUA, setForceDesktopOverride } from "../../utils/device.js";
   import { mobileNavigation, MOBILE_OPTIONAL_TABS, type MobileTab } from "../../stores/mobileNavigation.svelte.js";
   import {
@@ -96,15 +97,18 @@
     return profiles.find((profile) => profile.id === config!.theme_profile_id) ?? null;
   });
 
+  let serverDirectoryPicker = $state<{
+    title: string;
+    initialPath: string;
+    resolve: (path: string | null) => void;
+  } | null>(null);
+
   /** Open a directory picker. Returns path string or null. */
-  async function openDirectoryDialog(title: string): Promise<string | null> {
-    if (!isTauri) {
-      // Browser / LAN mode: there is no native Tauri dialog. Fall back to the
-      // web Directory Picker so the Browse button actually responds instead of
-      // silently doing nothing. Note browsers cannot expose absolute paths, so
-      // this returns only the folder name — sufficient for a quick picker
-      // fallback, not a full path.
-      return ipcOpenDirectoryDialog();
+  async function openDirectoryDialog(title: string, initialPath = ""): Promise<string | null> {
+    if (isBrowserMode) {
+      return await new Promise<string | null>((resolve) => {
+        serverDirectoryPicker = { title, initialPath, resolve };
+      });
     }
     const { open } = await import("@tauri-apps/plugin-dialog");
     const selected = await open({ directory: true, multiple: false, title });
@@ -1091,7 +1095,8 @@
 
   async function browseModelDir(i: number) {
     if (!config) return;
-    const selected = await openDirectoryDialog(locale.t('settings.paths.model_dir_dialog_title'));
+    const currentPath = (config.extra_model_paths ?? "").split("\n")[i]?.trim() ?? "";
+    const selected = await openDirectoryDialog(locale.t('settings.paths.model_dir_dialog_title'), currentPath);
     if (selected) {
       const paths = (config.extra_model_paths ?? "").split("\n");
       paths[i] = selected;
@@ -5161,4 +5166,19 @@
 
 {#if showPromptAssistantSetup}
   <PromptAssistantSetupModal onClose={() => (showPromptAssistantSetup = false)} />
+{/if}
+
+{#if serverDirectoryPicker}
+  <ServerDirectoryPicker
+    title={serverDirectoryPicker.title}
+    initialPath={serverDirectoryPicker.initialPath}
+    onselect={(path) => {
+      serverDirectoryPicker?.resolve(path);
+      serverDirectoryPicker = null;
+    }}
+    oncancel={() => {
+      serverDirectoryPicker?.resolve(null);
+      serverDirectoryPicker = null;
+    }}
+  />
 {/if}

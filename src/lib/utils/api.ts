@@ -261,6 +261,21 @@ export async function openDirectory(path: string): Promise<void> {
   return ipcInvoke("open_directory", { path });
 }
 
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+}
+
+export interface DirectoryListing {
+  current_path: string | null;
+  parent_path: string | null;
+  entries: DirectoryEntry[];
+}
+
+export async function browseDirectory(path?: string): Promise<DirectoryListing> {
+  return ipcInvoke("browse_directory", { path: path ?? null });
+}
+
 export async function findModelByHash(
   category: string,
   hash: string

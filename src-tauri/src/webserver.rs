@@ -261,6 +261,7 @@ const MODERATOR_COMMANDS: &[&str] = &[
     "install_h3_teacache",
     "import_image_directory",
     "open_directory",
+    "browse_directory",
     "move_installation",
     "read_image_metadata_path",
     "save_image_file",
@@ -5148,6 +5149,19 @@ async fn dispatch_command(
                 let _ = tokio::process::Command::new("xdg-open").arg(&path).spawn();
             }
             Ok(serde_json::json!(null))
+        }
+        "browse_directory" => {
+            if !caller_is_local {
+                return Err("Directory browsing is only available from the local browser".into());
+            }
+            let path = args["path"].as_str().map(str::to_string);
+            let listing = tokio::task::spawn_blocking(move || {
+                crate::commands::api::browse_directory_for_path(path)
+            })
+            .await
+            .map_err(|e| format!("Directory listing task failed: {}", e))?
+            .map_err(|e| e.to_string())?;
+            serde_json::to_value(listing).map_err(|e| e.to_string())
         }
         "read_temp_image" => {
             let filename = args["filename"]
