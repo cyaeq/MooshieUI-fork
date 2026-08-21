@@ -15,7 +15,6 @@ import {
   MODEL_FAMILIES,
   TURBO_MODEL_VARIANTS,
   signalsIndicateVPred,
-  familyRequiresSeparateClip,
   familyIsSdxlLike,
   toTurboModelVariant,
 } from "../utils/modelFamily.js";
@@ -1140,26 +1139,30 @@ class GenerationStore {
    * detection so the recommended VAE / Text Encoder refresh under the new mode.
    */
   applyModelLoadingOverride(mode: "checkpoint" | "split"): void {
+    // Keep track of the folder the selected file actually came from. A manual
+    // loading-mode change must not make a file in `checkpoints/` look like it
+    // belongs to `diffusion_models/` (or vice versa), otherwise ComfyUI's stock
+    // loaders reject it with a misleading "not in list" validation error.
+    const activeName = this.useSplitModel ? this.diffusionModel : this.checkpoint;
+    const physicalCategory = this.modelSourceCategory ??
+      this.inferModelSourceCategory(activeName, this.useSplitModel);
+
     if (mode === "checkpoint") {
       const checkpointName =
         this.useSplitModel && this.diffusionModel ? this.diffusionModel : this.checkpoint;
       if (!checkpointName) return;
-      this.modelSourceCategory = null;
+      this.modelSourceCategory = physicalCategory === "checkpoints" ? null : physicalCategory;
       this.useSplitModel = false;
       this.diffusionModel = null;
       this.clipModel = null;
       this.clipType = null;
       this.checkpoint = checkpointName;
-      // Persist under the exact `category::filename` key the detection re-run
-      // below will query (`applyDetectedModelKind` reads modelLoadingOverrides
-      // keyed by the category passed to fetchAndApplyModelMetadata — here
-      // "checkpoints"). Storing the pre-switch key (e.g. "diffusion_models::X")
-      // would leave the manual choice unmatched, and auto-detection would then
-      // silently flip the mode back to split for any file the backend
-      // classifies as a diffusion model.
-      this.setModelLoadingOverride(`checkpoints::${checkpointName}`, "checkpoint");
+      // Persist under the exact physical `category::filename` key that the
+      // metadata re-run below will query. Using the loader's expected category
+      // would lose overrides for files intentionally kept in another folder.
+      this.setModelLoadingOverride(`${physicalCategory}::${checkpointName}`, "checkpoint");
       this.invalidateModelMetadataCache();
-      void this.fetchAndApplyModelMetadata("checkpoints", checkpointName);
+      void this.fetchAndApplyModelMetadata(physicalCategory, checkpointName);
       return;
     }
 
@@ -1168,12 +1171,24 @@ class GenerationStore {
     this.diffusionModel = diffusionName;
     this.checkpoint = diffusionName;
     this.useSplitModel = true;
-    const category = this.modelSourceCategory ?? "diffusion_models";
+    const category = physicalCategory;
+    this.modelSourceCategory = category === "diffusion_models" ? null : category;
     // Same contract as above: the override key must match the category the
     // detection re-run below will query.
     this.setModelLoadingOverride(`${category}::${diffusionName}`, "split");
     this.invalidateModelMetadataCache();
     void this.fetchAndApplyModelMetadata(category, diffusionName);
+  }
+
+  /** Infer the file's physical folder from the model lists, with loader mode as fallback. */
+  private inferModelSourceCategory(filename: string | null, splitMode: boolean): string {
+    if (filename) {
+      const inCheckpoints = models.checkpoints.includes(filename);
+      const inDiffusionModels = models.diffusionModels.includes(filename);
+      if (inCheckpoints && !inDiffusionModels) return "checkpoints";
+      if (inDiffusionModels && !inCheckpoints) return "diffusion_models";
+    }
+    return splitMode ? "diffusion_models" : "checkpoints";
   }
 
   /** Drop the manual loading override for the current model and let auto-detection decide again. */
@@ -1342,7 +1357,7 @@ class GenerationStore {
     // wins over auto-detection. Auto-detection remains a suggestion only.
     const loadingOverride = this.modelLoadingOverrides[`${category}::${filename}`];
     if (loadingOverride === "checkpoint") {
-      this.modelSourceCategory = null;
+      this.modelSourceCategory = category === "checkpoints" ? null : category;
       this.useSplitModel = false;
       this.diffusionModel = null;
       this.clipModel = null;
@@ -2535,6 +2550,21 @@ class GenerationStore {
     // block generation over state video does not use.
     const isVideo = this._mode === "video";
 
+    // Repair persisted state from versions that lost the physical model folder
+    // when the user switched between checkpoint and split loading. This keeps
+    // generation working immediately after upgrade, without requiring the model
+    // to be reselected in the UI.
+    const inferredSourceCategory = isVideo
+      ? null
+      : this.inferModelSourceCategory(
+          this.useSplitModel ? this.diffusionModel : this.checkpoint,
+          this.useSplitModel,
+        );
+    const modelSourceCategory = this.modelSourceCategory ??
+      (inferredSourceCategory === (this.useSplitModel ? "diffusion_models" : "checkpoints")
+        ? null
+        : inferredSourceCategory);
+
     // Pre-submit model self-check. Gated by the `preflightModelCheck` setting:
     // when disabled the workflow is submitted exactly as configured and error
     // reporting is left to ComfyUI.
@@ -2554,17 +2584,11 @@ class GenerationStore {
         }
       }
 
-      // Diffusion-only families (Flux, Anima, Wan, Qwen, Chroma, ...) carry no
-      // text encoder in a single checkpoint. If one was placed in `checkpoints/`
-      // and loaded via CheckpointLoaderSimple, ComfyUI returns a None CLIP and
-      // fails with "clip input is invalid: None". Surface an actionable error.
-      if (!isVideo && !this.useSplitModel && familyRequiresSeparateClip(this.modelFamily)) {
-        throw new Error(
-          `"${this.checkpoint}" is a ${this.modelFamily} diffusion model with no built-in text encoder. ` +
-            `Move it to ComfyUI's diffusion_models/ folder and select it as a diffusion model, ` +
-            `or choose a full checkpoint instead.`,
-        );
-      }
+      // Do not infer checkpoint contents from the selected model family. Anima,
+      // Flux, Qwen, and similar architectures can be distributed as genuine
+      // all-in-one checkpoints with baked CLIP/VAE components. ComfyUI's loader
+      // is the authority for checkpoint compatibility; only split mode needs
+      // the explicit component-presence checks above.
     }
 
     const style = this.stylePresetsEnabled
@@ -2846,7 +2870,7 @@ class GenerationStore {
       diffusion_model: this.diffusionModel,
       clip_model: this.clipModel,
       clip_type: this.clipType,
-      model_source_category: this.modelSourceCategory,
+      model_source_category: modelSourceCategory,
       controlnet: this.controlnetEnabled
         ? {
             enabled: true,

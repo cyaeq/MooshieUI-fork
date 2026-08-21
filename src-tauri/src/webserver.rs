@@ -2834,7 +2834,7 @@ async fn dispatch_command(
         // --- Generation ---
         "generate" => {
             crate::comfyui::process::mark_legacy_worker_idle(&state).await;
-            let params: crate::comfyui::types::GenerationParams =
+            let mut params: crate::comfyui::types::GenerationParams =
                 serde_json::from_value(args["params"].clone())
                     .map_err(|e| format!("Invalid params: {}", e))?;
             crate::templates::validate_generation_params(&params)?;
@@ -2858,6 +2858,16 @@ async fn dispatch_command(
                     &params,
                 )
                 .await?;
+            }
+
+            {
+                let config = state.config.read().await;
+                crate::commands::api::resolve_generation_model_path(
+                    &config.comfyui_path,
+                    config.extra_model_paths.as_deref(),
+                    &mut params,
+                )
+                .map_err(|e| e.to_string())?;
             }
             let seed = if params.seed < 0 {
                 (rand::random::<u64>() >> 1) as i64
