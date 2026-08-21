@@ -270,6 +270,8 @@ export interface DirectoryListing {
   current_path: string | null;
   parent_path: string | null;
   entries: DirectoryEntry[];
+  breadcrumbs: DirectoryEntry[];
+  locations: DirectoryEntry[];
 }
 
 export async function browseDirectory(path?: string): Promise<DirectoryListing> {

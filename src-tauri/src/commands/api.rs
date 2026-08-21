@@ -867,7 +867,7 @@ pub async fn open_directory(path: String) -> Result<(), AppError> {
     Ok(())
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct DirectoryEntry {
     pub name: String,
     pub path: String,
@@ -878,6 +878,69 @@ pub struct DirectoryListing {
     pub current_path: Option<String>,
     pub parent_path: Option<String>,
     pub entries: Vec<DirectoryEntry>,
+    pub breadcrumbs: Vec<DirectoryEntry>,
+    pub locations: Vec<DirectoryEntry>,
+}
+
+fn directory_path_string(path: &std::path::Path) -> String {
+    let path = path.to_string_lossy().to_string();
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(unc) = path.strip_prefix(r"\\?\UNC\") {
+            return format!(r"\\{}", unc);
+        }
+        if let Some(regular) = path.strip_prefix(r"\\?\") {
+            return regular.to_string();
+        }
+    }
+    path
+}
+
+fn directory_locations() -> Vec<DirectoryEntry> {
+    let mut locations = Vec::new();
+    if let Some(home) = dirs::home_dir().filter(|path| path.is_dir()) {
+        locations.push(DirectoryEntry {
+            name: directory_path_string(&home),
+            path: directory_path_string(&home),
+        });
+    }
+    #[cfg(target_os = "windows")]
+    for letter in b'A'..=b'Z' {
+        let path = format!("{}:\\", letter as char);
+        if std::path::Path::new(&path).is_dir()
+            && !locations.iter().any(|location| location.path == path)
+        {
+            locations.push(DirectoryEntry {
+                name: path.clone(),
+                path,
+            });
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    if !locations.iter().any(|location| location.path == "/") {
+        locations.push(DirectoryEntry {
+            name: "/".to_string(),
+            path: "/".to_string(),
+        });
+    }
+    locations
+}
+
+fn directory_breadcrumbs(path: &std::path::Path) -> Vec<DirectoryEntry> {
+    let mut ancestors = path.ancestors().collect::<Vec<_>>();
+    ancestors.reverse();
+    ancestors
+        .into_iter()
+        .map(|ancestor| {
+            let path = directory_path_string(ancestor);
+            let name = ancestor
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .filter(|name| !name.is_empty())
+                .unwrap_or_else(|| path.clone());
+            DirectoryEntry { name, path }
+        })
+        .collect()
 }
 
 /// List filesystem directories for the browser-mode path picker. The browser
@@ -886,67 +949,55 @@ pub struct DirectoryListing {
 pub(crate) fn browse_directory_for_path(
     path: Option<String>,
 ) -> Result<DirectoryListing, AppError> {
-    let roots = || {
-        let mut paths = Vec::new();
-        #[cfg(target_os = "windows")]
-        for letter in b'A'..=b'Z' {
-            let root = format!("{}:\\", letter as char);
-            if std::path::Path::new(&root).is_dir() {
-                paths.push(root);
-            }
-        }
-        #[cfg(not(target_os = "windows"))]
-        paths.push("/".to_string());
-        if let Some(home) = dirs::home_dir() {
-            let home = home.to_string_lossy().to_string();
-            if !paths.iter().any(|p| p == &home) {
-                paths.push(home);
-            }
-        }
-        paths.sort_by_key(|p| p.to_lowercase());
-        paths
-    };
+    let locations = directory_locations();
+    let path = path.filter(|path| !path.trim().is_empty()).or_else(|| {
+        dirs::home_dir()
+            .filter(|path| path.is_dir())
+            .map(|path| directory_path_string(&path))
+    });
 
-    let Some(raw_path) = path.filter(|p| !p.trim().is_empty()) else {
+    let Some(raw_path) = path else {
         return Ok(DirectoryListing {
             current_path: None,
             parent_path: None,
-            entries: roots()
-                .into_iter()
-                .map(|path| DirectoryEntry {
-                    name: path.clone(),
-                    path,
-                })
-                .collect(),
+            entries: locations.clone(),
+            breadcrumbs: Vec::new(),
+            locations,
         });
     };
 
-    let requested = std::path::PathBuf::from(raw_path);
-    let current = requested
+    let requested = if raw_path == "~" {
+        dirs::home_dir().ok_or_else(|| AppError::Other("Home directory not found".into()))?
+    } else if let Some(rest) = raw_path
+        .strip_prefix("~/")
+        .or_else(|| raw_path.strip_prefix("~\\"))
+    {
+        dirs::home_dir()
+            .ok_or_else(|| AppError::Other("Home directory not found".into()))?
+            .join(rest)
+    } else {
+        std::path::PathBuf::from(raw_path.trim())
+    };
+    let canonical = requested
         .canonicalize()
         .map_err(|e| AppError::Other(format!("Cannot open directory: {}", e)))?;
+    let current = std::path::PathBuf::from(directory_path_string(&canonical));
     if !current.is_dir() {
         return Err(AppError::Other("Selected path is not a directory".into()));
     }
-    let current_path = current.to_string_lossy().to_string();
+    let current_path = directory_path_string(&current);
     let parent_path = current.parent().and_then(|parent| {
-        let parent = parent.to_string_lossy().to_string();
+        let parent = directory_path_string(parent);
         (parent != current_path).then_some(parent)
     });
     let mut entries = std::fs::read_dir(&current)?
         .filter_map(Result::ok)
         .filter_map(|entry| {
-            entry
-                .file_type()
-                .ok()
-                .filter(|kind| kind.is_dir())
-                .map(|_| {
-                    let path = entry.path().to_string_lossy().to_string();
-                    DirectoryEntry {
-                        name: entry.file_name().to_string_lossy().to_string(),
-                        path,
-                    }
-                })
+            let entry_path = entry.path();
+            entry_path.is_dir().then(|| DirectoryEntry {
+                name: entry.file_name().to_string_lossy().to_string(),
+                path: directory_path_string(&entry_path),
+            })
         })
         .collect::<Vec<_>>();
     entries.sort_by_key(|entry| entry.name.to_lowercase());
@@ -955,6 +1006,8 @@ pub(crate) fn browse_directory_for_path(
         current_path: Some(current_path),
         parent_path,
         entries,
+        breadcrumbs: directory_breadcrumbs(&current),
+        locations,
     })
 }
 

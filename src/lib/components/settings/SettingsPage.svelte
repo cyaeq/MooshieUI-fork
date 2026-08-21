@@ -1349,10 +1349,7 @@
 
   function focusSettingsSection(key: string) {
     activeSection = key;
-    const section = sections.find((item) => item.key === key);
-    const label = section ? locale.t(section.labelKey) : "";
-    const target = Array.from(document.querySelectorAll<HTMLElement>(".studio-settings-page section"))
-      .find((item) => label && item.textContent?.includes(label));
+    const target = document.querySelector<HTMLElement>(`[data-settings-section="${key}"]`);
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -2050,7 +2047,7 @@
       {:else if config}
         <!-- Browser / App Mode Switch (admin only; hidden on mobile — users are already in browser mode) -->
         {#if isAdmin && sectionVisible("appMode") && !mobileFriendly}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="appMode" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <div class="p-5 space-y-3">
             <div class="flex items-center justify-between">
               <div>
@@ -2190,7 +2187,7 @@
 
         <!-- Cross-browser Sync & Data Export/Import -->
         {#if sectionVisible("sync")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="sync" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.sync = !collapsed.sync)}
@@ -2287,7 +2284,7 @@
 
         <!-- Queue (all users — always shown when section visible) -->
         {#if sectionVisible("queue")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="queue" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.queue = !collapsed.queue)}
@@ -2404,7 +2401,7 @@
 
         <!-- Connection (admin / moderator) -->
         {#if isAdmin && sectionVisible("connection")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="connection" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.connection = !collapsed.connection)}
@@ -2545,7 +2542,7 @@
 
         <!-- Appearance -->
         {#if sectionVisible("appearance")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="appearance" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.appearance = !collapsed.appearance)}
@@ -2931,7 +2928,7 @@
 
         <!-- Performance (admin / moderator) -->
         {#if isAdmin && sectionVisible("performance")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="performance" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.performance = !collapsed.performance)}
@@ -3103,7 +3100,7 @@
 
         <!-- Quality Tags (visible to all users) -->
         {#if sectionVisible("quality")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="quality" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.quality = !collapsed.quality)}
@@ -3208,7 +3205,7 @@
 
         <!-- GPU Workers (visible to all users) -->
         {#if sectionVisible("gpu")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="gpu" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.gpu = !collapsed.gpu)}
@@ -3290,7 +3287,7 @@
 
         <!-- Model Management (mods/admins) -->
         {#if canManageServer && sectionVisible("models")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="models" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.models = !collapsed.models)}
@@ -3319,7 +3316,7 @@
 
         <!-- Model Requests (mods/admins) -->
         {#if canManageServer && sectionVisible("modelRequests")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="modelRequests" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.modelRequests = !collapsed.modelRequests)}
@@ -3338,7 +3335,7 @@
 
         <!-- Paths (admin only) -->
         {#if isAdmin && sectionVisible("paths")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="paths" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.paths = !collapsed.paths)}
@@ -3567,7 +3564,7 @@
 
         <!-- Gallery -->
         {#if sectionVisible("gallery")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="gallery" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.gallery = !collapsed.gallery)}
@@ -3795,7 +3792,7 @@
 
         <!-- Autocomplete -->
         {#if sectionVisible("autocomplete")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="autocomplete" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.autocomplete = !collapsed.autocomplete)}
@@ -3975,7 +3972,7 @@
 
         <!-- Interrogator -->
         {#if sectionVisible("interrogator")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="interrogator" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.interrogator = !collapsed.interrogator)}
@@ -4039,7 +4036,7 @@
 
         <!-- Prompt Assistant -->
         {#if sectionVisible("prompt_assistant")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="prompt_assistant" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.prompt_assistant = !collapsed.prompt_assistant)}
@@ -4119,7 +4116,7 @@
 
         <!-- CivitAI (admin / moderator) -->
         {#if canManageServer && sectionVisible("civitai")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="civitai" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.civitai = !collapsed.civitai)}
@@ -4262,7 +4259,7 @@
 
         <!-- About & Updates -->
         {#if sectionVisible("about")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="about" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.about = !collapsed.about)}

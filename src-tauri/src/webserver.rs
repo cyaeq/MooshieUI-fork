@@ -5151,9 +5151,6 @@ async fn dispatch_command(
             Ok(serde_json::json!(null))
         }
         "browse_directory" => {
-            if !caller_is_local {
-                return Err("Directory browsing is only available from the local browser".into());
-            }
             let path = args["path"].as_str().map(str::to_string);
             let listing = tokio::task::spawn_blocking(move || {
                 crate::commands::api::browse_directory_for_path(path)
