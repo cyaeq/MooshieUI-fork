@@ -33,6 +33,36 @@ Built with **Svelte 5** + **Rust**, it hides ComfyUI's node-graph complexity beh
 
 ---
 
+## NewUI Fork Features
+
+NewUI is the redesigned interface variant in this personal fork. It keeps MooshieUI's ComfyUI workflow while focusing on a more flexible workspace, clearer controls, and better touch interaction.
+
+### 主要特色
+
+- **全新 Studio 生成工作区**：提供 Studio Workbench 和 Focus Preview 两种桌面布局，可将生成控制集中到左侧或右侧，并支持左右面板交换。
+- **更好的移动端体验**：支持顶部快速面板控制或边缘滑出控制，生成按钮固定在底部操作区，Gallery、Model Hub 和 Settings 也针对小屏幕重新排版。
+- **Inpainting Canvas Editor**：在局部重绘时可独立开启 Canvas Editor，快速切换画布、遮罩和生成控制。
+- **提示词收藏库**：支持保存、搜索、编辑、删除、分组和导出提示词，并可从历史记录或生成面板直接复用。
+- **服务器目录浏览器**：可浏览服务器端目录，使用路径输入、上级目录、前进后退和位置导航选择模型、画廊及自动保存目录。
+- **更可靠的模型路径识别**：根据模型实际所在目录判断加载类别，减少 checkpoint 与 split model 切换后的加载错误。
+- **更多外观设置**：可选择生成页布局、控制面板位置、移动端面板操作方式和按钮阴影质量。
+- **Fork 更新提示**：明确区分 Fork Releases 与官方 MooshieUI 更新，自动更新保持关闭并支持手动下载。
+
+### NewUI highlights
+
+- A redesigned Studio generation workspace with Workbench and Focus Preview layouts.
+- Swappable left and right control panels, persistent panel sizing, and a clearer command bar.
+- Touch-friendly mobile controls with quick actions, edge handles, and a bottom generation dock.
+- A dedicated Canvas Editor toggle for inpainting workflows.
+- A prompt library with saved prompts, search, groups, editing, export, and history reuse.
+- A server-side directory browser for model, gallery, and save paths.
+- More reliable physical model-folder detection for checkpoint and split-model loading.
+- Additional appearance preferences for layout, panel controls, and button shadow quality.
+
+NewUI is an unofficial personal fork. Automatic updates are disabled for this build. Download fork builds from the [Fork Releases](https://github.com/cyaeq/MooshieUI-fork/releases) page, and use the [official MooshieUI releases](https://github.com/Mooshieblob1/MooshieUI/releases) for upstream versions.
+
+---
+
 ## 📚 Documentation
 
 Full guides live in the **[MooshieUI Wiki](https://github.com/Mooshieblob1/MooshieUI/wiki)**:
