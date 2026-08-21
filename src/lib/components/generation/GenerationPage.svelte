@@ -89,6 +89,13 @@
     { id: "video" as const, label: () => locale.t('generation.mode.video') },
   ];
 
+  function toggleCanvasEditor() {
+    canvas.isCanvasMode = !canvas.isCanvasMode;
+    if (canvas.isCanvasMode && canvas.layers.length === 0) {
+      canvas.initCanvas(generation.width, generation.height);
+    }
+  }
+
   let canvasEditorRef: CanvasEditor | undefined = $state();
   let imagePreviewUrl = $state<string | null>(null);
   let maskPreviewUrl = $state<string | null>(null);
@@ -331,9 +338,13 @@
   const focusLayout = $derived(!mobileFriendly && generationLayout.style === "focus");
   const controlsSide = $derived(focusLayout ? generationLayout.controlsSide : leftHasSections ? "left" : "right");
   const mobileCommandInset = $derived(
-    generationLayout.mobilePanelControls === "quick"
-      ? "calc(env(safe-area-inset-top) + 7rem)"
-      : "calc(env(safe-area-inset-top) + 4.25rem)"
+    generation.mode === "inpainting"
+      ? generationLayout.mobilePanelControls === "quick"
+        ? "calc(env(safe-area-inset-top) + 10rem)"
+        : "calc(env(safe-area-inset-top) + 7.25rem)"
+      : generationLayout.mobilePanelControls === "quick"
+        ? "calc(env(safe-area-inset-top) + 7rem)"
+        : "calc(env(safe-area-inset-top) + 4.25rem)"
   );
 
   // Sections for rendering — excludes the dragged section so drop zone indices match computeDropTarget
@@ -2122,7 +2133,33 @@
             </button>
           {/each}
         </div>
-        <div class="studio-command-actions shrink-0">
+        <div class="studio-command-actions shrink-0 gap-2">
+          {#if generation.mode === "inpainting"}
+            <button
+              type="button"
+              onclick={toggleCanvasEditor}
+              class="flex min-w-44 items-center justify-between gap-4 px-3 py-1.5 rounded-md text-xs transition-colors {canvas.isCanvasMode
+                ? 'bg-indigo-600/20 border border-indigo-500/50 text-indigo-300'
+                : 'bg-neutral-800 border border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:border-neutral-600'}"
+            >
+              <span class="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+                {locale.t('generation.inpaint.canvas_editor')}
+              </span>
+              <span class="text-[10px] {canvas.isCanvasMode ? 'text-indigo-400' : 'text-neutral-500'}">
+                {canvas.isCanvasMode ? locale.t('common.on') : locale.t('common.off')}
+              </span>
+            </button>
+          {/if}
+          <button
+            type="button"
+            onclick={swapPanels}
+            class="shrink-0 p-2 rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 transition-colors"
+            title={locale.t('generation.swap_panels')}
+            aria-label={locale.t('generation.swap_panels')}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7H20m0 0l-4-4m4 4l-4 4"/><path d="M16 17H4m0 0l4 4m-4-4l4-4"/></svg>
+          </button>
           {#if !focusLayout}
             <GenerateButton canvasEditorRef={canvasEditorRef} mobileFriendly={false} />
           {/if}
@@ -2154,6 +2191,25 @@
             </button>
             {/each}
         </div>
+        {#if generation.mode === "inpainting"}
+          <button
+            type="button"
+            onclick={toggleCanvasEditor}
+            class="studio-mobile-canvas-toggle touch-target pointer-events-auto mt-1.5 flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs font-medium transition-colors {canvas.isCanvasMode
+              ? 'is-open border-indigo-500/60 bg-indigo-600/20 text-indigo-300'
+              : 'border-neutral-700 bg-neutral-900 text-neutral-300'}"
+            title={locale.t('generation.inpaint.canvas_editor')}
+            aria-pressed={canvas.isCanvasMode}
+          >
+            <span class="flex min-w-0 items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+              <span class="truncate">{locale.t('generation.inpaint.canvas_editor')}</span>
+            </span>
+            <span class="shrink-0 text-[10px] uppercase tracking-[0.12em] {canvas.isCanvasMode ? 'text-indigo-400' : 'text-neutral-500'}">
+              {canvas.isCanvasMode ? locale.t('common.on') : locale.t('common.off')}
+            </span>
+          </button>
+        {/if}
         {#if generationLayout.mobilePanelControls === "quick"}
           <div class="studio-mobile-quick-actions mt-1.5 flex items-center justify-center gap-1.5">
             <button
@@ -2218,57 +2274,6 @@
           class="{mobileFriendly ? 'studio-mobile-panel-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden pl-3 pr-5 pb-6 flex flex-col gap-2' : 'contents'}"
           style={mobileFriendly ? `padding-top: ${mobileCommandInset};` : undefined}
         >
-        {#if controlsSide === "left" && !mobileFriendly}
-          <div class="studio-inline-controls sticky top-0 z-10 bg-neutral-950 -mx-3 px-3 -mt-2 pt-2 pb-2">
-            <div class="flex gap-1.5 items-center">
-              <div class="studio-inline-mode-switch flex gap-1 bg-neutral-900 rounded-lg p-1 flex-1">
-                {#each modes as mode}
-                  <button
-                    onclick={() => {
-                      generation.mode = mode.id;
-                      if (mode.id !== "inpainting") canvas.isCanvasMode = false;
-                    }}
-                    class="flex-1 text-xs py-1.5 rounded-md transition-colors {generation.mode === mode.id
-                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-950/40'
-                      : 'text-neutral-400 hover:text-neutral-200'}"
-                  >
-                    {mode.label()}
-                  </button>
-                {/each}
-              </div>
-              <button
-                onclick={swapPanels}
-                class="p-1.5 rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 transition-colors"
-                title={locale.t('generation.swap_panels')}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7H20m0 0l-4-4m4 4l-4 4"/><path d="M16 17H4m0 0l4 4m-4-4l4-4"/></svg>
-              </button>
-            </div>
-
-            {#if generation.mode === "inpainting"}
-              <button
-                onclick={() => {
-                  canvas.isCanvasMode = !canvas.isCanvasMode;
-                  if (canvas.isCanvasMode && canvas.layers.length === 0) {
-                    canvas.initCanvas(generation.width, generation.height);
-                  }
-                }}
-                class="flex items-center justify-between w-full px-3 py-2 mt-2 rounded-lg text-xs transition-colors {canvas.isCanvasMode
-                  ? 'bg-indigo-600/20 border border-indigo-500/50 text-indigo-300'
-                  : 'bg-neutral-800 border border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:border-neutral-600'}"
-              >
-                <span class="flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-                  {locale.t('generation.inpaint.canvas_editor')}
-                </span>
-                <span class="text-[10px] {canvas.isCanvasMode ? 'text-indigo-400' : 'text-neutral-500'}">
-                  {canvas.isCanvasMode ? locale.t('common.on') : locale.t('common.off')}
-                </span>
-              </button>
-            {/if}
-          </div>
-        {/if}
-
         {@render sectionDropZone("left", 0)}
         {#each leftRenderSections as section, i}
           {@render renderSection(section)}
@@ -2339,7 +2344,7 @@
 
           {#if mobileFriendly}
             <div
-              class="studio-generate-dock absolute inset-x-0 bottom-0 z-30 px-4 pb-[calc(env(safe-area-inset-bottom)+4.5rem)] pt-6 bg-gradient-to-t from-neutral-950 via-neutral-950/80 to-transparent pointer-events-none"
+              class="studio-generate-dock absolute inset-x-0 bottom-0 z-30 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-6 bg-gradient-to-t from-neutral-950 via-neutral-950/80 to-transparent pointer-events-none"
               transition:fly={{ y: 24, duration: 200 }}
             >
               <div class="pointer-events-auto">
@@ -2414,57 +2419,6 @@
           class="{mobileFriendly ? 'studio-mobile-panel-scroll flex-1 min-h-0 overflow-y-auto pl-5 pr-3 pb-6 space-y-2' : 'contents'}"
           style={mobileFriendly ? `padding-top: ${mobileCommandInset};` : undefined}
         >
-        {#if controlsSide === "right" && !mobileFriendly}
-          <div class="studio-inline-controls sticky top-0 z-10 bg-neutral-950 -mx-3 px-3 -mt-3 pt-3 pb-2">
-            <div class="flex gap-1.5 items-center">
-              <div class="studio-inline-mode-switch flex gap-1 bg-neutral-900 rounded-lg p-1 flex-1">
-                {#each modes as mode}
-                  <button
-                    onclick={() => {
-                      generation.mode = mode.id;
-                      if (mode.id !== "inpainting") canvas.isCanvasMode = false;
-                    }}
-                    class="flex-1 text-xs py-1.5 rounded-md transition-colors {generation.mode === mode.id
-                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-950/40'
-                      : 'text-neutral-400 hover:text-neutral-200'}"
-                  >
-                    {mode.label()}
-                  </button>
-                {/each}
-              </div>
-              <button
-                onclick={swapPanels}
-                class="p-1.5 rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 transition-colors"
-                title={locale.t('generation.swap_panels')}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7H20m0 0l-4-4m4 4l-4 4"/><path d="M16 17H4m0 0l4 4m-4-4l4-4"/></svg>
-              </button>
-            </div>
-
-            {#if generation.mode === "inpainting"}
-              <button
-                onclick={() => {
-                  canvas.isCanvasMode = !canvas.isCanvasMode;
-                  if (canvas.isCanvasMode && canvas.layers.length === 0) {
-                    canvas.initCanvas(generation.width, generation.height);
-                  }
-                }}
-                class="flex items-center justify-between w-full px-3 py-2 mt-2 rounded-lg text-xs transition-colors {canvas.isCanvasMode
-                  ? 'bg-indigo-600/20 border border-indigo-500/50 text-indigo-300'
-                  : 'bg-neutral-800 border border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:border-neutral-600'}"
-              >
-                <span class="flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-                  {locale.t('generation.inpaint.canvas_editor')}
-                </span>
-                <span class="text-[10px] {canvas.isCanvasMode ? 'text-indigo-400' : 'text-neutral-500'}">
-                  {canvas.isCanvasMode ? locale.t('common.on') : locale.t('common.off')}
-                </span>
-              </button>
-            {/if}
-          </div>
-        {/if}
-
         {@render sectionDropZone("right", 0)}
         {#each rightRenderSections as section, i}
           {@render renderSection(section)}
@@ -2549,18 +2503,20 @@
         class="absolute inset-0 bg-neutral-950 pointer-events-auto flex flex-col will-change-transform shadow-[0_-8px_24px_rgba(0,0,0,0.4)]"
         style="transform: {mobilePanelTransform('bottom')}; transition: {mobilePanelTransition('bottom')};"
       >
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <button
-          type="button"
-          onclick={toggleBottomPanel}
-          class="shrink-0 mx-auto mt-2 h-6 w-12 flex items-center justify-center rounded-t border border-b-0 transition-colors {bottomCollapsed
-            ? 'bg-indigo-600 border-indigo-500/70 text-white hover:bg-indigo-500'
-            : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700'}"
-          title={bottomCollapsed ? locale.t('generation.panel.expand_bottom') : locale.t('generation.panel.collapse_bottom')}
-          aria-label={bottomCollapsed ? locale.t('generation.panel.expand_bottom') : locale.t('generation.panel.collapse_bottom')}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform {bottomCollapsed ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
+        {#if generationLayout.mobilePanelControls === "edge"}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <button
+            type="button"
+            onclick={toggleBottomPanel}
+            class="studio-mobile-edge-handle shrink-0 mx-auto mt-2 h-6 w-12 flex items-center justify-center rounded-t border border-b-0 transition-colors {bottomCollapsed
+              ? 'bg-indigo-600 border-indigo-500/70 text-white hover:bg-indigo-500'
+              : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700'}"
+            title={bottomCollapsed ? locale.t('generation.panel.expand_bottom') : locale.t('generation.panel.collapse_bottom')}
+            aria-label={bottomCollapsed ? locale.t('generation.panel.expand_bottom') : locale.t('generation.panel.collapse_bottom')}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform {bottomCollapsed ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        {/if}
         <div class="flex-1 min-h-0 border-t border-neutral-800/50 overflow-hidden">
           <BottomPanel onupscale={upscaleImage} oninpaint={inpaintImage} onrefine={refineImage} oncontextmenu={handleSessionContextMenu} />
         </div>

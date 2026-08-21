@@ -327,6 +327,16 @@ option:checked {
   height: 0;
 }
 
+.studio-mobile-panel-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.studio-mobile-panel-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* Prevent WebKitGTK from intercepting range-slider drags as OS drag-drop gestures. */
 input[type="range"] {
   -webkit-user-drag: none;
@@ -906,10 +916,13 @@ html.light .lightbox-backdrop {
    The generation surface is intentionally denser than the surrounding app:
    the preview gets a quiet canvas, while controls read as one inspector. */
 .studio-generation-shell {
-  --studio-canvas: color-mix(in srgb, var(--theme-background) 94%, white 6%);
+  /* Keep the workspace on one hue family in both modes. The background,
+     panels, and inputs differ by measured tonal steps; white/black overlays
+     made light mode look like unrelated grey cards on a white page. */
+  --studio-canvas: color-mix(in srgb, var(--theme-background) 96%, var(--theme-sub) 4%);
   --studio-surface: color-mix(in srgb, var(--theme-background) 84%, var(--theme-sub) 16%);
-  --studio-raised: color-mix(in srgb, var(--theme-background) 74%, var(--theme-sub) 26%);
-  --studio-line: color-mix(in srgb, var(--theme-background) 58%, var(--theme-sub) 42%);
+  --studio-raised: color-mix(in srgb, var(--theme-background) 72%, var(--theme-sub) 28%);
+  --studio-line: color-mix(in srgb, var(--theme-background) 62%, var(--theme-sub) 38%);
   --studio-muted: color-mix(in srgb, var(--theme-text) 56%, transparent);
   background: var(--studio-canvas);
 }
@@ -948,7 +961,7 @@ html.light .lightbox-backdrop {
 }
 
 .studio-app-shell {
-  background: color-mix(in srgb, var(--theme-background) 94%, white 6%);
+  background: color-mix(in srgb, var(--theme-background) 96%, var(--theme-sub) 4%);
 }
 
 .studio-app-rail {
@@ -959,7 +972,7 @@ html.light .lightbox-backdrop {
 .studio-app-nav,
 .studio-app-main {
   border-color: color-mix(in srgb, var(--studio-line, var(--theme-border-700)) 78%, transparent) !important;
-  background: color-mix(in srgb, var(--theme-surface-900) 92%, black 8%) !important;
+  background: color-mix(in srgb, var(--theme-surface-900) 94%, var(--theme-background) 6%) !important;
 }
 
 .studio-app-logo {
@@ -1037,6 +1050,23 @@ html.light .lightbox-backdrop {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-accent-500) 12%, transparent), 0 4px 14px color-mix(in srgb, var(--theme-accent-500) 10%, transparent);
 }
 
+.studio-mobile-canvas-toggle {
+  min-height: 2.75rem;
+  border-color: color-mix(in srgb, var(--studio-line, #404040) 88%, transparent) !important;
+  background: color-mix(in srgb, var(--studio-surface, #171717) 96%, var(--theme-background) 4%) !important;
+  box-shadow: 0 4px 14px color-mix(in srgb, black 10%, transparent);
+}
+
+.studio-mobile-canvas-toggle:not(.is-open):hover,
+.studio-mobile-canvas-toggle:not(.is-open):focus-visible {
+  border-color: color-mix(in srgb, var(--theme-accent-500) 52%, var(--studio-line, #404040)) !important;
+  background: color-mix(in srgb, var(--theme-accent-500) 9%, var(--studio-surface, #171717)) !important;
+}
+
+.studio-mobile-canvas-toggle.is-open {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-accent-500) 14%, transparent), 0 5px 16px color-mix(in srgb, var(--theme-accent-500) 12%, transparent);
+}
+
 .studio-mobile-edge-handle {
   touch-action: none;
   opacity: 0.78;
@@ -1079,7 +1109,7 @@ html.light .lightbox-backdrop {
 .studio-command-bar {
   min-height: 3.5rem;
   border-bottom: 1px solid color-mix(in srgb, var(--studio-line) 74%, transparent);
-  background: color-mix(in srgb, var(--studio-surface) 88%, black 12%);
+  background: color-mix(in srgb, var(--studio-surface) 94%, var(--theme-background) 6%);
   box-shadow: 0 8px 24px color-mix(in srgb, black 12%, transparent);
 }
 
@@ -1129,21 +1159,12 @@ html.light .lightbox-backdrop {
 }
 
 .studio-generation-shell .studio-panel {
-  background: color-mix(in srgb, var(--studio-canvas) 86%, black 14%);
+  background: color-mix(in srgb, var(--studio-surface) 92%, transparent);
   border-color: color-mix(in srgb, var(--studio-line) 68%, transparent) !important;
 }
 
 .studio-generation-shell .studio-preview-stage {
   background: var(--studio-canvas);
-}
-
-.studio-generation-shell .studio-inline-controls {
-  background: color-mix(in srgb, var(--studio-canvas) 94%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--studio-line) 56%, transparent);
-}
-
-.studio-generation-shell .studio-inline-mode-switch {
-  display: none;
 }
 
 .studio-startup-banner {
@@ -1222,7 +1243,7 @@ html.light .lightbox-backdrop {
 
 .studio-generation-shell .studio-mode-switch {
   border-color: color-mix(in srgb, var(--studio-line) 72%, transparent);
-  background: color-mix(in srgb, var(--studio-surface) 96%, black 4%);
+  background: color-mix(in srgb, var(--studio-surface) 96%, var(--theme-background) 4%);
   box-shadow: 0 7px 22px color-mix(in srgb, black 14%, transparent);
 }
 
@@ -1310,7 +1331,7 @@ html.light .lightbox-backdrop {
   margin-inline: -0.75rem;
   padding: 0.65rem 0.75rem calc(0.65rem + env(safe-area-inset-bottom));
   border-top: 1px solid color-mix(in srgb, var(--studio-line) 74%, transparent);
-  background: color-mix(in srgb, var(--studio-canvas) 94%, black 6%);
+  background: color-mix(in srgb, var(--studio-canvas) 94%, var(--theme-background) 6%);
   box-shadow: 0 -12px 24px color-mix(in srgb, black 24%, transparent);
 }
 
@@ -1656,12 +1677,12 @@ html.light .lightbox-backdrop {
 }
 
 .studio-generation-shell .studio-material-tray {
-  background: color-mix(in srgb, var(--studio-surface) 96%, black 4%);
+  background: color-mix(in srgb, var(--studio-surface) 96%, var(--theme-background) 4%);
 }
 
 .studio-generation-shell .studio-material-tabs {
   min-height: 2.8rem;
-  background: color-mix(in srgb, var(--studio-surface) 88%, black 12%);
+  background: color-mix(in srgb, var(--studio-surface) 88%, var(--theme-background) 12%);
 }
 
 .studio-generation-shell .studio-material-tabs button {
@@ -1669,12 +1690,12 @@ html.light .lightbox-backdrop {
 }
 
 .studio-generation-shell .studio-mobile-bottom-panel > div {
-  background: color-mix(in srgb, var(--studio-surface) 96%, black 4%);
+  background: color-mix(in srgb, var(--studio-surface) 96%, var(--theme-background) 4%);
   border-top: 1px solid var(--studio-line);
 }
 
 .studio-page {
-  background: color-mix(in srgb, var(--theme-background) 95%, white 5%);
+  background: color-mix(in srgb, var(--theme-background) 96%, var(--theme-sub) 4%);
 }
 
 .studio-page > div {
@@ -2061,7 +2082,4 @@ html.light .lightbox-backdrop {
     font-size: 0.75rem;
   }
 
-  .studio-generation-shell[data-studio-mode="mobile"] .studio-inline-controls {
-    display: none;
-  }
 }
