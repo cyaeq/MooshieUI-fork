@@ -6,7 +6,7 @@
   import { autocomplete } from "../../stores/autocomplete.svelte.js";
   import { generation } from "../../stores/generation.svelte.js";
   import { accessibility } from "../../stores/accessibility.svelte.js";
-  import { locale, LOCALE_OPTIONS } from "../../stores/locale.svelte.js";
+  import { locale, LOCALE_OPTIONS, type Locale } from "../../stores/locale.svelte.js";
   import { gallery } from "../../stores/gallery.svelte.js";
   import { prefsSync } from "../../stores/prefsSync.svelte.js";
   import { models } from "../../stores/models.svelte.js";
