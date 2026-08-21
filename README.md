@@ -1,3 +1,9 @@
+> ## ⚠️ 重要声明 / Important Notice
+>
+> 本项目是 [MooshieUI](https://github.com/Mooshieblob1/MooshieUI) 官方项目的**个人二次修改版（fork）**，仅供个人自用，**不提供任何维护与支持**。请勿在官方项目仓库提交 issue、PR 或功能请求，以免打扰官方维护者。所有使用风险（包括但不限于数据丢失、兼容性问题、安全漏洞）均由使用者自行承担。
+>
+> This repository is a **personal fork / modified version** of the official [MooshieUI](https://github.com/Mooshieblob1/MooshieUI) project. It is maintained **for personal use only** and is **not actively maintained or supported**. Please **do NOT open issues, PRs, or feature requests** on the official project, so as not to disturb the upstream maintainers. You use this software entirely at your own risk (including but not limited to data loss, compatibility issues, and security vulnerabilities).
+
 # MooshieUI
 
 MooshieUI is a beginner-friendly interface for [ComfyUI](https://github.com/comfyanonymous/ComfyUI) that runs in two modes:
@@ -23,7 +29,7 @@ Built with **Svelte 5** + **Rust**, it hides ComfyUI's node-graph complexity beh
   <em>MooshieUI is free and open source. If it saves you time or sparks joy, a sponsorship keeps the updates coming. No pressure, just gratitude. 🙏 (<a href="#-support--where-the-money-goes">where does the money go?</a>)</em>
 </p>
 
-![MooshieUI Screenshot](docs/screenshot.avif)
+![MooshieUI Screenshot](docs/screenshot.png)
 
 ---
 

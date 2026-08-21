@@ -5619,6 +5619,81 @@ pub(crate) fn resolve_model_path(
     None
 }
 
+/// Resolve the active generation model when its saved loading mode and physical
+/// folder disagree. Correctly placed files keep using ComfyUI's stock loader;
+/// only a file found in the alternate folder is switched to a path-based loader.
+pub(crate) fn resolve_generation_model_path(
+    comfyui_path: &str,
+    extra_model_paths: Option<&str>,
+    params: &mut crate::comfyui::types::GenerationParams,
+) -> Result<(), AppError> {
+    let filename = if params.use_split_model {
+        params.diffusion_model.clone().unwrap_or_default()
+    } else {
+        params.checkpoint.clone()
+    };
+    if filename.is_empty() {
+        return Ok(());
+    }
+
+    // GGUF uses the third-party UnetLoaderGGUF node, which has no absolute-path
+    // input. Keep its existing native validation path even if stale state claims
+    // the file came from another category.
+    if params.use_split_model && filename.to_ascii_lowercase().ends_with(".gguf") {
+        params.model_source_category = None;
+        params.resolved_model_path = None;
+        return Ok(());
+    }
+
+    let expected_category = if params.use_split_model {
+        "diffusion_models"
+    } else {
+        "checkpoints"
+    };
+
+    if let Some(source_category) = params.model_source_category.clone() {
+        let path = resolve_model_path(comfyui_path, extra_model_paths, &source_category, &filename)
+            .ok_or_else(|| {
+                AppError::InvalidWorkflow(format!(
+                    "Model file not found: {}/{}",
+                    source_category, filename
+                ))
+            })?;
+        params.resolved_model_path = Some(path.to_string_lossy().to_string());
+        return Ok(());
+    }
+
+    // The file is where the chosen loader expects it, so preserve the normal
+    // ComfyUI workflow and its native model-list validation.
+    if resolve_model_path(
+        comfyui_path,
+        extra_model_paths,
+        expected_category,
+        &filename,
+    )
+    .is_some()
+    {
+        return Ok(());
+    }
+
+    let alternate_category = if params.use_split_model {
+        "checkpoints"
+    } else {
+        "diffusion_models"
+    };
+    if let Some(path) = resolve_model_path(
+        comfyui_path,
+        extra_model_paths,
+        alternate_category,
+        &filename,
+    ) {
+        params.model_source_category = Some(alternate_category.to_string());
+        params.resolved_model_path = Some(path.to_string_lossy().to_string());
+    }
+
+    Ok(())
+}
+
 pub(crate) fn validate_lora_files_for_generation(
     comfyui_path: &str,
     extra_model_paths: Option<&str>,
