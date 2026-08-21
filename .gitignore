@@ -49,7 +49,6 @@ src-tauri/gen/
 *.log
 error-logs/
 .github/skills/rust-tauri/SKILL.md
-src-tauri/Cargo.toml
 # Ephemeral PR/release draft bodies (use gh pr create --body instead)
 PR_BODY*.md
 PR_AUTOBODY*.md

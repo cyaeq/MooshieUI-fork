@@ -11,7 +11,6 @@
   import { prefsSync } from "../../stores/prefsSync.svelte.js";
   import { models } from "../../stores/models.svelte.js";
   import { promptAssistant } from "../../stores/promptAssistant.svelte.js";
-  import { updatePreferences } from "../../stores/updatePreferences.svelte.js";
   import { generationLayout } from "../../stores/generationLayout.svelte.js";
   import PromptAssistantSetupModal from "../generation/PromptAssistantSetupModal.svelte";
   import OpenModelFolders from "./OpenModelFolders.svelte";
@@ -39,7 +38,6 @@
   import DOMPurify from "dompurify";
   import { clearArtistImageCache, getArtistImageCacheCount } from "../../artist-gallery/imageCache.js";
   import { appVersion as getAppVersion } from "../../utils/platformInfo.js";
-  import type { DownloadEvent } from "@tauri-apps/plugin-updater";
 
   interface Props {
     userRole?: string;
@@ -1157,111 +1155,6 @@
     detectedModelDirs = detectedModelDirs.filter((d) => d.path !== path);
   }
 
-  // Update check state
-  type UpdateCheckState = "idle" | "checking" | "available" | "downloading" | "ready" | "up-to-date" | "error";
-  type BrowserUpdateMode = "local" | "lan" | "server";
-  let updateState = $state<UpdateCheckState>("idle");
-  let updateVersion = $state("");
-  let updateError = $state("");
-  let updateDownloaded = $state(0);
-  let updateTotal = $state(0);
-  let browserUpdateMode = $state<BrowserUpdateMode>("local");
-  let updateObj: any | null = null;
-
-  const updatePercent = $derived(updateTotal > 0 ? Math.round((updateDownloaded / updateTotal) * 100) : 0);
-
-  async function refreshBrowserUpdateMode(): Promise<BrowserUpdateMode> {
-    let mode: BrowserUpdateMode = "local";
-    try {
-      const resp = await fetch("/internal-api/_auth/status", {
-        headers: authHeaders(),
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        mode = data.server_mode === true ? "server" : data.lan_enabled === true ? "lan" : "local";
-      }
-    } catch (e) {
-      console.warn("[settings] failed to read browser update mode:", e);
-    }
-    browserUpdateMode = mode;
-    return mode;
-  }
-
-  async function checkForUpdates() {
-    updateState = "checking";
-    updateError = "";
-    try {
-      if (isBrowserMode) {
-        updateObj = null;
-        await refreshBrowserUpdateMode();
-        const resp = await fetch("/internal-api/_check_update", {
-          headers: authHeaders(),
-        });
-        if (!resp.ok) {
-          const message = await resp.text();
-          throw new Error(message || `Update check failed (${resp.status})`);
-        }
-        const data = await resp.json();
-        if (data.error) throw new Error(String(data.error));
-        if (data.update_available) {
-          updateVersion = data.latest_version;
-          updateState = "available";
-        } else {
-          updateState = "up-to-date";
-        }
-        return;
-      }
-      if (!isTauri) { updateState = "up-to-date"; return; }
-      const { check } = await import("@tauri-apps/plugin-updater");
-      const update = await check();
-      if (update) {
-        updateObj = update;
-        updateVersion = update.version;
-        updateState = "available";
-      } else {
-        updateState = "up-to-date";
-      }
-    } catch (e) {
-      updateState = "error";
-      updateError = String(e);
-    }
-  }
-
-  async function downloadAndInstallUpdate() {
-    if (!updateObj && isBrowserMode && browserUpdateMode === "local") {
-      updateState = "checking";
-      updateError = "";
-      try {
-        await ipcInvoke("switch_to_app_mode");
-        updateState = "available";
-      } catch (e) {
-        updateState = "error";
-        updateError = String(e);
-      }
-      return;
-    }
-    if (!updateObj) return;
-    updateState = "downloading";
-    try {
-      await updateObj.downloadAndInstall((event: DownloadEvent) => {
-        if (event.event === "Started") {
-          updateTotal = event.data.contentLength ?? 0;
-          updateDownloaded = 0;
-        } else if (event.event === "Progress") {
-          updateDownloaded += event.data.chunkLength;
-        } else if (event.event === "Finished") {
-          updateState = "ready";
-        }
-      });
-      // Record the expected version so UpdateNotification can verify on the
-      // next launch that the update actually applied (mirrors the banner path).
-      if (updateVersion) localStorage.setItem("mooshieui_pending_update", updateVersion);
-      updateState = "ready";
-    } catch (e) {
-      updateState = "error";
-      updateError = String(e);
-    }
-  }
   let dyslexicFont = $state(localStorage.getItem("mooshieui.dyslexicFont") === "true");
   let buttonQuality = $state<ButtonQuality>(normalizeButtonQuality(localStorage.getItem("mooshieui.buttonQuality.v1")));
 
@@ -4283,23 +4176,24 @@
               </button>
             </div>
 
-            <div class="flex items-center justify-between gap-4 rounded-lg border border-neutral-800 bg-neutral-950/70 px-3 py-3">
-              <div class="min-w-0">
-                <p class="text-sm text-neutral-200">{locale.t('settings.about.update_notifications')}</p>
-                <p class="mt-0.5 text-xs leading-relaxed text-neutral-500">{locale.t('settings.about.update_notifications_desc')}</p>
+            <div class="space-y-3 rounded-lg border border-neutral-800 bg-neutral-950/70 px-3 py-3">
+              <p class="text-sm leading-relaxed text-neutral-300">{locale.t('settings.about.manual_update_notice')}</p>
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onclick={() => openExternalUrl('https://github.com/cyaeq/MooshieUI-fork/releases')}
+                  class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors cursor-pointer"
+                >
+                  {locale.t('settings.about.fork_updates')}
+                </button>
+                <button
+                  type="button"
+                  onclick={() => openExternalUrl('https://github.com/Mooshieblob1/MooshieUI/releases')}
+                  class="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg border border-neutral-700 text-sm transition-colors cursor-pointer"
+                >
+                  {locale.t('settings.about.official_updates')}
+                </button>
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={updatePreferences.showAutomaticNotifications}
-                aria-label={locale.t('settings.about.update_notifications')}
-                class="relative h-6 w-11 shrink-0 rounded-full border transition-colors {updatePreferences.showAutomaticNotifications
-                  ? 'border-indigo-500 bg-indigo-600'
-                  : 'border-neutral-600 bg-neutral-700'}"
-                onclick={() => updatePreferences.setShowAutomaticNotifications(!updatePreferences.showAutomaticNotifications)}
-              >
-                <span class="absolute left-0.5 top-0.5 h-4.5 w-4.5 rounded-full bg-white shadow transition-transform {updatePreferences.showAutomaticNotifications ? 'translate-x-5' : 'translate-x-0'}"></span>
-              </button>
             </div>
 
             <!-- What's New -->
@@ -4328,113 +4222,20 @@
               </div>
             </details>
 
-            <div class="space-y-3 rounded-xl border border-neutral-800 bg-neutral-950/70 p-3">
-              <div
-                role="alert"
-                class="flex items-start gap-3 rounded-lg border border-amber-500/60 bg-amber-500/10 px-3 py-3 shadow-[0_0_20px_rgba(245,158,11,0.08)]"
-              >
-                <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/30">
-                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M10.3 2.9 1.8 17a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 2.9a2 2 0 0 0-3.4 0Z" />
-                    <path d="M12 9v4" />
-                    <path d="M12 17h.01" />
-                  </svg>
-                </div>
-                <p class="text-sm font-medium leading-relaxed text-amber-100">
-                  {locale.t('settings.about.fork_notice')}
-                </p>
+            <div
+              role="alert"
+              class="flex items-start gap-3 rounded-xl border border-amber-500/60 bg-amber-500/10 px-3 py-3 shadow-[0_0_20px_rgba(245,158,11,0.08)]"
+            >
+              <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/30">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M10.3 2.9 1.8 17a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 2.9a2 2 0 0 0-3.4 0Z" />
+                  <path d="M12 9v4" />
+                  <path d="M12 17h.01" />
+                </svg>
               </div>
-
-              {#if updateState === "idle"}
-                <button
-                  onclick={checkForUpdates}
-                  class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors cursor-pointer"
-                >
-                  {locale.t('settings.about.check_updates')}
-                </button>
-
-              {:else if updateState === "checking"}
-                <div class="flex items-center gap-2 text-sm text-neutral-400">
-                  <div class="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></div>
-                  {locale.t('settings.about.checking_updates')}
-                </div>
-
-              {:else if updateState === "up-to-date"}
-                <div class="flex items-center gap-2 text-sm text-emerald-400">
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
-                  {locale.t('settings.about.up_to_date')}
-                </div>
-                <button
-                  onclick={checkForUpdates}
-                  class="text-xs text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
-                >
-                  {locale.t('settings.about.check_again')}
-                </button>
-
-              {:else if updateState === "available"}
-                <div class="px-3 py-2 bg-indigo-900/30 border border-indigo-800/50 rounded-lg">
-                  <p class="text-sm text-indigo-200 mb-2">{locale.t('settings.about.version_available').replace('{version}', updateVersion)}</p>
-                  {#if isBrowserMode && !updateObj}
-                    {#if browserUpdateMode === "local"}
-                      <p class="text-xs text-indigo-200/80 mb-2">{locale.t('settings.about.switch_to_app_mode_hint')}</p>
-                      <button
-                        onclick={downloadAndInstallUpdate}
-                        class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors cursor-pointer"
-                      >
-                        {locale.t('settings.about.switch_to_app_mode')}
-                      </button>
-                    {:else}
-                      <p class="text-xs text-indigo-200/80">{locale.t('settings.about.redeploy_to_update')}</p>
-                    {/if}
-                  {:else}
-                    <button
-                      onclick={downloadAndInstallUpdate}
-                      class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors cursor-pointer"
-                    >
-                      {locale.t('settings.about.download_install')}
-                    </button>
-                  {/if}
-                </div>
-
-              {:else if updateState === "downloading"}
-                <div class="px-3 py-2 bg-indigo-900/30 border border-indigo-800/50 rounded-lg space-y-2">
-                  <div class="flex items-center justify-between text-xs text-neutral-400">
-                    <span>{locale.t('settings.about.downloading_version').replace('{version}', updateVersion)}</span>
-                    {#if updateTotal > 0}
-                      <span class="tabular-nums">{updatePercent}%</span>
-                    {/if}
-                  </div>
-                  <div class="w-full bg-neutral-700 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      class="bg-indigo-500 h-full rounded-full transition-[width] duration-300"
-                      style="width: {updateTotal > 0 ? updatePercent : 33}%"
-                      class:animate-pulse={updateTotal === 0}
-                    ></div>
-                  </div>
-                </div>
-
-              {:else if updateState === "ready"}
-                <div class="px-3 py-2 bg-emerald-900/30 border border-emerald-800/50 rounded-lg">
-                  <p class="text-sm text-emerald-200 mb-2">{locale.t('settings.about.update_ready').replace('{version}', updateVersion)}</p>
-                  <button
-                    onclick={async () => { try { await stopComfyui(); } catch {} if (isTauri) { const { relaunch } = await import("@tauri-apps/plugin-process"); await relaunch(); } else { window.location.reload(); } }}
-                    class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm transition-colors cursor-pointer"
-                  >
-                    {locale.t('updater.restart_now')}
-                  </button>
-                </div>
-
-              {:else if updateState === "error"}
-                <div class="px-3 py-2 bg-red-900/30 border border-red-800/50 rounded-lg">
-                  <p class="text-xs text-red-200">{updateError}</p>
-                </div>
-                <button
-                  onclick={checkForUpdates}
-                  class="text-xs text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
-                >
-                  {locale.t('settings.about.try_again')}
-                </button>
-              {/if}
+              <p class="text-sm font-medium leading-relaxed text-amber-100">
+                {locale.t('settings.about.fork_notice')}
+              </p>
             </div>
 
             <!-- Troubleshooting -->

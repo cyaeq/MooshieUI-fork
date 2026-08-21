@@ -1170,7 +1170,7 @@ async fn check_update_handler(
     }
 
     let current = env!("CARGO_PKG_VERSION");
-    let url = "https://api.github.com/repos/Mooshieblob1/MooshieUI/releases/latest";
+    let url = "https://api.github.com/repos/cyaeq/MooshieUI-fork/releases/latest";
 
     let resp = state
         .app
@@ -4486,7 +4486,7 @@ async fn dispatch_command(
         "fetch_release_notes" => {
             let resp = state
                 .http_client
-                .get("https://api.github.com/repos/Mooshieblob1/MooshieUI/releases")
+                .get("https://api.github.com/repos/cyaeq/MooshieUI-fork/releases")
                 .query(&[("per_page", "20")])
                 .header("Accept", "application/vnd.github+json")
                 .header("User-Agent", "MooshieUI-Desktop")

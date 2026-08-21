@@ -1975,6 +1975,9 @@ const pl: Record<string, string> = {
   "settings.about.modal_tagline": "Przyjazny interfejs do generowania obrazów AI na komputerze.",
   "settings.about.fork_notice": "This is an unofficial modified build of MooshieUI. Please do not report issues from this build to the official project; report fork-specific issues to the fork maintainer instead.",
   "settings.about.github_button": "Repozytorium GitHub",
+  "settings.about.manual_update_notice": "Automatic updates are disabled for this unofficial build. Download new fork builds manually from Fork Releases, or switch to the official MooshieUI release.",
+  "settings.about.fork_updates": "Fork Releases",
+  "settings.about.official_updates": "Official Updates",
   "settings.about.gpu_garden_button": "gpu.garden",
   "settings.about.report_issue_button": "Zgłoś problem",
 

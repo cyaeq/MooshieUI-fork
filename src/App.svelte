@@ -26,7 +26,6 @@
   import { accessibility } from "./lib/stores/accessibility.svelte.js";
   import { locale } from "./lib/stores/locale.svelte.js";
   import type { GenerationMode, GenerationParams, OutputImage, InterrogationResult } from "./lib/types/index.js";
-  import UpdateNotification from "./lib/components/updater/UpdateNotification.svelte";
   import DownloadBanner from "./lib/components/downloads/DownloadBanner.svelte";
   import { downloads } from "./lib/stores/downloads.svelte.js";
   import { compare } from "./lib/stores/compare.svelte.js";
@@ -3580,7 +3579,6 @@
 
   <!-- Main content -->
   <main class="studio-app-main flex min-w-0 flex-1 flex-col overflow-hidden md:rounded-2xl md:border md:border-neutral-800 md:bg-neutral-900 md:p-1 md:shadow-2xl md:shadow-black/30">
-    <UpdateNotification {userRole} />
     <DownloadBanner />
     <ExternalComfyModal
       open={externalComfyOpen}
