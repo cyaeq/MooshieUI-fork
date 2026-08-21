@@ -3522,7 +3522,7 @@
 
     <!-- Report a problem -->
     <button
-      class="w-8 h-8 rounded-lg flex items-center justify-center text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200 transition-colors mx-auto mb-1"
+      class="hidden"
       onclick={() => (showBugReport = true)}
       title={locale.t('nav.report_bug')}
     >

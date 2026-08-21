@@ -1751,6 +1751,7 @@ const pt: Record<string, string> = {
   "settings.about.about_button": "About MooshieUI",
   "settings.about.modal_title": "About MooshieUI",
   "settings.about.modal_tagline": "A friendly desktop interface for AI image generation.",
+  "settings.about.fork_notice": "This is an unofficial modified build of MooshieUI. Please do not report issues from this build to the official project; report fork-specific issues to the fork maintainer instead.",
   "settings.about.github_button": "GitHub Repository",
   "settings.about.gpu_garden_button": "gpu.garden",
   "settings.about.report_issue_button": "Report an Issue",

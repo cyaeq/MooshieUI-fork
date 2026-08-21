@@ -1751,6 +1751,7 @@ const zhTw: Record<string, string> = {
   "settings.about.about_button": "About MooshieUI",
   "settings.about.modal_title": "About MooshieUI",
   "settings.about.modal_tagline": "A friendly desktop interface for AI image generation.",
+  "settings.about.fork_notice": "目前使用的是 MooshieUI 的非官方二次修改版本。本版本的問題請勿回報給官方專案，請聯絡本二改版本的維護者。",
   "settings.about.github_button": "GitHub Repository",
   "settings.about.gpu_garden_button": "gpu.garden",
   "settings.about.report_issue_button": "Report an Issue",

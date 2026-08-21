@@ -1716,12 +1716,13 @@ html.light .lightbox-backdrop {
 }
 
 .studio-modelhub-page > div {
-  max-width: 90rem;
+  max-width: none;
+  margin-inline: 0;
 }
 
 .studio-gallery-page > div {
-  max-width: 100rem;
-  margin-inline: auto;
+  max-width: none;
+  margin-inline: 0;
 }
 
 .studio-gallery-toolbar,

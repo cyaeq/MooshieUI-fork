@@ -330,7 +330,7 @@
   });
 </script>
 
-<div class="studio-page studio-gallery-page p-3 md:p-6 h-full overflow-y-auto will-change-scroll">
+<div class="studio-page studio-gallery-page p-3 md:p-6 h-full overflow-y-auto">
   {#if gallery.loading}
     <div class="flex items-center justify-center h-full text-neutral-500">{locale.t("gallery.loading")}</div>
   {:else if gallery.images.length === 0}
@@ -490,7 +490,7 @@
           {:else}
             <div class="grid {isMobile ? 'gap-2' : 'gap-3'}" style="grid-template-columns: repeat({viewColumns(galleryView)}, minmax(0, 1fr));">
               {#each group.images as image}
-                <div class="group relative rounded-lg overflow-hidden border border-neutral-800 hover:border-indigo-500 transition-colors {galleryView === 'huge' ? 'aspect-4/3' : 'aspect-square'}">
+                <div class="group relative rounded-lg overflow-hidden border border-neutral-800 hover:border-indigo-500 transition-colors {galleryView === 'huge' ? 'aspect-4/3' : 'aspect-square'}" style="content-visibility: auto; contain-intrinsic-size: auto 240px;">
                   <button
                     class="w-full h-full"
                     title={isVideoImage(image) ? locale.t("gallery.play_video") : image.filename}

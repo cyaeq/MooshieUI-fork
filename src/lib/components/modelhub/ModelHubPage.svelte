@@ -253,15 +253,17 @@
   const botPad = $derived(Math.max(0, (totalRows - lastRow) * rowH));
 
   let rafPending = false;
+  let scrollRafId: number | null = null;
   function handleScroll() {
     if (rafPending) return;
     rafPending = true;
-    requestAnimationFrame(() => {
+    scrollRafId = requestAnimationFrame(() => {
       if (scrollHost) {
         scrollY = scrollHost.scrollTop;
         viewportH = scrollHost.clientHeight;
       }
       rafPending = false;
+      scrollRafId = null;
     });
   }
 
@@ -1150,12 +1152,15 @@
     return () => {
       if (unlisten) unlisten();
       if (directFilenameResolveTimer) clearTimeout(directFilenameResolveTimer);
+      if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+      if (queryDebounceTimer) clearTimeout(queryDebounceTimer);
+      if (scrollRafId !== null) cancelAnimationFrame(scrollRafId);
     };
   });
 </script>
 
-<div class="studio-page studio-modelhub-page h-full overflow-y-auto p-6" style="will-change: scroll-position;" bind:this={scrollHost} onscroll={handleScroll}>
-  <div class="mx-auto space-y-4">
+<div class="studio-page studio-modelhub-page h-full overflow-y-auto p-6" bind:this={scrollHost} onscroll={handleScroll}>
+  <div class="space-y-4">
     <div class="studio-modelhub-heading flex flex-col gap-1">
       <h2 class="text-lg font-semibold text-neutral-100">{locale.t("modelhub.title")}</h2>
       <p class="text-xs text-neutral-400">

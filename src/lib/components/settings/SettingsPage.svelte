@@ -4720,6 +4720,9 @@
     </div>
 
     <p class="text-xs text-neutral-400">{locale.t('settings.about.modal_tagline')}</p>
+    <p class="rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-xs leading-relaxed text-amber-200">
+      {locale.t('settings.about.fork_notice')}
+    </p>
 
     <!-- Links -->
     <div class="space-y-2">
@@ -4741,7 +4744,7 @@
 
       <button
         onclick={() => { showAboutModal = false; showReportModal = true; }}
-        class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-sm transition-colors cursor-pointer text-left"
+        class="hidden"
       >
         <svg class="w-4 h-4 shrink-0 text-neutral-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
         {locale.t('settings.about.report_issue_button')}

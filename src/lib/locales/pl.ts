@@ -1969,6 +1969,7 @@ const pl: Record<string, string> = {
   "settings.about.about_button": "O MooshieUI",
   "settings.about.modal_title": "O MooshieUI",
   "settings.about.modal_tagline": "Przyjazny interfejs do generowania obrazów AI na komputerze.",
+  "settings.about.fork_notice": "This is an unofficial modified build of MooshieUI. Please do not report issues from this build to the official project; report fork-specific issues to the fork maintainer instead.",
   "settings.about.github_button": "Repozytorium GitHub",
   "settings.about.gpu_garden_button": "gpu.garden",
   "settings.about.report_issue_button": "Zgłoś problem",
