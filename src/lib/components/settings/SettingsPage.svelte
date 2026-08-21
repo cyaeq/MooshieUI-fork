@@ -4326,7 +4326,23 @@
               </div>
             </details>
 
-            <div class="space-y-2">
+            <div class="space-y-3 rounded-xl border border-neutral-800 bg-neutral-950/70 p-3">
+              <div
+                role="alert"
+                class="flex items-start gap-3 rounded-lg border border-amber-500/60 bg-amber-500/10 px-3 py-3 shadow-[0_0_20px_rgba(245,158,11,0.08)]"
+              >
+                <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/30">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M10.3 2.9 1.8 17a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 2.9a2 2 0 0 0-3.4 0Z" />
+                    <path d="M12 9v4" />
+                    <path d="M12 17h.01" />
+                  </svg>
+                </div>
+                <p class="text-sm font-medium leading-relaxed text-amber-100">
+                  {locale.t('settings.about.fork_notice')}
+                </p>
+              </div>
+
               {#if updateState === "idle"}
                 <button
                   onclick={checkForUpdates}
@@ -4720,9 +4736,6 @@
     </div>
 
     <p class="text-xs text-neutral-400">{locale.t('settings.about.modal_tagline')}</p>
-    <p class="rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-xs leading-relaxed text-amber-200">
-      {locale.t('settings.about.fork_notice')}
-    </p>
 
     <!-- Links -->
     <div class="space-y-2">

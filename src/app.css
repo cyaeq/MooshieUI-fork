@@ -1543,7 +1543,8 @@ html.light .lightbox-backdrop {
 
 .studio-settings-content-inner {
   margin-inline: 0;
-  max-width: none !important;
+  width: 100%;
+  max-width: 64rem !important;
 }
 
 @media (min-width: 901px) {
@@ -1561,6 +1562,13 @@ html.light .lightbox-backdrop {
 
   .studio-settings-page .studio-settings-layout {
     width: 100%;
+  }
+
+  /* Keep long setting rows readable while allowing the rail to breathe across
+     desktop sizes. The parent width still constrains smaller windows. */
+  .studio-settings-page .studio-settings-content-inner {
+    width: clamp(42rem, 58vw, 72rem);
+    max-width: 100% !important;
   }
 }
 
