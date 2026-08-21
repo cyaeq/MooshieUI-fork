@@ -33,6 +33,30 @@ Built with **Svelte 5** + **Rust**, it hides ComfyUI's node-graph complexity beh
 
 ---
 
+## Fork Features
+
+This repository is a personal fork of MooshieUI. The `master` branch keeps the familiar upstream interface while adding workflow, mobile, model-loading, and release changes maintained specifically for this fork.
+
+### 主要特色
+
+- **提示词收藏库**：支持保存、编辑、删除、分组和导入导出提示词，并可从生成面板与历史记录中快速复用。
+- **移动端交互改进**：优化小屏幕下的生成操作与导航，并可在设置中选择需要显示的移动端功能标签。
+- **更可靠的模型路径识别**：根据模型实际所在目录解析加载路径，减少 checkpoint 与 split model 切换后的分类和加载错误。
+- **Fork 专用更新方式**：自动更新保持关闭，设置页明确区分 Fork Releases 与官方 MooshieUI 版本，避免混用不同发布渠道。
+- **独立发布流程**：使用本 Fork 自己的 Windows/Linux 构建与发布配置，不依赖上游的自动更新签名与更新清单。
+
+### Fork highlights
+
+- A prompt library with saved prompts, editing, groups, deletion, import/export, and quick reuse from generation history.
+- Improved mobile generation controls and configurable mobile navigation tabs.
+- Physical model-folder detection for more reliable checkpoint and split-model loading.
+- Clear separation between fork releases and official upstream releases, with automatic app updates disabled.
+- An independent Windows/Linux build and release workflow for this fork.
+
+Download builds for this repository from [Fork Releases](https://github.com/cyaeq/MooshieUI-fork/releases). For upstream builds and support, use the [official MooshieUI repository](https://github.com/Mooshieblob1/MooshieUI).
+
+---
+
 ## 📚 Documentation
 
 Full guides live in the **[MooshieUI Wiki](https://github.com/Mooshieblob1/MooshieUI/wiki)**:
