@@ -35,7 +35,7 @@ const zhTw: Record<string, string> = {
   "common.go_to_top": "回到頂部",
   "common.or": "或",
   "common.on": "開啟",
-  "common.details": "Details",
+  "common.details": "詳細資訊",
   "common.dismiss_notification": "關閉通知",
   "common.done": "Done",
   "common.local": "Local",

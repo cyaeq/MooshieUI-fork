@@ -206,6 +206,7 @@ class GalleryStore {
   /** When set, the lightbox shows this URL instead of selectedImage. */
   lightboxUrl = $state<string | null>(null);
   lightboxOpen = $state(false);
+  lightboxInfoRequested = $state(false);
   lightboxLoading = $state(false);
   loading = $state(false);
   /** True while a save/download operation is in progress (prevents double-clicks). */
@@ -464,9 +465,10 @@ class GalleryStore {
     this.sessionImages = [...newImages, ...this.sessionImages];
   }
 
-  async openLightbox(image: OutputImage) {
+  async openLightbox(image: OutputImage, showInfo = false) {
     this.selectedImage = image;
     this.lastSelectedImage = image;
+    this.lightboxInfoRequested = showInfo;
     this.lightboxOpen = true;
     const isJxl = image.gallery_filename?.endsWith(".jxl") ?? false;
     // Videos always play from the streaming URL. Never blob-ify an mp4: a 15 s
@@ -623,6 +625,7 @@ class GalleryStore {
       if (!isShared) URL.revokeObjectURL(this.lightboxUrl);
     }
     this.lightboxOpen = false;
+    this.lightboxInfoRequested = false;
     this.selectedImage = null;
     this.lightboxUrl = null;
   }

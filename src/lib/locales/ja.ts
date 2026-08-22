@@ -35,7 +35,7 @@ const ja: Record<string, string> = {
   "common.go_to_top": "トップへ",
   "common.or": "または",
   "common.on": "オン",
-    "common.details": "Details",
+    "common.details": "詳細",
     "common.dismiss_notification": "通知を閉じる",
     "common.done": "Done",
     "common.local": "Local",

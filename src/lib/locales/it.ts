@@ -35,7 +35,7 @@ const it: Record<string, string> = {
   "common.go_to_top": "Torna su",
   "common.or": "o",
   "common.on": "Attivo",
-    "common.details": "Details",
+    "common.details": "Dettagli",
     "common.dismiss_notification": "Chiudi notifica",
     "common.done": "Done",
     "common.local": "Local",

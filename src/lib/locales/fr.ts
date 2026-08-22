@@ -33,7 +33,7 @@ const fr: Record<string, string> = {
   "common.select": "Sélectionner",
   "common.close": "Fermer",
   "common.go_to_top": "Retour en haut",
-  "common.details": "Details",
+  "common.details": "Détails",
   "common.dismiss_notification": "Fermer la notification",
   "common.done": "Done",
   "common.local": "Local",

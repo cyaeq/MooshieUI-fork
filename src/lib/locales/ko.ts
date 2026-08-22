@@ -35,7 +35,7 @@ const ko: Record<string, string> = {
   "common.go_to_top": "맨 위로",
   "common.or": "또는",
   "common.on": "켜짐",
-    "common.details": "Details",
+    "common.details": "세부 정보",
     "common.dismiss_notification": "알림 닫기",
     "common.done": "Done",
     "common.local": "Local",
