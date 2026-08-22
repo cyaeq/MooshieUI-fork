@@ -11,6 +11,7 @@
   import { characterInsert } from "../../stores/characterInsert.svelte.js";
   import CharacterInsertModal from "../../animadex/components/CharacterInsertModal.svelte";
   import type { AnimadexCharacter } from "../../animadex/types.js";
+  import MobileGalleryLightbox from "../gallery/MobileGalleryLightbox.svelte";
 
   interface Props {
     canUseModelhub?: boolean;
@@ -94,6 +95,9 @@
     {/if}
   </main>
   <CharacterInsertModal onapplied={finishCharacterInsert} />
+  <!-- Keep the mobile lightbox at shell level so images opened from the
+       generation results are shown as the image, regardless of the active tab. -->
+  <MobileGalleryLightbox />
   <MobileTabBar
     current={currentTab}
     onChange={go}

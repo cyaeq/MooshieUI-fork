@@ -17,6 +17,7 @@
   import { detectArtistsInPrompt } from "../detection.js";
   import { ARTIST_PREVIEW_RECIPE } from "../previewRecipe.js";
   import type { ArtistPreviewStatus, ArtistPreviewVariant } from "../previewRecipe.js";
+  import { useMobileLayout } from "../../utils/device.js";
 
   type ExplorerTab = "artists" | "characters" | "prompts";
 
@@ -35,6 +36,7 @@
   }
 
   let { manifestUrl, initialTab = "artists", oninsertTag, oninsertCharacter, ongeneratePreview, previewStatus }: Props = $props();
+  const isMobile = useMobileLayout;
 
   let explorerTab = $state<ExplorerTab>("artists");
   let lastInitialTab = $state<ExplorerTab>("artists");
@@ -598,7 +600,7 @@
   });
 </script>
 
-<div class="studio-page studio-artist-page flex h-full w-full flex-col overflow-hidden bg-neutral-950 text-neutral-100">
+<div bind:this={scrollContainer} class="studio-page studio-artist-page flex h-full w-full flex-col {isMobile ? 'overflow-y-auto' : 'overflow-hidden'} bg-neutral-950 text-neutral-100">
   <div class="studio-artist-tabs flex-none border-b border-neutral-800 bg-neutral-900/80 px-4 pt-3">
     <div class="mb-3 flex max-w-full gap-1 overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-950/80 p-1 w-fit overscroll-x-contain">
       <button
@@ -831,7 +833,7 @@
     {/if}
   </header>
 
-  <div class="flex-1 overflow-y-auto" bind:this={scrollContainer}>
+  <div class="{isMobile ? 'flex-none overflow-visible' : 'flex-1 overflow-y-auto'}">
     {#if allError}
       <div class="p-8 text-center text-sm text-red-400">
         {locale.t('artist_gallery.load_error', { error: allError ?? '' })}

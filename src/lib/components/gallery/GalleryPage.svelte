@@ -12,8 +12,6 @@
   import { formatGenerationTime } from "../../utils/localeFormat.js";
   import { useMobileLayout } from "../../utils/device.js";
   import type { OutputImage } from "../../types/index.js";
-  import MobileGalleryLightbox from "./MobileGalleryLightbox.svelte";
-
   interface Props {
     onSwitchToGenerate?: () => void;
   }
@@ -663,6 +661,3 @@
   </div>
 {/if}
 
-{#if isMobile && gallery.lightboxOpen}
-  <MobileGalleryLightbox />
-{/if}
