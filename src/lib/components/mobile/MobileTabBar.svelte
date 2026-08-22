@@ -22,7 +22,7 @@
         ...(showModelhub ? [{ id: "modelhub", labelKey: "nav.modelhub" }] : []),
         { id: "artists", labelKey: "nav.artists" },
         { id: "prompts", labelKey: "bottom_panel.tab.prompts" },
-        { id: "characters", labelKey: "artist_gallery.tab_characters" },
+        { id: "characters", labelKey: "nav.characters" },
         { id: "settings", labelKey: "nav.settings" },
       ] as { id: MobileTab; labelKey: string }[]
     ).filter((tab) => mobileNavigation.isEnabled(tab.id))

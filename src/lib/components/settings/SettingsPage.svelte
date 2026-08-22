@@ -1167,24 +1167,36 @@
     localStorage.setItem("mooshieui.dyslexicFont", String(dyslexicFont));
   });
 
-  // Section collapse state (persisted across tab switches)
-  const COLLAPSED_KEY = "mooshieui.settings.collapsed.v1";
+  // Section collapse state (persisted across tab switches). Mobile and desktop
+  // use separate storage keys so their defaults (collapsed vs expanded) don't
+  // clobber each other.
+  const COLLAPSED_KEY = mobileFriendly
+    ? "mooshieui.settings.collapsed.mobile.v1"
+    : "mooshieui.settings.collapsed.v1";
   let collapsed: Record<string, boolean> = $state(loadCollapsedState());
 
   function loadCollapsedState(): Record<string, boolean> {
+    // Mobile has no category sidebar, so collapse every module by default to
+    // keep the single-column list scannable; desktop stays fully expanded.
+    const d = mobileFriendly;
     const defaults: Record<string, boolean> = {
-      connection: false,
-      appearance: false,
-      performance: false,
-      models: false,
-      modelRequests: false,
-      paths: false,
-      autocomplete: false,
-      interrogator: false,
-      prompt_assistant: false,
-      civitai: false,
-      about: false,
-      sync: false,
+      connection: d,
+      appearance: d,
+      performance: d,
+      quality: d,
+      gpu: d,
+      models: d,
+      modelRequests: d,
+      paths: d,
+      gallery: d,
+      autocomplete: d,
+      interrogator: d,
+      prompt_assistant: d,
+      civitai: d,
+      queue: d,
+      about: d,
+      sync: d,
+      developer: d,
     };
     try {
       const raw = localStorage.getItem(COLLAPSED_KEY);
@@ -1224,6 +1236,28 @@
     { key: "about", labelKey: "settings.sections.about", keywords: "version update check updates about troubleshooting logs export diagnostic github report issue" },
     { key: "sync", labelKey: "settings.sections.sync", keywords: "sync preferences cross browser server backup export import data json lora presets prompt history" },
   ];
+
+  // Inner SVG markup (Lucide-style) keyed by section; rendered inside the nav icon slot.
+  const sectionIcons: Record<string, string> = {
+    appMode: '<rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8" /><path d="M12 17v4" />',
+    connection: '<path d="M5 12.55a11 11 0 0 1 14.08 0" /><path d="M1.42 9a16 16 0 0 1 21.16 0" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" />',
+    appearance: '<circle cx="13.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="10.5" r="2.5" /><circle cx="8.5" cy="7.5" r="2.5" /><circle cx="6.5" cy="12.5" r="2.5" /><path d="M12 2a10 10 0 0 0 0 20c1.1 0 2-.9 2-2v-1a2 2 0 0 1 2-2h1a4 4 0 0 0 4-4 10 10 0 0 0-9-9z" />',
+    performance: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />',
+    quality: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />',
+    gpu: '<rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" /><line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" /><line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" /><line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />',
+    models: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />',
+    modelRequests: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><path d="M9 15l2 2 4-4" />',
+    paths: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />',
+    gallery: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />',
+    autocomplete: '<path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />',
+    interrogator: '<circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />',
+    prompt_assistant: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M9 10h.01" /><path d="M13 10h.01" /><path d="M17 10h.01" />',
+    civitai: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" />',
+    queue: '<line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />',
+    about: '<circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />',
+    sync: '<polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />',
+    developer: '<polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />',
+  };
 
   function sectionVisible(key: string): boolean {
     if (!search.trim()) return true;
@@ -1894,6 +1928,7 @@
     onscroll={onSettingsScroll}
   >
     <div class="studio-settings-layout flex items-start gap-6">
+      {#if !mobileFriendly}
       <aside class="studio-settings-sidebar shrink-0" aria-label={locale.t('settings.title')}>
         <div class="studio-settings-sidebar-inner">
           <p class="studio-settings-sidebar-title">{locale.t('settings.title')}</p>
@@ -1913,13 +1948,18 @@
                 class:active={activeSection === section.key}
                 onclick={() => focusSettingsSection(section.key)}
               >
-                <span>{locale.t(section.labelKey)}</span>
+                <span class="studio-settings-nav-label">
+                  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                  <svg class="studio-settings-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{@html sectionIcons[section.key] ?? ''}</svg>
+                  <span>{locale.t(section.labelKey)}</span>
+                </span>
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
               </button>
             {/each}
           </nav>
         </div>
       </aside>
+      {/if}
       <div class="studio-settings-content flex-1 min-w-0">
         <div class="studio-settings-content-inner max-w-5xl">
       {#if loading}

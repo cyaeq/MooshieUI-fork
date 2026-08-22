@@ -1,5 +1,20 @@
 # Changelog
 
+## What's New in v0.0.3 NewUI
+
+### New features
+- **Settings page sidebar icons**: each section (Connection, Appearance, Performance, Quality, GPU, Models, Gallery, Autocomplete, Prompt Assistant, Civitai, Queue, About, Sync, Developer) now has a dedicated Lucide-style SVG icon in the sidebar navigation, with hover/active accent highlighting.
+- **Mobile settings single-column layout**: the category sidebar is hidden on mobile; sections are collapsed by default for a scannable single-column list. Mobile and desktop use separate localStorage keys for collapse state, so their defaults don't interfere.
+- **Gallery metadata expanded**: the mobile lightbox details view now shows additional generation parameters — Bit Depth, Model Architecture, Smart Guidance, Differential Diffusion, ControlNet Preset/Model/Strength, Prompt Schedule, Upscale Steps/Tiling/Tile Size, and Soft Guidance.
+- **Stable metadata display order**: the settings table in gallery details now follows an explicit logical grouping order instead of raw object-insertion order, with any unknown keys appended at the bottom.
+
+### Fixes and maintenance
+- **Settings sidebar scroll fix**: the sidebar now uses a fixed height with `overflow-y: auto` and `overscroll-behavior: contain`, preventing the layout from breaking on long section lists.
+- **Navigation label consistency**: the mobile tab bar's Characters tab now uses the shared `nav.characters` key; the Artist Gallery's Prompts tab uses a dedicated `artist_gallery.tab_prompts` key.
+- **i18n coverage**: added 14 new translation keys (`nav.characters`, `artist_gallery.tab_prompts`, `gallery.meta.bit_depth`, `gallery.meta.upscale_steps`, `gallery.meta.upscale_tiling`, `gallery.meta.upscale_tile_size`, `gallery.meta.soft_guidance`, `gallery.meta.model_architecture`, `gallery.meta.smart_guidance`, `gallery.meta.differential_diffusion`, `gallery.meta.controlnet_preset`, `gallery.meta.controlnet_model`, `gallery.meta.controlnet_strength`, `gallery.meta.prompt_schedule`) across all 12 supported languages (DE, EN, ES, FR, IT, JA, KO, PL, PT, RU, ZH-TW, ZH).
+
+---
+
 ## What's New in v2.1.3
 
 ### Fixes and maintenance

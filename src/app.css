@@ -1443,7 +1443,9 @@ html.light .lightbox-backdrop {
   position: sticky;
   top: 0;
   width: clamp(15rem, 22vw, 20rem);
-  min-height: calc(100vh - 3.75rem);
+  height: calc(100vh - 3.75rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   align-self: flex-start;
   border-right: 1px solid color-mix(in srgb, var(--studio-line, #404040) 72%, transparent);
   background: color-mix(in srgb, var(--theme-background) 98%, black 2%);
@@ -1535,6 +1537,23 @@ html.light .lightbox-backdrop {
   height: 1rem;
   flex: 0 0 auto;
   color: var(--color-neutral-500);
+}
+
+.studio-settings-nav-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.studio-settings-nav-icon {
+  color: var(--color-neutral-400);
+  transition: color 140ms ease;
+}
+
+.studio-settings-nav button:hover .studio-settings-nav-icon,
+.studio-settings-nav button.active .studio-settings-nav-icon {
+  color: var(--theme-accent-400);
 }
 
 .studio-settings-content {

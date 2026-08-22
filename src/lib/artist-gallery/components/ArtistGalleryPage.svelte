@@ -615,7 +615,7 @@
         class="rounded-md px-3 py-1 text-xs font-medium transition-colors {explorerTab === 'prompts' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
         onclick={() => (explorerTab = 'prompts')}
       >
-        {locale.t('generation.prompts.title')}
+        {locale.t('artist_gallery.tab_prompts')}
       </button>
       <button
         type="button"
