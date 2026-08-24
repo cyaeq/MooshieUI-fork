@@ -3102,5 +3102,55 @@ const fr: Record<string, string> = {
 
   "prompt_favourites.negative_prompt_dialog": "Prompt négatif",
 
+  "prompt_favourites.name": "Nom",
+
+  "prompt_favourites.name_placeholder": "Nom optionnel",
+
+  "prompt_favourites.unnamed": "Sans titre",
+
+  "prompt_favourites.move_up": "Monter",
+
+  "prompt_favourites.move_down": "Descendre",
+
+  "prompt_favourites.copy": "Copier",
+
+  "prompt_favourites.copied": "Copié",
+
+  "prompt_favourites.import": "Importer",
+
+  "prompt_favourites.import_mode": "Mode d'import",
+
+  "prompt_favourites.import_mode_merge": "Fusionner",
+
+  "prompt_favourites.import_mode_replace": "Remplacer",
+
+  "prompt_favourites.imported": "{count} prompts importés",
+
+  "prompt_favourites.edit_title": "Modifier le prompt enregistré",
+
+  "prompt_favourites.edit_desc": "Renommez-le, ajustez les prompts ou déplacez-le dans un autre groupe.",
+
+  "prompt_favourites.group": "Groupe",
+
+  "prompt_favourites.no_group": "Aucun groupe",
+
+  "prompt_favourites.delete_confirm": "Supprimer ce prompt enregistré ?",
+
+  "prompt_favourites.loading": "Chargement…",
+
+  "prompt_brackets.round": "parenthèses",
+
+  "prompt_brackets.square": "crochets",
+
+  "prompt_brackets.curly": "accolades",
+
+  "prompt_brackets.out_of_order": "Une {brackets} fermante apparaît avant son ouverture.",
+
+  "prompt_brackets.extra_opening": "{count} {brackets} non fermées.",
+
+  "prompt_brackets.extra_closing": "{count} {brackets} fermantes en trop.",
+
+  "prompt_brackets.badge": "Parenthèses",
+
 };
 export default fr;

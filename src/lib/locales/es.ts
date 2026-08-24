@@ -3105,5 +3105,55 @@ const es: Record<string, string> = {
 
   "prompt_favourites.negative_prompt_dialog": "Prompt negativo",
 
+  "prompt_favourites.name": "Nombre",
+
+  "prompt_favourites.name_placeholder": "Nombre opcional",
+
+  "prompt_favourites.unnamed": "Sin título",
+
+  "prompt_favourites.move_up": "Subir",
+
+  "prompt_favourites.move_down": "Bajar",
+
+  "prompt_favourites.copy": "Copiar",
+
+  "prompt_favourites.copied": "Copiado",
+
+  "prompt_favourites.import": "Importar",
+
+  "prompt_favourites.import_mode": "Modo de importación",
+
+  "prompt_favourites.import_mode_merge": "Combinar",
+
+  "prompt_favourites.import_mode_replace": "Reemplazar",
+
+  "prompt_favourites.imported": "{count} prompts importados",
+
+  "prompt_favourites.edit_title": "Editar prompt guardado",
+
+  "prompt_favourites.edit_desc": "Renómbralo, ajusta los prompts o muévelo a otro grupo.",
+
+  "prompt_favourites.group": "Grupo",
+
+  "prompt_favourites.no_group": "Sin grupo",
+
+  "prompt_favourites.delete_confirm": "¿Eliminar este prompt guardado?",
+
+  "prompt_favourites.loading": "Cargando…",
+
+  "prompt_brackets.round": "paréntesis",
+
+  "prompt_brackets.square": "corchetes",
+
+  "prompt_brackets.curly": "llaves",
+
+  "prompt_brackets.out_of_order": "Hay un cierre de {brackets} antes de su apertura.",
+
+  "prompt_brackets.extra_opening": "{count} {brackets} sin cerrar.",
+
+  "prompt_brackets.extra_closing": "{count} {brackets} de cierre de más.",
+
+  "prompt_brackets.badge": "Paréntesis",
+
 };
 export default es;

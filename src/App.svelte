@@ -35,6 +35,7 @@
   import type { AnimadexCharacter } from "./lib/animadex/types.js";
   import { styles as stylesStore } from "./lib/stores/styles.svelte.js";
   import { promptAssistant } from "./lib/stores/promptAssistant.svelte.js";
+  import { promptFavourites } from "./lib/artist-gallery/promptFavourites.svelte.js";
   import { notifications } from "./lib/stores/notifications.svelte.js";
   import NotificationBell from "./lib/components/ui/NotificationBell.svelte";
   import logoUrl from "./lib/assets/logo.png";
@@ -2467,6 +2468,10 @@
 
     // Load persisted settings
     await Promise.all([generation.loadSettings(), autocomplete.loadSettings(), locale.loadSettings()]);
+
+    // Prompt favourites live in SQLite; load after generation so the one-time
+    // history migration can read promptHistory.
+    promptFavourites.init();
 
     // Prompt assistant: detect hardware + pre-select recommended model at launch.
     promptAssistant.init();

@@ -57,7 +57,7 @@ class PrefsSyncStore {
     if (prefs.styles) styles.applyServerPrefs(prefs.styles);
     if (prefs.lora_presets) loraPresets.applyServerPrefs(prefs.lora_presets);
     if (prefs.artist_favourites) artistFavourites.applyServerPrefs(prefs.artist_favourites);
-    if (prefs.prompt_favourites) promptFavourites.applyServerPrefs(prefs.prompt_favourites);
+    if (prefs.prompt_favourites) await promptFavourites.applyServerPrefs(prefs.prompt_favourites);
     if (prefs.gallery_boards) gallery.applyServerPrefs(prefs.gallery_boards);
     if (prefs.autocomplete) {
       await autocomplete

@@ -17,6 +17,7 @@ pub mod model_requests;
 pub mod notifications;
 #[cfg(any(feature = "desktop", feature = "server"))]
 pub mod prompt_assistant;
+pub mod prompt_favourites_db;
 #[cfg(feature = "desktop")]
 pub mod setup;
 pub mod state;
@@ -589,6 +590,14 @@ pub fn run() {
             commands::prompt_assistant::list_external_llm_models,
             commands::prompt_assistant::connect_llm_oauth,
             commands::prompt_assistant::call_external_llm,
+            commands::prompt_favourites::list_prompt_favourites,
+            commands::prompt_favourites::upsert_prompt_favourite,
+            commands::prompt_favourites::delete_prompt_favourite,
+            commands::prompt_favourites::reorder_prompt_favourites,
+            commands::prompt_favourites::set_prompt_favourite_group,
+            commands::prompt_favourites::upsert_prompt_favourite_group,
+            commands::prompt_favourites::delete_prompt_favourite_group,
+            commands::prompt_favourites::import_prompt_favourites,
             commands::api::fetch_cached_image,
             commands::api::read_clipboard_image,
             commands::api::get_gpu_stats,

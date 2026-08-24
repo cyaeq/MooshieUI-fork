@@ -1308,3 +1308,75 @@ export async function getGpuStats(): Promise<GpuStats[]> {
   if (!resp.ok) throw new Error(await resp.text());
   return resp.json();
 }
+
+// --- Prompt favourites (SQLite-backed) ---
+//
+// Wire format is snake_case to match the Rust structs; the store converts to
+// camelCase for UI consumption.
+
+export interface PromptFavouriteRecord {
+  id: string;
+  name: string;
+  positive: string;
+  negative: string;
+  mode: string;
+  style_preset: string;
+  created_at: number;
+  sort_order: number;
+  group_id: string | null;
+}
+
+export interface PromptFavouriteGroupRecord {
+  id: string;
+  title: string;
+  collapsed: boolean;
+  created_at: number;
+  sort_order: number;
+}
+
+export interface PromptFavouritesSnapshot {
+  entries: PromptFavouriteRecord[];
+  groups: PromptFavouriteGroupRecord[];
+}
+
+export async function listPromptFavourites(): Promise<PromptFavouritesSnapshot> {
+  return ipcInvoke("list_prompt_favourites");
+}
+
+export async function upsertPromptFavourite(
+  entry: PromptFavouriteRecord,
+): Promise<void> {
+  await ipcInvoke("upsert_prompt_favourite", { entry });
+}
+
+export async function deletePromptFavourite(id: string): Promise<void> {
+  await ipcInvoke("delete_prompt_favourite", { id });
+}
+
+export async function reorderPromptFavourites(ids: string[]): Promise<void> {
+  await ipcInvoke("reorder_prompt_favourites", { ids });
+}
+
+export async function setPromptFavouriteGroup(
+  id: string,
+  groupId: string | null,
+): Promise<void> {
+  await ipcInvoke("set_prompt_favourite_group", { id, groupId });
+}
+
+export async function upsertPromptFavouriteGroup(
+  group: PromptFavouriteGroupRecord,
+): Promise<void> {
+  await ipcInvoke("upsert_prompt_favourite_group", { group });
+}
+
+export async function deletePromptFavouriteGroup(id: string): Promise<void> {
+  await ipcInvoke("delete_prompt_favourite_group", { id });
+}
+
+export async function importPromptFavourites(
+  snapshot: PromptFavouritesSnapshot,
+  mode: "merge" | "replace",
+): Promise<PromptFavouritesSnapshot> {
+  return ipcInvoke("import_prompt_favourites", { snapshot, mode });
+}

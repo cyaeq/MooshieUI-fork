@@ -3076,5 +3076,55 @@ const ru: Record<string, string> = {
 
   "prompt_favourites.negative_prompt_dialog": "Негативный промпт",
 
+  "prompt_favourites.name": "Название",
+
+  "prompt_favourites.name_placeholder": "Название (необязательно)",
+
+  "prompt_favourites.unnamed": "Без названия",
+
+  "prompt_favourites.move_up": "Переместить вверх",
+
+  "prompt_favourites.move_down": "Переместить вниз",
+
+  "prompt_favourites.copy": "Копировать",
+
+  "prompt_favourites.copied": "Скопировано",
+
+  "prompt_favourites.import": "Импорт",
+
+  "prompt_favourites.import_mode": "Режим импорта",
+
+  "prompt_favourites.import_mode_merge": "Объединить",
+
+  "prompt_favourites.import_mode_replace": "Заменить",
+
+  "prompt_favourites.imported": "Импортировано промптов: {count}",
+
+  "prompt_favourites.edit_title": "Изменить сохранённый промпт",
+
+  "prompt_favourites.edit_desc": "Переименуйте, отредактируйте промпты или переместите в другую группу.",
+
+  "prompt_favourites.group": "Группа",
+
+  "prompt_favourites.no_group": "Без группы",
+
+  "prompt_favourites.delete_confirm": "Удалить этот сохранённый промпт?",
+
+  "prompt_favourites.loading": "Загрузка…",
+
+  "prompt_brackets.round": "круглые скобки",
+
+  "prompt_brackets.square": "квадратные скобки",
+
+  "prompt_brackets.curly": "фигурные скобки",
+
+  "prompt_brackets.out_of_order": "Закрывающая {brackets} стоит раньше открывающей.",
+
+  "prompt_brackets.extra_opening": "Незакрытых {brackets}: {count}.",
+
+  "prompt_brackets.extra_closing": "Лишних закрывающих {brackets}: {count}.",
+
+  "prompt_brackets.badge": "Скобки",
+
 };
 export default ru;

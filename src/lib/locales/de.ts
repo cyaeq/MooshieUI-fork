@@ -3078,5 +3078,55 @@ const de: Record<string, string> = {
 
   "prompt_favourites.negative_prompt_dialog": "Negativer Prompt",
 
+  "prompt_favourites.name": "Name",
+
+  "prompt_favourites.name_placeholder": "Optionaler Name",
+
+  "prompt_favourites.unnamed": "Ohne Titel",
+
+  "prompt_favourites.move_up": "Nach oben",
+
+  "prompt_favourites.move_down": "Nach unten",
+
+  "prompt_favourites.copy": "Kopieren",
+
+  "prompt_favourites.copied": "Kopiert",
+
+  "prompt_favourites.import": "Importieren",
+
+  "prompt_favourites.import_mode": "Importmodus",
+
+  "prompt_favourites.import_mode_merge": "Zusammenführen",
+
+  "prompt_favourites.import_mode_replace": "Ersetzen",
+
+  "prompt_favourites.imported": "{count} Prompts importiert",
+
+  "prompt_favourites.edit_title": "Gespeicherten Prompt bearbeiten",
+
+  "prompt_favourites.edit_desc": "Umbenennen, Prompts anpassen oder in eine andere Gruppe verschieben.",
+
+  "prompt_favourites.group": "Gruppe",
+
+  "prompt_favourites.no_group": "Keine Gruppe",
+
+  "prompt_favourites.delete_confirm": "Diesen gespeicherten Prompt löschen?",
+
+  "prompt_favourites.loading": "Wird geladen…",
+
+  "prompt_brackets.round": "runde Klammern",
+
+  "prompt_brackets.square": "eckige Klammern",
+
+  "prompt_brackets.curly": "geschweifte Klammern",
+
+  "prompt_brackets.out_of_order": "Eine schließende {brackets} steht vor der öffnenden.",
+
+  "prompt_brackets.extra_opening": "{count} nicht geschlossene {brackets}.",
+
+  "prompt_brackets.extra_closing": "{count} überzählige schließende {brackets}.",
+
+  "prompt_brackets.badge": "Klammern",
+
 };
 export default de;
