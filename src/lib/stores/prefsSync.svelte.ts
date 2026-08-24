@@ -9,6 +9,7 @@ import { generation } from "./generation.svelte.js";
 import { locale } from "./locale.svelte.js";
 import { loraPresets } from "./loraPresets.svelte.js";
 import { notes } from "./notes.svelte.js";
+import { paramPresets } from "./paramPresets.svelte.js";
 import { promptPresets } from "./promptPresets.svelte.js";
 import { styles } from "./styles.svelte.js";
 import { videoTimeline } from "./videoTimeline.svelte.js";
@@ -35,6 +36,7 @@ class PrefsSyncStore {
       prompt_presets: promptPresets.collectPrefs(),
       styles: styles.collectPrefs(),
       lora_presets: loraPresets.collectPrefs(),
+      param_presets: paramPresets.collectPrefs(),
       artist_favourites: artistFavourites.collectPrefs(),
       prompt_favourites: promptFavourites.collectPrefs(),
       gallery_boards: gallery.collectPrefs(),
@@ -56,6 +58,7 @@ class PrefsSyncStore {
     if (prefs.prompt_presets) promptPresets.applyServerPrefs(prefs.prompt_presets);
     if (prefs.styles) styles.applyServerPrefs(prefs.styles);
     if (prefs.lora_presets) loraPresets.applyServerPrefs(prefs.lora_presets);
+    if (prefs.param_presets) paramPresets.applyServerPrefs(prefs.param_presets);
     if (prefs.artist_favourites) artistFavourites.applyServerPrefs(prefs.artist_favourites);
     if (prefs.prompt_favourites) await promptFavourites.applyServerPrefs(prefs.prompt_favourites);
     if (prefs.gallery_boards) gallery.applyServerPrefs(prefs.gallery_boards);

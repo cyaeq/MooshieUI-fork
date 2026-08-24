@@ -28,6 +28,7 @@
   import { ipcListen, isTauri, authHeaders } from "../../utils/ipc.js";
   import { onMount } from "svelte";
   import InfoTip from "../ui/InfoTip.svelte";
+  import EditableValue from "../ui/EditableValue.svelte";
   import { scrollCapture } from "../../utils/scrollCapture.js";
 
   let preprocessorAvailable = $state<boolean | null>(null);
@@ -867,9 +868,14 @@
         <span>{locale.t('generation.controlnet.strength')}<InfoTip
           text={locale.t('generation.controlnet.strength_tip')}
         /></span>
-        <span class="text-neutral-300"
-          >{locale.formatDecimal(generation.controlnetStrength, 2)}</span
-        >
+        <EditableValue
+          value={generation.controlnetStrength}
+          min={0}
+          max={controlnetStrengthMax}
+          step={0.05}
+          decimals={2}
+          onchange={(v) => { generation.controlnetStrength = v; }}
+        />
       </label>
       <input
         type="range"
@@ -889,9 +895,14 @@
           <span>{locale.t('generation.controlnet.start_percent')}<InfoTip
             text={locale.t('generation.controlnet.start_percent_tip')}
           /></span>
-          <span class="text-neutral-300"
-            >{locale.formatPercent(generation.controlnetStartPercent * 100, 0)}</span
-          >
+          <EditableValue
+            value={Math.round(generation.controlnetStartPercent * 100)}
+            min={0}
+            max={100}
+            step={5}
+            suffix="%"
+            onchange={(v) => { generation.controlnetStartPercent = v / 100; }}
+          />
         </label>
         <input
           type="range"
@@ -909,9 +920,14 @@
           <span>{locale.t('generation.controlnet.end_percent')}<InfoTip
             text={locale.t('generation.controlnet.end_percent_tip')}
           /></span>
-          <span class="text-neutral-300"
-            >{locale.formatPercent(generation.controlnetEndPercent * 100, 0)}</span
-          >
+          <EditableValue
+            value={Math.round(generation.controlnetEndPercent * 100)}
+            min={0}
+            max={100}
+            step={5}
+            suffix="%"
+            onchange={(v) => { generation.controlnetEndPercent = v / 100; }}
+          />
         </label>
         <input
           type="range"

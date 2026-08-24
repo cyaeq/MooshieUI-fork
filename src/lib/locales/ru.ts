@@ -482,9 +482,9 @@ const ru: Record<string, string> = {
   "settings.quality_warning.keep": "Оставить включённым",
   "settings.quality_warning.disable": "Всё равно отключить",
   "settings.advanced_mode.label": "Advanced Mode",
-  "settings.advanced_mode.desc": "Stop auto-applying recommended steps, CFG, sampler, scheduler, and dimensions when you switch checkpoints. Your current settings are kept on every model swap.",
+  "settings.advanced_mode.desc": "Включено по умолчанию: при смене чекпоинта рекомендуемые шаги, CFG, сэмплер, планировщик и размеры никогда не применяются автоматически. Рекомендации по-прежнему отображаются, чтобы вы могли применить их сами. Отключите, чтобы смена модели настраивала эти параметры за вас.",
   "settings.advanced_mode.warning_title": "Enable Advanced Mode?",
-  "settings.advanced_mode.warning_body": "With Advanced Mode on, switching checkpoints will no longer auto-tune steps, CFG, sampler, scheduler, or dimensions for the selected model. You'll set these yourself. Model family detection still works.",
+  "settings.advanced_mode.warning_body": "При включённом расширенном режиме смена чекпоинта больше не будет автоматически подбирать шаги, CFG, сэмплер, планировщик и размеры под выбранную модель. Вы задаёте их сами, ориентируясь на подсказки. Определение семейства модели продолжает работать.",
   "settings.advanced_mode.enable": "Enable",
   "settings.advanced_mode.cancel": "Cancel",
 
@@ -3125,6 +3125,76 @@ const ru: Record<string, string> = {
   "prompt_brackets.extra_closing": "Лишних закрывающих {brackets}: {count}.",
 
   "prompt_brackets.badge": "Скобки",
+
+  "settings.lora_weight_limit.label": "Снять ограничение веса LoRA",
+
+  "settings.lora_weight_limit.desc": "Позволяет поднять ползунки силы LoRA выше стандартного предела 2. Для весов выше предела в панели LoRA показывается предупреждение.",
+
+  "settings.lora_weight_limit.warning_title": "Снять ограничение веса LoRA?",
+
+  "settings.lora_weight_limit.warning_body": "Сила LoRA выше 2 обычно «выжигает» изображение: выцветшие цвета, артефакты, искажённая анатомия. Снимайте ограничение только если знаете, что конкретной LoRA это нужно.",
+
+  "settings.lora_weight_limit.enable": "Снять",
+
+  "settings.lora_weight_limit.cancel": "Отмена",
+
+  "settings.lora_weight_limit.max_label": "Максимальный вес LoRA",
+
+  "settings.lora_weight_limit.max_desc": "От 2 до 10. Применяется к ползункам силы модели и CLIP.",
+
+  "generation.model.lora_over_cap_warning": "Одна или несколько LoRA превышают стандартный вес 2. Очень высокие веса часто «выжигают» изображение (выцветшие цвета, артефакты, искажённая анатомия).",
+
+  "param_presets.title": "Предустановки параметров",
+
+  "param_presets.select_placeholder": "Выберите предустановку...",
+
+  "param_presets.name_placeholder": "Имя новой предустановки (необязательно)",
+
+  "param_presets.save_current": "Сохранить текущие",
+
+  "param_presets.update": "Обновить",
+
+  "param_presets.delete": "Удалить",
+
+  "param_presets.apply": "Применить",
+
+  "param_presets.untitled": "Безымянная предустановка",
+
+  "param_presets.default_name": "Предустановка {n}",
+
+  "param_presets.saved": "Предустановка \"{name}\" сохранена",
+
+  "param_presets.error.select_first": "Сначала выберите предустановку.",
+
+  "param_presets.error.not_found": "Предустановка не найдена.",
+
+  "param_presets.updated": "Предустановка \"{name}\" обновлена",
+
+  "param_presets.applied": "Предустановка применена.",
+
+  "param_presets.delete_confirm": "Удалить предустановку \"{name}\"?",
+
+  "param_presets.deleted": "Предустановка удалена.",
+
+  "generation.sampler.family_recommended": "Рекомендуемые настройки для {model}",
+
+  "generation.sampler.family_recommended_generic": "Рекомендуемые настройки",
+
+  "generation.sampler.family_rec_hint": "Значения по умолчанию для определённого семейства моделей. В расширенном режиме ваши значения сохраняются при смене модели, поэтому применяйте эти параметры вручную.",
+
+  "generation.sampler.family_rec_hint_unknown": "Семейство модели определить не удалось, поэтому показаны общие значения по умолчанию.",
+
+  "generation.sampler.family_rec_res": "Разрешение",
+
+  "generation.sampler.family_rec_upscale_denoise": "Denoise апскейла",
+
+  "generation.sampler.family_rec_flux_guidance": "Flux Guidance",
+
+  "generation.sampler.family_rec_matches": "Текущие значения уже совпадают с рекомендацией.",
+
+  "generation.sampler.steps_range": "Шаги: {min}-{max}",
+
+  "generation.sampler.cfg_range": "CFG: {min}-{max}",
 
 };
 export default ru;

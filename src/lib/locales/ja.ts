@@ -491,9 +491,9 @@ const ja: Record<string, string> = {
   "settings.quality_warning.keep": "有効のまま",
   "settings.quality_warning.disable": "無効にする",
   "settings.advanced_mode.label": "Advanced Mode",
-  "settings.advanced_mode.desc": "Stop auto-applying recommended steps, CFG, sampler, scheduler, and dimensions when you switch checkpoints. Your current settings are kept on every model swap.",
+  "settings.advanced_mode.desc": "既定でオンです。チェックポイントを切り替えても、推奨のステップ数・CFG・サンプラー・スケジューラー・解像度が自動適用されることはありません。推奨値は表示されるので自分で適用できます。オフにすると、モデル切り替え時にこれらのパラメーターが自動調整されます。",
   "settings.advanced_mode.warning_title": "Enable Advanced Mode?",
-  "settings.advanced_mode.warning_body": "With Advanced Mode on, switching checkpoints will no longer auto-tune steps, CFG, sampler, scheduler, or dimensions for the selected model. You'll set these yourself. Model family detection still works.",
+  "settings.advanced_mode.warning_body": "アドバンストモードをオンにすると、チェックポイントを切り替えても選択したモデル向けにステップ数・CFG・サンプラー・スケジューラー・解像度が自動調整されなくなります。推奨値のヒントを見ながら自分で設定してください。モデルファミリーの検出は引き続き機能します。",
   "settings.advanced_mode.enable": "Enable",
   "settings.advanced_mode.cancel": "Cancel",
 
@@ -3150,6 +3150,76 @@ const ja: Record<string, string> = {
   "prompt_brackets.extra_closing": "余分な閉じ{brackets}が {count} 個あります。",
 
   "prompt_brackets.badge": "括弧",
+
+  "settings.lora_weight_limit.label": "LoRA の重み上限を解除",
+
+  "settings.lora_weight_limit.desc": "LoRA 強度スライダーを既定の上限 2 より大きくできます。既定の上限を超えた重みには LoRA パネルで警告が表示されます。",
+
+  "settings.lora_weight_limit.warning_title": "LoRA の重み上限を解除しますか？",
+
+  "settings.lora_weight_limit.warning_body": "LoRA 強度が 2 を超えると、色あせ・アーティファクト・破綻した人体など画像が焼き付くことがほとんどです。特定の LoRA に必要だと分かっている場合のみ解除してください。",
+
+  "settings.lora_weight_limit.enable": "解除",
+
+  "settings.lora_weight_limit.cancel": "キャンセル",
+
+  "settings.lora_weight_limit.max_label": "LoRA の重み最大値",
+
+  "settings.lora_weight_limit.max_desc": "2 から 10 の範囲。モデル強度と CLIP 強度の両方のスライダーに適用されます。",
+
+  "generation.model.lora_over_cap_warning": "既定の重み 2 を超えている LoRA があります。非常に高い重みは画像を焼き付かせることが多いです（色あせ、アーティファクト、破綻した人体）。",
+
+  "param_presets.title": "パラメータープリセット",
+
+  "param_presets.select_placeholder": "プリセットを選択...",
+
+  "param_presets.name_placeholder": "新しいプリセット名（任意）",
+
+  "param_presets.save_current": "現在の設定を保存",
+
+  "param_presets.update": "更新",
+
+  "param_presets.delete": "削除",
+
+  "param_presets.apply": "適用",
+
+  "param_presets.untitled": "名称未設定のプリセット",
+
+  "param_presets.default_name": "プリセット {n}",
+
+  "param_presets.saved": "プリセット「{name}」を保存しました",
+
+  "param_presets.error.select_first": "先にプリセットを選択してください。",
+
+  "param_presets.error.not_found": "プリセットが見つかりません。",
+
+  "param_presets.updated": "プリセット「{name}」を更新しました",
+
+  "param_presets.applied": "プリセットを適用しました。",
+
+  "param_presets.delete_confirm": "プリセット「{name}」を削除しますか？",
+
+  "param_presets.deleted": "プリセットを削除しました。",
+
+  "generation.sampler.family_recommended": "{model} の推奨設定",
+
+  "generation.sampler.family_recommended_generic": "推奨設定",
+
+  "generation.sampler.family_rec_hint": "検出されたモデルファミリーの既定値です。詳細モードではモデル切り替え時に現在の値が保持されるため、必要な場合は手動で適用してください。",
+
+  "generation.sampler.family_rec_hint_unknown": "モデルファミリーを検出できなかったため、プロジェクト共通の既定値を表示しています。",
+
+  "generation.sampler.family_rec_res": "解像度",
+
+  "generation.sampler.family_rec_upscale_denoise": "アップスケールのノイズ除去",
+
+  "generation.sampler.family_rec_flux_guidance": "Flux ガイダンス",
+
+  "generation.sampler.family_rec_matches": "現在の値はすでに推奨値と一致しています。",
+
+  "generation.sampler.steps_range": "ステップ: {min}-{max}",
+
+  "generation.sampler.cfg_range": "CFG: {min}-{max}",
 
 };
 export default ja;

@@ -482,9 +482,9 @@ const ko: Record<string, string> = {
   "settings.quality_warning.keep": "활성 유지",
   "settings.quality_warning.disable": "그래도 비활성화",
   "settings.advanced_mode.label": "Advanced Mode",
-  "settings.advanced_mode.desc": "Stop auto-applying recommended steps, CFG, sampler, scheduler, and dimensions when you switch checkpoints. Your current settings are kept on every model swap.",
+  "settings.advanced_mode.desc": "기본으로 켜져 있습니다. 체크포인트를 바꿔도 권장 스텝, CFG, 샘플러, 스케줄러, 해상도가 자동 적용되지 않습니다. 권장값은 계속 표시되므로 직접 적용할 수 있습니다. 끄면 모델 변경 시 해당 파라미터가 자동으로 조정됩니다.",
   "settings.advanced_mode.warning_title": "Enable Advanced Mode?",
-  "settings.advanced_mode.warning_body": "With Advanced Mode on, switching checkpoints will no longer auto-tune steps, CFG, sampler, scheduler, or dimensions for the selected model. You'll set these yourself. Model family detection still works.",
+  "settings.advanced_mode.warning_body": "고급 모드를 켜면 체크포인트를 바꿔도 선택한 모델에 맞춰 스텝, CFG, 샘플러, 스케줄러, 해상도가 자동 조정되지 않습니다. 권장값 힌트를 참고해 직접 설정해야 합니다. 모델 계열 감지는 계속 작동합니다.",
   "settings.advanced_mode.enable": "Enable",
   "settings.advanced_mode.cancel": "Cancel",
 
@@ -3125,6 +3125,76 @@ const ko: Record<string, string> = {
   "prompt_brackets.extra_closing": "불필요한 닫는 {brackets} {count}개.",
 
   "prompt_brackets.badge": "괄호",
+
+  "settings.lora_weight_limit.label": "LoRA 가중치 상한 해제",
+
+  "settings.lora_weight_limit.desc": "LoRA 강도 슬라이더를 기본 상한 2 이상으로 올립니다. 기본 상한을 넘는 가중치는 LoRA 패널에 경고가 표시됩니다.",
+
+  "settings.lora_weight_limit.warning_title": "LoRA 가중치 상한을 해제할까요?",
+
+  "settings.lora_weight_limit.warning_body": "LoRA 강도가 2를 넘으면 색이 바래거나 아티팩트가 생기고 인체가 깨지는 등 이미지가 타는 경우가 많습니다. 특정 LoRA에 필요하다고 확신할 때만 해제하세요.",
+
+  "settings.lora_weight_limit.enable": "해제",
+
+  "settings.lora_weight_limit.cancel": "취소",
+
+  "settings.lora_weight_limit.max_label": "최대 LoRA 가중치",
+
+  "settings.lora_weight_limit.max_desc": "2에서 10 사이. 모델 강도와 CLIP 강도 슬라이더에 모두 적용됩니다.",
+
+  "generation.model.lora_over_cap_warning": "기본 가중치 2를 초과하는 LoRA가 있습니다. 매우 높은 가중치는 이미지를 태우는 경우가 많습니다(색 바램, 아티팩트, 깨진 인체).",
+
+  "param_presets.title": "파라미터 프리셋",
+
+  "param_presets.select_placeholder": "프리셋 선택...",
+
+  "param_presets.name_placeholder": "새 프리셋 이름 (선택)",
+
+  "param_presets.save_current": "현재 설정 저장",
+
+  "param_presets.update": "업데이트",
+
+  "param_presets.delete": "삭제",
+
+  "param_presets.apply": "적용",
+
+  "param_presets.untitled": "이름 없는 프리셋",
+
+  "param_presets.default_name": "프리셋 {n}",
+
+  "param_presets.saved": "프리셋 \"{name}\"을 저장했습니다",
+
+  "param_presets.error.select_first": "먼저 프리셋을 선택하세요.",
+
+  "param_presets.error.not_found": "프리셋을 찾을 수 없습니다.",
+
+  "param_presets.updated": "프리셋 \"{name}\"을 업데이트했습니다",
+
+  "param_presets.applied": "프리셋을 적용했습니다.",
+
+  "param_presets.delete_confirm": "프리셋 \"{name}\"을 삭제할까요?",
+
+  "param_presets.deleted": "프리셋을 삭제했습니다.",
+
+  "generation.sampler.family_recommended": "{model} 권장 설정",
+
+  "generation.sampler.family_recommended_generic": "권장 설정",
+
+  "generation.sampler.family_rec_hint": "감지된 모델 계열의 기본값입니다. 고급 모드에서는 모델을 바꿔도 사용자 값이 유지되므로, 원하면 수동으로 적용하세요.",
+
+  "generation.sampler.family_rec_hint_unknown": "모델 계열을 감지할 수 없어 프로젝트 공통 기본값을 표시합니다.",
+
+  "generation.sampler.family_rec_res": "해상도",
+
+  "generation.sampler.family_rec_upscale_denoise": "업스케일 디노이즈",
+
+  "generation.sampler.family_rec_flux_guidance": "Flux 가이던스",
+
+  "generation.sampler.family_rec_matches": "현재 값이 이미 권장값과 일치합니다.",
+
+  "generation.sampler.steps_range": "스텝: {min}-{max}",
+
+  "generation.sampler.cfg_range": "CFG: {min}-{max}",
 
 };
 export default ko;

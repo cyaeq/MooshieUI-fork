@@ -31,6 +31,8 @@ pub struct UserPrefs {
     pub styles: Option<serde_json::Value>,
     /// LoRA stack presets.
     pub lora_presets: Option<serde_json::Value>,
+    /// Generation parameter presets (sampler/steps/CFG/upscale/... snapshots).
+    pub param_presets: Option<serde_json::Value>,
     /// Favourited artist slugs and user-defined categories.
     pub artist_favourites: Option<serde_json::Value>,
     /// Independent prompt favourite library and groups.

@@ -13,6 +13,67 @@ export interface LoraPayloadEntry {
   strength_clip: number;
 }
 
+/**
+ * Snapshot of the generation parameters a saved preset restores. Deliberately
+ * excludes prompts, LoRAs, seed, input images and UI preferences so a preset can
+ * be applied on top of whatever the user is currently working on.
+ */
+export interface ParamPresetValues {
+  samplerName: string;
+  scheduler: string;
+  steps: number;
+  cfg: number;
+  denoise: number;
+  batchSize: number;
+  fluxGuidance: number;
+  smartGuidance: boolean;
+  width: number;
+  height: number;
+  upscaleEnabled: boolean;
+  upscaleMethod: "algorithmic" | "model";
+  upscaleModel: string | null;
+  upscaleScale: number;
+  upscaleTargetScaleEnabled: boolean;
+  upscaleTargetScale: number;
+  upscaleDenoise: number;
+  upscaleSteps: number;
+  upscaleTileSize: number;
+  upscaleTiling: boolean;
+  upscaleFastRefine: boolean;
+  upscaleSoftGuidance: boolean;
+  upscaleSoftGuidanceMultiplier: number;
+  facefixEnabled: boolean;
+  facefixDetector: string | null;
+  facefixDenoise: number;
+  facefixSteps: number;
+  facefixGuideSize: number;
+  facefixMaxFaces: number;
+  facefixAutoPrompt: boolean;
+  controlnetEnabled: boolean;
+  controlnetMode: "preset" | "custom";
+  controlnetPreset: string | null;
+  controlnetModel: string | null;
+  controlnetPreprocessor: string | null;
+  controlnetStrength: number;
+  controlnetStartPercent: number;
+  controlnetEndPercent: number;
+  styleTransferEnabled: boolean;
+  styleTransferLowScaleEnd: number;
+  styleTransferHighScaleStart: number;
+  styleTransferBeta: number;
+  styleTransferAdainStrength: number;
+  styleTransferRfMode: string;
+  styleTransferGamma: number;
+  styleTransferGammaCurve: number;
+  styleTransferNormStrength: number;
+  styleTransferPmiAlpha: number;
+  styleTransferMegapixels: number;
+  styleTransferBlocks: string;
+  outputFormat: "png" | "jxl" | "webp";
+  outputBitDepth: "8bit" | "16bit";
+  metadataMode: "text_chunk" | "stealth" | "both";
+}
+
 export interface ControlNetPayload {
   enabled: boolean;
   preset: string | null;
