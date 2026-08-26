@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### New features
+- **System RAM management modes**: added Balanced, Low RAM, Minimal, and raw ComfyUI-default modes under Settings > Performance. New installations choose a mode from detected system memory, while manually supplied conflicting ComfyUI memory flags continue to take precedence.
+- **System memory monitoring**: the GPU status panel now reports total system RAM usage from ComfyUI alongside GPU utilization and VRAM, and startup logs record whether pinned host memory is enabled and its reserved budget.
+- **Customizable desktop sidebar**: desktop users can choose which optional sidebar destinations are visible. Prompts and Characters now have direct navigation entries, and browser/LAN mode has a sidebar shortcut for uploading or downloading synchronized preferences.
+- **Gallery board deletion**: custom gallery boards can now be deleted with confirmation. Images assigned to a removed board are returned to Unsorted without deleting the image files.
+
+### Fixes and maintenance
+- **Lower memory use on constrained systems**: Low RAM mode disables ComfyUI pinned host memory, while Minimal mode also disables node-output caching. The same memory policy is applied to both the primary ComfyUI process and worker processes.
+- **Mobile long-press actions restored**: the app no longer suppresses the native context menu on touch layouts, restoring mobile copy, share, and save actions for gallery content and metadata.
+- **Android card borders remain visible**: studio card borders now use an opaque mixed color to prevent Chrome 145 on Android from dropping the card paint.
+- **i18n coverage**: added translations for memory modes, system RAM monitoring, desktop sidebar controls, sync navigation, and gallery board deletion across all 12 supported languages.
+
+---
+
 ## What's New in v0.0.3 NewUI
 
 ### New features

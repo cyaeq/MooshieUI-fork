@@ -1733,7 +1733,8 @@ html.light .lightbox-backdrop {
 .studio-page section,
 .studio-page [class~="bg-neutral-900/60"],
 .studio-page [class~="bg-neutral-900/50"] {
-  border-color: color-mix(in srgb, var(--theme-border-700) 76%, transparent) !important;
+  /* Opaque border: a translucent one drops these cards' paint entirely on Chrome 145 Android. */
+  border-color: color-mix(in srgb, var(--theme-border-700) 76%, var(--theme-background) 24%) !important;
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 3%, transparent);
 }
 

@@ -79,6 +79,12 @@ pub struct AppConfig {
     pub default_height: u32,
     /// VRAM management mode: "auto", "high", "normal", "low", "none"
     pub vram_mode: String,
+    /// System-RAM management mode: "comfyui_default", "balanced", "low_ram", "minimal".
+    ///
+    /// ComfyUI pins up to 40% of system RAM for weight transfers on Windows and only
+    /// reclaims it once RAM is nearly exhausted, so the tighter modes trade transfer
+    /// speed for a much lower resident footprint.
+    pub memory_mode: String,
     /// Keep ComfyUI running after the app closes (default: false)
     pub keep_alive: bool,
     /// Automatically start ComfyUI when the app launches (default: true)
@@ -225,6 +231,7 @@ impl Default for AppConfig {
             default_width: 1024,
             default_height: 1024,
             vram_mode: "normal".to_string(),
+            memory_mode: "balanced".to_string(),
             keep_alive: false,
             auto_start: true,
             theme: "dark".to_string(),

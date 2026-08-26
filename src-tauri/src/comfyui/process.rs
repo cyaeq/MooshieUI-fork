@@ -312,6 +312,61 @@ fn apply_highvram_flag(cmd: &mut tokio::process::Command, config: &AppConfig) {
     }
 }
 
+/// ComfyUI CLI flags that a memory mode wants to add, and the flags it must not
+/// duplicate if the user already set them by hand in `extra_args`.
+///
+/// ComfyUI's cache flags (`--cache-ram`/`--cache-classic`/`--cache-lru`/
+/// `--cache-none`/`--high-ram`) form a mutually exclusive argparse group, so a
+/// duplicate makes ComfyUI exit at startup rather than warn.
+const MEMORY_MODE_CONFLICTING_ARGS: &[&str] = &[
+    "--cache-ram",
+    "--cache-classic",
+    "--cache-lru",
+    "--cache-none",
+    "--high-ram",
+    "--disable-pinned-memory",
+];
+
+/// Add the system-RAM flags for `config.memory_mode`.
+///
+/// The dominant resident cost on Windows is pinned host memory: ComfyUI sizes
+/// `MAX_PINNED_MEMORY` at 40% of system RAM and only reclaims it once available
+/// RAM drops below 512 MB or the page file passes 5%, so a 16 GB machine hands
+/// ~6.4 GB of non-pageable memory to `python.exe` and keeps it. Node-output
+/// caching is a distant second: `--cache-ram` is already the default and its
+/// inactive headroom defaults to the full system RAM, which evicts everything
+/// outside the current prompt after each node.
+///
+/// Yields to hand-written `extra_args` rather than fighting them, in the same
+/// shape as the `--bf16-vae` guard.
+fn apply_memory_mode_flags(cmd: &mut tokio::process::Command, config: &AppConfig) {
+    if config.memory_mode == "comfyui_default" {
+        return;
+    }
+    if let Some(user_arg) = config
+        .extra_args
+        .iter()
+        .find(|a| MEMORY_MODE_CONFLICTING_ARGS.contains(&a.as_str()))
+    {
+        log::info!(
+            "memory_mode='{}' skipped: extra_args already sets '{}'",
+            config.memory_mode,
+            user_arg
+        );
+        return;
+    }
+    match config.memory_mode.as_str() {
+        "low_ram" => {
+            cmd.arg("--disable-pinned-memory");
+        }
+        "minimal" => {
+            cmd.arg("--disable-pinned-memory").arg("--cache-none");
+        }
+        // "balanced" keeps ComfyUI's defaults; reclamation happens at runtime instead.
+        _ => {}
+    }
+}
+
 /// Returns true if the directory has at least one known model-category subdirectory.
 /// If false, the directory is flat and needs per-category classification instead.
 fn is_structured_model_dir(path: &std::path::Path) -> bool {
@@ -906,6 +961,8 @@ pub async fn start_comfyui_process(state: &AppState) -> Result<StartResult, AppE
         _ => {}
     }
 
+    apply_memory_mode_flags(&mut cmd, &config);
+
     // Attention backend flag (mutually exclusive in ComfyUI). Self-heal: only pass
     // the flag if the backing package is actually installed, else fall back to
     // default SDPA so a stale/broken config can't crash ComfyUI at startup.
@@ -1226,6 +1283,7 @@ pub async fn wait_for_ready(state: &AppState, timeout_secs: u64) -> Result<(), A
                 log::warn!("GGUF custom nodes not loaded at startup (optional): {}", e);
             }
             mark_legacy_worker_idle(state).await;
+            log_pinned_memory_budget();
             return Ok(());
         }
 
@@ -1303,6 +1361,26 @@ pub fn read_comfyui_log_tail(lines: usize) -> Option<String> {
         None
     } else {
         Some(tail.join("\n"))
+    }
+}
+
+/// Surface the pinned-memory budget ComfyUI picked, into MooshieUI's own log.
+///
+/// ComfyUI prints `Enabled pinned memory {MB}` during startup and that number is
+/// 40% of system RAM on Windows — non-pageable, and only reclaimed under extreme
+/// pressure. It is the single largest contributor to `python.exe`'s resident set,
+/// so having it next to the app's own logs is what makes a RAM report diagnosable.
+fn log_pinned_memory_budget() {
+    let log_path = std::env::temp_dir().join("comfyui-desktop-stderr.log");
+    let Ok(content) = std::fs::read_to_string(&log_path) else {
+        return;
+    };
+    match content
+        .lines()
+        .find(|l| l.contains("Enabled pinned memory"))
+    {
+        Some(line) => log::info!("[comfyui] {}", line.trim()),
+        None => log::info!("[comfyui] pinned memory disabled"),
     }
 }
 
@@ -1665,6 +1743,8 @@ pub async fn start_worker_process(
         }
         _ => {}
     }
+
+    apply_memory_mode_flags(&mut cmd, &config);
 
     // bf16 VAE for Blackwell
     let has_vae_flag = config.extra_args.iter().any(|a| {

@@ -24,6 +24,11 @@
   import { useMobileLayout, isMobileUA, setForceDesktopOverride } from "../../utils/device.js";
   import { mobileNavigation, MOBILE_OPTIONAL_TABS, type MobileTab } from "../../stores/mobileNavigation.svelte.js";
   import {
+    desktopNavigation,
+    DESKTOP_OPTIONAL_RAIL_ITEMS,
+    type DesktopRailItem,
+  } from "../../stores/desktopNavigation.svelte.js";
+  import {
     applyTheme,
     THEME_PALETTES,
     THEME_TONE_FIELDS,
@@ -63,6 +68,18 @@
     artists: "nav.artists",
     prompts: "bottom_panel.tab.prompts",
     characters: "artist_gallery.tab_characters",
+    settings: "nav.settings",
+  };
+
+  const railItemLabelKeys: Record<DesktopRailItem, string> = {
+    generate: "nav.generate",
+    gallery: "nav.gallery",
+    modelhub: "nav.modelhub",
+    artists: "nav.artist_gallery",
+    prompts: "artist_gallery.tab_prompts",
+    characters: "artist_gallery.tab_characters",
+    interrogate: "generation.interrogate.title",
+    sync: "sidebar.sync.title",
     settings: "nav.settings",
   };
 
@@ -1286,6 +1303,7 @@
   let originalPort = 0;
   let originalMode = "";
   let originalVramMode = "";
+  let originalMemoryMode = "";
   let originalAttentionBackend = "";
   let originalExtraArgs = "";
   let originalModelPaths = "";
@@ -1411,6 +1429,7 @@
     originalPort = config.server_port;
     originalMode = config.server_mode;
     originalVramMode = config.vram_mode;
+    originalMemoryMode = config.memory_mode;
     originalAttentionBackend = config.attention_backend;
     originalExtraArgs = config.extra_args.join(" ");
     originalModelPaths = config.extra_model_paths ?? "";
@@ -1425,6 +1444,7 @@
       config.server_port !== originalPort ||
       config.server_mode !== originalMode ||
       config.vram_mode !== originalVramMode ||
+      config.memory_mode !== originalMemoryMode ||
       config.attention_backend !== originalAttentionBackend ||
       config.ui_server_port !== originalUiServerPort ||
       config.lan_enabled !== originalLanEnabled ||
@@ -2590,6 +2610,25 @@
               </div>
               <p class="mt-2 text-[10px] text-neutral-600">{locale.t("settings.appearance.mobile_tabs_required")}</p>
             </div>
+          {:else}
+            <div class="rounded-lg border border-neutral-700 bg-neutral-950/60 p-4">
+              <p class="text-xs font-medium text-neutral-200">{locale.t("settings.appearance.desktop_rail_title")}</p>
+              <p class="mt-1 text-[10px] text-neutral-500">{locale.t("settings.appearance.desktop_rail_desc")}</p>
+              <div class="mt-3 grid grid-cols-2 gap-2">
+                {#each DESKTOP_OPTIONAL_RAIL_ITEMS as item}
+                  <label class="flex min-h-11 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs text-neutral-300">
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4 accent-indigo-500"
+                      checked={desktopNavigation.isEnabled(item)}
+                      onchange={(event) => desktopNavigation.setEnabled(item, event.currentTarget.checked)}
+                    />
+                    <span>{locale.t(railItemLabelKeys[item])}</span>
+                  </label>
+                {/each}
+              </div>
+              <p class="mt-2 text-[10px] text-neutral-600">{locale.t("settings.appearance.desktop_rail_required")}</p>
+            </div>
           {/if}
           <p class="text-xs font-medium text-neutral-300">{locale.t("settings.appearance.builtin_theme")}</p>
           <p class="text-[10px] text-neutral-500 -mt-2">{locale.t("settings.appearance.builtin_palette_hint")}</p>
@@ -2886,6 +2925,22 @@
               <option value="none">{locale.t('settings.performance.vram_none')}</option>
             </select>
             <p class="text-[10px] text-neutral-500 mt-0.5">{locale.t('settings.performance.vram_note')}</p>
+          </div>
+
+          <div>
+            <label class="block text-xs text-neutral-400 mb-1">{locale.t('settings.performance.memory_mode')}<span class="text-amber-400">*</span></label>
+            <select
+              bind:value={config.memory_mode}
+              onchange={() => { autoSave(); }}
+              class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:border-indigo-500 transition-colors"
+            >
+              <option value="comfyui_default">{locale.t('settings.performance.memory_comfyui_default')}</option>
+              <option value="balanced">{locale.t('settings.performance.memory_balanced')}</option>
+              <option value="low_ram">{locale.t('settings.performance.memory_low_ram')}</option>
+              <option value="minimal">{locale.t('settings.performance.memory_minimal')}</option>
+            </select>
+            <p class="text-[10px] text-neutral-500 mt-0.5">{locale.t(`settings.performance.memory_desc_${config.memory_mode}`)}</p>
+            <p class="text-[10px] text-neutral-500 mt-0.5">{locale.t('settings.performance.memory_note')}</p>
           </div>
 
           <div>

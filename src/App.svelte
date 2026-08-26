@@ -38,6 +38,12 @@
   import { promptFavourites } from "./lib/artist-gallery/promptFavourites.svelte.js";
   import { notifications } from "./lib/stores/notifications.svelte.js";
   import NotificationBell from "./lib/components/ui/NotificationBell.svelte";
+  import SyncButton from "./lib/components/ui/SyncButton.svelte";
+  import {
+    desktopNavigation,
+    DESKTOP_OPTIONAL_RAIL_ITEMS,
+    type DesktopRailItem,
+  } from "./lib/stores/desktopNavigation.svelte.js";
   import logoUrl from "./lib/assets/logo.png";
   import { applyTheme, applyButtonQuality, getActiveThemeLogoUrl, onThemeApplied } from "./lib/utils/theme.js";
   import { serializeSegmentTags } from "./lib/utils/promptSegmentDetail.js";
@@ -573,6 +579,14 @@
   let mobileCurrentTab = $state<PrimaryPage>("generate");
   let mobileGenerateNavigationVersion = $state(0);
   let generationDoneToast = $state<GenerationDoneToast | null>(null);
+
+  // If the rail icon for the active page gets hidden, fall back to the generate page.
+  $effect(() => {
+    if (!DESKTOP_OPTIONAL_RAIL_ITEMS.includes(currentPage as DesktopRailItem)) return;
+    if (!desktopNavigation.isEnabled(currentPage as DesktopRailItem)) {
+      currentPage = "generate";
+    }
+  });
 
   // Auth gate state (browser mode LAN access, token-based)
   let authRequired = $state(false);
@@ -2334,15 +2348,16 @@
 
     // Suppress the native WebView context menu (the "Share", "Save As" (html),
     // "Print" and "Send link to..." entries that point at tauri.localhost and make
-    // no sense in-app) everywhere except editable text, where the native
-    // copy/paste/spellcheck menu is still useful. App-specific right-click menus
-    // (gallery/session images, artist tags) call preventDefault themselves and are
-    // unaffected — this only blocks the default menu where nothing else handles it (#392).
-    window.addEventListener("contextmenu", (e) => {
-      const target = e.target as HTMLElement | null;
-      if (target?.closest('input, textarea, [contenteditable="true"]')) return;
-      e.preventDefault();
-    });
+    // no sense in-app) on the desktop shell. Keep the browser's native menu on
+    // touch layouts: long-press is how mobile users access copy/share/save actions
+    // for gallery images and metadata.
+    if (!useMobileLayout) {
+      window.addEventListener("contextmenu", (e) => {
+        const target = e.target as HTMLElement | null;
+        if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+        e.preventDefault();
+      });
+    }
 
     // Restore window maximize state (Tauri only)
     if (isTauri) {
@@ -3297,6 +3312,7 @@
         </div>
       {/if}
     </div>
+    {#if desktopNavigation.isEnabled("gallery")}
     <button
       class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors {currentPage ===
       'gallery'
@@ -3327,7 +3343,8 @@
         /></svg
       >
     </button>
-    {#if canUseModelhub}
+    {/if}
+    {#if canUseModelhub && desktopNavigation.isEnabled("modelhub")}
     <button
       class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors {currentPage ===
       'modelhub'
@@ -3349,6 +3366,7 @@
       >
     </button>
     {/if}
+    {#if desktopNavigation.isEnabled("artists")}
     <button
       class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors {currentPage ===
       'artists'
@@ -3369,9 +3387,57 @@
         ><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-7 8-7s8 3 8 7" /></svg
       >
     </button>
+    {/if}
+
+    {#if desktopNavigation.isEnabled("prompts")}
+    <button
+      class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors {currentPage ===
+      'prompts'
+        ? 'bg-indigo-600 text-white'
+        : 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200'} mx-auto"
+      onclick={() => (currentPage = "prompts")}
+      title={locale.t("artist_gallery.tab_prompts")}
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        class="w-4.5 h-4.5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        ><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg
+      >
+    </button>
+    {/if}
+
+    {#if desktopNavigation.isEnabled("characters")}
+    <button
+      class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors {currentPage ===
+      'characters'
+        ? 'bg-indigo-600 text-white'
+        : 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200'} mx-auto"
+      onclick={() => (currentPage = "characters")}
+      title={locale.t("artist_gallery.tab_characters")}
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        class="w-4.5 h-4.5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        ><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg
+      >
+    </button>
+    {/if}
 
     <div class="flex-1"></div>
 
+    {#if desktopNavigation.isEnabled("interrogate")}
     <div class="relative mx-auto">
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <button
@@ -3428,6 +3494,11 @@
         </div>
       {/if}
     </div>
+    {/if}
+
+    {#if desktopNavigation.isEnabled("sync")}
+      <SyncButton onOpenSettings={() => (currentPage = "settings")} />
+    {/if}
 
     <button
       class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors {currentPage ===
@@ -3630,6 +3701,24 @@
     {:else if currentPage === "artists"}
       <ArtistGalleryPage
         manifestUrl={connection.artistGalleryManifestUrl}
+        oninsertTag={handleArtistTagInsert}
+        oninsertCharacter={handleCharacterInsert}
+        ongeneratePreview={handleArtistGeneratePreview}
+        previewStatus={artistPreviewStatus}
+      />
+    {:else if currentPage === "prompts"}
+      <ArtistGalleryPage
+        manifestUrl={connection.artistGalleryManifestUrl}
+        initialTab="prompts"
+        oninsertTag={handleArtistTagInsert}
+        oninsertCharacter={handleCharacterInsert}
+        ongeneratePreview={handleArtistGeneratePreview}
+        previewStatus={artistPreviewStatus}
+      />
+    {:else if currentPage === "characters"}
+      <ArtistGalleryPage
+        manifestUrl={connection.artistGalleryManifestUrl}
+        initialTab="characters"
         oninsertTag={handleArtistTagInsert}
         oninsertCharacter={handleCharacterInsert}
         ongeneratePreview={handleArtistGeneratePreview}

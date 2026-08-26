@@ -342,6 +342,39 @@ class GalleryStore {
     this.saveCustomBoards();
   }
 
+  /** How many images are currently assigned to a board. */
+  boardImageCount(name: string): number {
+    const normalized = name.trim();
+    if (!normalized || normalized === "Unsorted") return 0;
+    return Object.values(this.boardAssignments).filter((board) => board === normalized).length;
+  }
+
+  /**
+   * Remove a board. Images assigned to it fall back to "Unsorted" — the
+   * assignment entries are dropped so `boards` stops deriving the name.
+   */
+  deleteBoard(name: string) {
+    const normalized = name.trim();
+    if (!normalized || normalized === "Unsorted") return;
+    if (this.customBoards.includes(normalized)) {
+      this.customBoards = this.customBoards.filter((board) => board !== normalized);
+      this.saveCustomBoards();
+    }
+    const nextAssignments: Record<string, string> = {};
+    let changed = false;
+    for (const [key, board] of Object.entries(this.boardAssignments)) {
+      if (board === normalized) {
+        changed = true;
+        continue;
+      }
+      nextAssignments[key] = board;
+    }
+    if (changed) {
+      this.boardAssignments = nextAssignments;
+      this.saveBoardAssignments();
+    }
+  }
+
   getBoard(image: OutputImage): string {
     const key = image.gallery_filename ?? `${image.prompt_id}::${image.filename}`;
     return this.boardAssignments[key] || "Unsorted";
