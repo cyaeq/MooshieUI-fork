@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## What's New in v0.0.4
 
 ### New features
 - **System RAM management modes**: added Balanced, Low RAM, Minimal, and raw ComfyUI-default modes under Settings > Performance. New installations choose a mode from detected system memory, while manually supplied conflicting ComfyUI memory flags continue to take precedence.
