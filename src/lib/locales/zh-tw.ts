@@ -3169,5 +3169,8 @@ const zhTw: Record<string, string> = {
   "settings.performance.memory_desc_low_ram": "停用鎖頁主機記憶體以降低記憶體使用量。",
   "settings.performance.memory_desc_minimal": "同時停用節點輸出快取，將記憶體使用量降至最低。",
   "settings.performance.memory_note": "安裝時自動偵測。若 python.exe 佔用過多系統記憶體，請降低此設定。",
+  "gallery.delete_board": "刪除畫板",
+  "gallery.delete_board_confirm": "確定刪除畫板「{name}」？",
+  "gallery.delete_board_confirm_with_images": "確定刪除畫板「{name}」？{count} 張圖片將移回「未分類」。圖片本身不會被刪除。",
 };
 export default zhTw;

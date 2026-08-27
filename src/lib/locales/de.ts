@@ -3171,5 +3171,8 @@ const de: Record<string, string> = {
   "settings.performance.memory_desc_low_ram": "Deaktiviert gepinnten Host-Speicher, um den RAM-Verbrauch zu senken.",
   "settings.performance.memory_desc_minimal": "Deaktiviert zusätzlich den Node-Ausgabe-Cache für minimalen RAM-Verbrauch.",
   "settings.performance.memory_note": "Wird bei der Installation automatisch erkannt. Senken Sie den Wert, wenn python.exe zu viel System-RAM belegt.",
+  "gallery.delete_board": "Board löschen",
+  "gallery.delete_board_confirm": "Board \"{name}\" löschen?",
+  "gallery.delete_board_confirm_with_images": "Board \"{name}\" löschen? {count} Bild(er) werden zurück zu Unsortiert verschoben. Die Bilder selbst werden nicht gelöscht.",
 };
 export default de;

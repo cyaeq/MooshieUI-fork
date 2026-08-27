@@ -3169,5 +3169,8 @@ const it: Record<string, string> = {
   "settings.performance.memory_desc_low_ram": "Disattiva la memoria host bloccata per ridurre l'uso della RAM.",
   "settings.performance.memory_desc_minimal": "Disattiva anche la cache degli output dei nodi per ridurre al minimo la RAM.",
   "settings.performance.memory_note": "Rilevato automaticamente durante l'installazione. Abbassa questo valore se python.exe usa troppa RAM di sistema.",
+  "gallery.delete_board": "Elimina board",
+  "gallery.delete_board_confirm": "Eliminare il board \"{name}\"?",
+  "gallery.delete_board_confirm_with_images": "Eliminare il board \"{name}\"? {count} immagine(i) torneranno in Non ordinate. Le immagini non vengono eliminate.",
 };
 export default it;

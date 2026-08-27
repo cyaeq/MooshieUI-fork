@@ -3169,5 +3169,8 @@ const ko: Record<string, string> = {
   "settings.performance.memory_desc_low_ram": "고정 호스트 메모리를 꺼서 RAM 사용량을 줄입니다.",
   "settings.performance.memory_desc_minimal": "노드 출력 캐싱도 꺼서 RAM 사용량을 최소화합니다.",
   "settings.performance.memory_note": "설정 시 자동 감지됩니다. python.exe가 시스템 RAM을 너무 많이 사용하면 낮추세요.",
+  "gallery.delete_board": "보드 삭제",
+  "gallery.delete_board_confirm": "보드 \"{name}\"을(를) 삭제할까요?",
+  "gallery.delete_board_confirm_with_images": "보드 \"{name}\"을(를) 삭제할까요? 이미지 {count}개가 미분류로 돌아갑니다. 이미지 자체는 삭제되지 않습니다.",
 };
 export default ko;

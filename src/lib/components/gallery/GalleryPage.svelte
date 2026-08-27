@@ -137,6 +137,18 @@
     newBoardName = "";
   }
 
+  function deleteSelectedBoard() {
+    const board = galleryBoardFilter.trim();
+    if (!board || board === "all" || board === "Unsorted") return;
+    const count = gallery.boardImageCount(board);
+    const message = count > 0
+      ? locale.t("gallery.delete_board_confirm_with_images", { name: board, count: String(count) })
+      : locale.t("gallery.delete_board_confirm", { name: board });
+    if (!window.confirm(message)) return;
+    gallery.deleteBoard(board);
+    galleryBoardFilter = "all";
+  }
+
   function loadGalleryPrefs() {
     try {
       const raw = localStorage.getItem(GALLERY_PREFS_KEY);
@@ -398,13 +410,16 @@
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-3 items-end">
           <div>
             <div class="text-xs text-neutral-400 mb-1">{locale.t("gallery.board_filter")}</div>
-            <select bind:value={galleryBoardFilter} class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-sm text-neutral-200">
-              <option value="all">{locale.t("gallery.all_boards")}</option>
-              <option value="Unsorted">{locale.t("gallery.unsorted")}</option>
-              {#each gallery.boards as board}
-                <option value={board}>{board}</option>
-              {/each}
-            </select>
+            <div class="flex items-center gap-2">
+              <select bind:value={galleryBoardFilter} class="flex-1 min-w-0 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-sm text-neutral-200">
+                <option value="all">{locale.t("gallery.all_boards")}</option>
+                <option value="Unsorted">{locale.t("gallery.unsorted")}</option>
+                {#each gallery.boards as board}
+                  <option value={board}>{board}</option>
+                {/each}
+              </select>
+              <button class="px-3 py-2 text-xs rounded border border-neutral-700 text-neutral-300 hover:border-red-500 hover:text-red-300 transition-colors disabled:opacity-40" onclick={deleteSelectedBoard} disabled={galleryBoardFilter === "all" || galleryBoardFilter === "Unsorted"} title={locale.t("gallery.delete_board")}>{locale.t("gallery.delete_board")}</button>
+            </div>
           </div>
           <div class="lg:col-span-3">
             <div class="text-xs text-neutral-400 mb-1">{locale.t("gallery.create_board")}</div>

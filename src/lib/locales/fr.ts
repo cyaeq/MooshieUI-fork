@@ -3195,5 +3195,8 @@ const fr: Record<string, string> = {
   "settings.performance.memory_desc_low_ram": "Désactive la mémoire hôte épinglée pour réduire l'utilisation de RAM.",
   "settings.performance.memory_desc_minimal": "Désactive aussi le cache des sorties de nœuds pour minimiser l'utilisation de RAM.",
   "settings.performance.memory_note": "Détecté automatiquement lors de l'installation. Abaissez ce réglage si python.exe consomme trop de RAM système.",
+  "gallery.delete_board": "Supprimer le tableau",
+  "gallery.delete_board_confirm": "Supprimer le tableau \"{name}\" ?",
+  "gallery.delete_board_confirm_with_images": "Supprimer le tableau \"{name}\" ? {count} image(s) reviendront dans Non classé. Les images ne sont pas supprimées.",
 };
 export default fr;

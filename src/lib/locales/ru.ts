@@ -3169,5 +3169,8 @@ const ru: Record<string, string> = {
   "settings.performance.memory_desc_low_ram": "Отключает закреплённую память хоста для снижения потребления ОЗУ.",
   "settings.performance.memory_desc_minimal": "Также отключает кэширование выводов узлов для минимального потребления ОЗУ.",
   "settings.performance.memory_note": "Определяется автоматически при установке. Понизьте, если python.exe занимает слишком много системной памяти.",
+  "gallery.delete_board": "Удалить доску",
+  "gallery.delete_board_confirm": "Удалить доску \"{name}\"?",
+  "gallery.delete_board_confirm_with_images": "Удалить доску \"{name}\"? {count} изображени(й) вернутся в «Без сортировки». Сами изображения не удаляются.",
 };
 export default ru;

@@ -3170,5 +3170,8 @@ const pt: Record<string, string> = {
   "settings.performance.memory_desc_low_ram": "Desativa a memória fixada do host para reduzir o uso de RAM.",
   "settings.performance.memory_desc_minimal": "Desativa também o cache das saídas dos nós para minimizar o uso de RAM.",
   "settings.performance.memory_note": "Detectado automaticamente durante a configuração. Reduza se o python.exe usar RAM do sistema em excesso.",
+  "gallery.delete_board": "Excluir board",
+  "gallery.delete_board_confirm": "Excluir o board \"{name}\"?",
+  "gallery.delete_board_confirm_with_images": "Excluir o board \"{name}\"? {count} imagem(ns) voltarão para Não classificadas. As imagens não são excluídas.",
 };
 export default pt;

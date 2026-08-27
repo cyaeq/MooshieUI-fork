@@ -3198,5 +3198,8 @@ const es: Record<string, string> = {
   "settings.performance.memory_desc_low_ram": "Desactiva la memoria fijada del host para reducir el uso de RAM.",
   "settings.performance.memory_desc_minimal": "También desactiva la caché de salidas de nodos para minimizar el uso de RAM.",
   "settings.performance.memory_note": "Detectado automáticamente durante la instalación. Baja este valor si python.exe usa demasiada RAM del sistema.",
+  "gallery.delete_board": "Eliminar tablero",
+  "gallery.delete_board_confirm": "¿Eliminar el tablero \"{name}\"?",
+  "gallery.delete_board_confirm_with_images": "¿Eliminar el tablero \"{name}\"? {count} imagen(es) volverán a Sin clasificar. Las imágenes no se eliminan.",
 };
 export default es;

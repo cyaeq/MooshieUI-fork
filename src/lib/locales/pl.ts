@@ -3208,5 +3208,8 @@ const pl: Record<string, string> = {
   "settings.performance.memory_desc_low_ram": "Wyłącza przypiętą pamięć hosta, aby zmniejszyć zużycie RAM.",
   "settings.performance.memory_desc_minimal": "Wyłącza także cache wyjść węzłów, aby zminimalizować zużycie RAM.",
   "settings.performance.memory_note": "Wykrywane automatycznie podczas konfiguracji. Obniż, jeśli python.exe zajmuje zbyt dużo pamięci systemowej.",
+  "gallery.delete_board": "Usuń tablicę",
+  "gallery.delete_board_confirm": "Usunąć tablicę \"{name}\"?",
+  "gallery.delete_board_confirm_with_images": "Usunąć tablicę \"{name}\"? {count} obraz(y) wrócą do Nieposortowane. Same obrazy nie zostaną usunięte.",
 };
 export default pl;

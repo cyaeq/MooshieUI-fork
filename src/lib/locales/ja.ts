@@ -3194,5 +3194,8 @@ const ja: Record<string, string> = {
   "settings.performance.memory_desc_low_ram": "ピンホストメモリを無効化してRAM使用量を減らします。",
   "settings.performance.memory_desc_minimal": "ノード出力キャッシュも無効化してRAM使用量を最小化します。",
   "settings.performance.memory_note": "セットアップ時に自動検出されます。python.exeがシステムRAMを使いすぎる場合は下げてください。",
+  "gallery.delete_board": "ボードを削除",
+  "gallery.delete_board_confirm": "ボード「{name}」を削除しますか？",
+  "gallery.delete_board_confirm_with_images": "ボード「{name}」を削除しますか？{count} 枚の画像は未分類に戻ります。画像自体は削除されません。",
 };
 export default ja;
