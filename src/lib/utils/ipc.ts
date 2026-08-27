@@ -253,21 +253,6 @@ export async function ipcOpenFileDialog(options?: {
   });
 }
 
-/** Browser-compatible directory picker. Returns null (not supported in all browsers). */
-export async function ipcOpenDirectoryDialog(): Promise<string | null> {
-  if (isTauri) return null;
-  // Use the modern Directory Picker API if available
-  if ("showDirectoryPicker" in window) {
-    try {
-      const handle = await (window as any).showDirectoryPicker();
-      return handle.name;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
 /** Store abstraction — uses localStorage in browser mode, scoped per-user. */
 export const ipcStore = {
   async get<T>(key: string): Promise<T | undefined> {

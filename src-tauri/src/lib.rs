@@ -506,6 +506,7 @@ pub fn run() {
             commands::api::delete_model_file,
             commands::api::move_model_file,
             commands::api::open_directory,
+            commands::api::browse_directory,
             commands::api::save_image_file,
             commands::api::save_text_file,
             commands::api::embed_image_metadata_bytes,

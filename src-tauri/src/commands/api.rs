@@ -867,6 +867,158 @@ pub async fn open_directory(path: String) -> Result<(), AppError> {
     Ok(())
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct DirectoryEntry {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DirectoryListing {
+    pub current_path: Option<String>,
+    pub parent_path: Option<String>,
+    pub entries: Vec<DirectoryEntry>,
+    pub breadcrumbs: Vec<DirectoryEntry>,
+    pub locations: Vec<DirectoryEntry>,
+}
+
+fn directory_path_string(path: &std::path::Path) -> String {
+    let path = path.to_string_lossy().to_string();
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(unc) = path.strip_prefix(r"\\?\UNC\") {
+            return format!(r"\\{}", unc);
+        }
+        if let Some(regular) = path.strip_prefix(r"\\?\") {
+            return regular.to_string();
+        }
+    }
+    path
+}
+
+fn directory_locations() -> Vec<DirectoryEntry> {
+    let mut locations = Vec::new();
+    if let Some(home) = dirs::home_dir().filter(|path| path.is_dir()) {
+        locations.push(DirectoryEntry {
+            name: directory_path_string(&home),
+            path: directory_path_string(&home),
+        });
+    }
+    #[cfg(target_os = "windows")]
+    for letter in b'A'..=b'Z' {
+        let path = format!("{}:\\", letter as char);
+        if std::path::Path::new(&path).is_dir()
+            && !locations.iter().any(|location| location.path == path)
+        {
+            locations.push(DirectoryEntry {
+                name: path.clone(),
+                path,
+            });
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    if !locations.iter().any(|location| location.path == "/") {
+        locations.push(DirectoryEntry {
+            name: "/".to_string(),
+            path: "/".to_string(),
+        });
+    }
+    locations
+}
+
+fn directory_breadcrumbs(path: &std::path::Path) -> Vec<DirectoryEntry> {
+    let mut ancestors = path.ancestors().collect::<Vec<_>>();
+    ancestors.reverse();
+    ancestors
+        .into_iter()
+        .map(|ancestor| {
+            let path = directory_path_string(ancestor);
+            let name = ancestor
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .filter(|name| !name.is_empty())
+                .unwrap_or_else(|| path.clone());
+            DirectoryEntry { name, path }
+        })
+        .collect()
+}
+
+/// List filesystem directories for the browser-mode path picker. The browser
+/// cannot expose absolute paths itself, so the server performs the directory
+/// enumeration and returns the complete paths that can be used in settings.
+pub(crate) fn browse_directory_for_path(
+    path: Option<String>,
+) -> Result<DirectoryListing, AppError> {
+    let locations = directory_locations();
+    let path = path.filter(|path| !path.trim().is_empty()).or_else(|| {
+        dirs::home_dir()
+            .filter(|path| path.is_dir())
+            .map(|path| directory_path_string(&path))
+    });
+
+    let Some(raw_path) = path else {
+        return Ok(DirectoryListing {
+            current_path: None,
+            parent_path: None,
+            entries: locations.clone(),
+            breadcrumbs: Vec::new(),
+            locations,
+        });
+    };
+
+    let requested = if raw_path == "~" {
+        dirs::home_dir().ok_or_else(|| AppError::Other("Home directory not found".into()))?
+    } else if let Some(rest) = raw_path
+        .strip_prefix("~/")
+        .or_else(|| raw_path.strip_prefix("~\\"))
+    {
+        dirs::home_dir()
+            .ok_or_else(|| AppError::Other("Home directory not found".into()))?
+            .join(rest)
+    } else {
+        std::path::PathBuf::from(raw_path.trim())
+    };
+    let canonical = requested
+        .canonicalize()
+        .map_err(|e| AppError::Other(format!("Cannot open directory: {}", e)))?;
+    let current = std::path::PathBuf::from(directory_path_string(&canonical));
+    if !current.is_dir() {
+        return Err(AppError::Other("Selected path is not a directory".into()));
+    }
+    let current_path = directory_path_string(&current);
+    let parent_path = current.parent().and_then(|parent| {
+        let parent = directory_path_string(parent);
+        (parent != current_path).then_some(parent)
+    });
+    let mut entries = std::fs::read_dir(&current)?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let entry_path = entry.path();
+            entry_path.is_dir().then(|| DirectoryEntry {
+                name: entry.file_name().to_string_lossy().to_string(),
+                path: directory_path_string(&entry_path),
+            })
+        })
+        .collect::<Vec<_>>();
+    entries.sort_by_key(|entry| entry.name.to_lowercase());
+
+    Ok(DirectoryListing {
+        current_path: Some(current_path),
+        parent_path,
+        entries,
+        breadcrumbs: directory_breadcrumbs(&current),
+        locations,
+    })
+}
+
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn browse_directory(path: Option<String>) -> Result<DirectoryListing, AppError> {
+    tokio::task::spawn_blocking(move || browse_directory_for_path(path))
+        .await
+        .map_err(|e| AppError::Other(format!("Directory listing task failed: {}", e)))?
+}
+
 /// Proxy a GET request to the Mooshieblob CDN and return the response body as
 /// text. Used by the Tauri desktop app for JSON fetches (artist gallery
 /// manifest, shards, search index) that would otherwise be blocked by the

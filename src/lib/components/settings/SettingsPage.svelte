@@ -18,7 +18,8 @@
   import ModelRequestsPanel from "./ModelRequestsPanel.svelte";
   import QualityTagsEditor from "./QualityTagsEditor.svelte";
   import LlmProviderPanel from "./LlmProviderPanel.svelte";
-  import { ipcInvoke, ipcListen, isTauri, isBrowserMode, authHeaders, clearAuthToken, ipcOpenDirectoryDialog } from "../../utils/ipc.js";
+  import ServerDirectoryPicker from "./ServerDirectoryPicker.svelte";
+  import { ipcInvoke, ipcListen, isTauri, isBrowserMode, authHeaders, clearAuthToken } from "../../utils/ipc.js";
   import { useMobileLayout, isMobileUA, setForceDesktopOverride } from "../../utils/device.js";
   import { mobileNavigation, MOBILE_OPTIONAL_TABS, type MobileTab } from "../../stores/mobileNavigation.svelte.js";
   import {
@@ -91,15 +92,18 @@
     return profiles.find((profile) => profile.id === config!.theme_profile_id) ?? null;
   });
 
+  let serverDirectoryPicker = $state<{
+    title: string;
+    initialPath: string;
+    resolve: (path: string | null) => void;
+  } | null>(null);
+
   /** Open a directory picker. Returns path string or null. */
-  async function openDirectoryDialog(title: string): Promise<string | null> {
-    if (!isTauri) {
-      // Browser / LAN mode: there is no native Tauri dialog. Fall back to the
-      // web Directory Picker so the Browse button actually responds instead of
-      // silently doing nothing. Note browsers cannot expose absolute paths, so
-      // this returns only the folder name — sufficient for a quick picker
-      // fallback, not a full path.
-      return ipcOpenDirectoryDialog();
+  async function openDirectoryDialog(title: string, initialPath = ""): Promise<string | null> {
+    if (isBrowserMode) {
+      return await new Promise<string | null>((resolve) => {
+        serverDirectoryPicker = { title, initialPath, resolve };
+      });
     }
     const { open } = await import("@tauri-apps/plugin-dialog");
     const selected = await open({ directory: true, multiple: false, title });
@@ -1085,7 +1089,8 @@
 
   async function browseModelDir(i: number) {
     if (!config) return;
-    const selected = await openDirectoryDialog(locale.t('settings.paths.model_dir_dialog_title'));
+    const currentPath = (config.extra_model_paths ?? "").split("\n")[i]?.trim() ?? "";
+    const selected = await openDirectoryDialog(locale.t('settings.paths.model_dir_dialog_title'), currentPath);
     if (selected) {
       const paths = (config.extra_model_paths ?? "").split("\n");
       paths[i] = selected;
@@ -1217,6 +1222,19 @@
     if (!s) return false;
     const q = search.toLowerCase();
     return locale.t(s.labelKey).toLowerCase().includes(q) || s.keywords.includes(q);
+  }
+
+  const visibleSections = $derived(sections.filter((section) => {
+    if (section.key === "appMode" && (!isAdmin || mobileFriendly)) return false;
+    if (["connection", "performance", "paths"].includes(section.key) && !isAdmin) return false;
+    if (["models", "modelRequests", "civitai"].includes(section.key) && !canManageServer) return false;
+    return sectionVisible(section.key);
+  }));
+
+  function focusSettingsSection(key: string) {
+    activeSection = key;
+    const target = document.querySelector<HTMLElement>(`[data-settings-section="${key}"]`);
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   // Track original values for restart-needing settings
@@ -1885,7 +1903,7 @@
       {:else if config}
         <!-- Browser / App Mode Switch (admin only; hidden on mobile — users are already in browser mode) -->
         {#if isAdmin && sectionVisible("appMode") && !mobileFriendly}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="appMode" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <div class="p-5 space-y-3">
             <div class="flex items-center justify-between">
               <div>
@@ -2025,7 +2043,7 @@
 
         <!-- Cross-browser Sync & Data Export/Import -->
         {#if sectionVisible("sync")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="sync" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.sync = !collapsed.sync)}
@@ -2122,7 +2140,7 @@
 
         <!-- Queue (all users — always shown when section visible) -->
         {#if sectionVisible("queue")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="queue" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.queue = !collapsed.queue)}
@@ -2239,7 +2257,7 @@
 
         <!-- Connection (admin / moderator) -->
         {#if isAdmin && sectionVisible("connection")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="connection" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.connection = !collapsed.connection)}
@@ -2380,7 +2398,7 @@
 
         <!-- Appearance -->
         {#if sectionVisible("appearance")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="appearance" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.appearance = !collapsed.appearance)}
@@ -2684,7 +2702,7 @@
 
         <!-- Performance (admin / moderator) -->
         {#if isAdmin && sectionVisible("performance")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="performance" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.performance = !collapsed.performance)}
@@ -2856,7 +2874,7 @@
 
         <!-- Quality Tags (visible to all users) -->
         {#if sectionVisible("quality")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="quality" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.quality = !collapsed.quality)}
@@ -2961,7 +2979,7 @@
 
         <!-- GPU Workers (visible to all users) -->
         {#if sectionVisible("gpu")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="gpu" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.gpu = !collapsed.gpu)}
@@ -3043,7 +3061,7 @@
 
         <!-- Model Management (mods/admins) -->
         {#if canManageServer && sectionVisible("models")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="models" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.models = !collapsed.models)}
@@ -3072,7 +3090,7 @@
 
         <!-- Model Requests (mods/admins) -->
         {#if canManageServer && sectionVisible("modelRequests")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="modelRequests" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.modelRequests = !collapsed.modelRequests)}
@@ -3091,7 +3109,7 @@
 
         <!-- Paths (admin only) -->
         {#if isAdmin && sectionVisible("paths")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="paths" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.paths = !collapsed.paths)}
@@ -3320,7 +3338,7 @@
 
         <!-- Gallery -->
         {#if sectionVisible("gallery")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="gallery" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.gallery = !collapsed.gallery)}
@@ -3548,7 +3566,7 @@
 
         <!-- Autocomplete -->
         {#if sectionVisible("autocomplete")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="autocomplete" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.autocomplete = !collapsed.autocomplete)}
@@ -3728,7 +3746,7 @@
 
         <!-- Interrogator -->
         {#if sectionVisible("interrogator")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="interrogator" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.interrogator = !collapsed.interrogator)}
@@ -3792,7 +3810,7 @@
 
         <!-- Prompt Assistant -->
         {#if sectionVisible("prompt_assistant")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="prompt_assistant" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.prompt_assistant = !collapsed.prompt_assistant)}
@@ -3872,7 +3890,7 @@
 
         <!-- CivitAI (admin / moderator) -->
         {#if canManageServer && sectionVisible("civitai")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="civitai" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.civitai = !collapsed.civitai)}
@@ -4015,7 +4033,7 @@
 
         <!-- About & Updates -->
         {#if sectionVisible("about")}
-        <section class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+        <section data-settings-section="about" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
           <button
             class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
             onclick={() => (collapsed.about = !collapsed.about)}
@@ -4802,3 +4820,19 @@
 {#if showPromptAssistantSetup}
   <PromptAssistantSetupModal onClose={() => (showPromptAssistantSetup = false)} />
 {/if}
+
+{#if serverDirectoryPicker}
+  <ServerDirectoryPicker
+    title={serverDirectoryPicker.title}
+    initialPath={serverDirectoryPicker.initialPath}
+    onselect={(path) => {
+      serverDirectoryPicker?.resolve(path);
+      serverDirectoryPicker = null;
+    }}
+    oncancel={() => {
+      serverDirectoryPicker?.resolve(null);
+      serverDirectoryPicker = null;
+    }}
+  />
+{/if}
+
