@@ -1,5 +1,15 @@
 # Changelog
 
+## What's New in v1.1.1 (MooshieUI F)
+
+### Fixes
+- **Dedicated configuration and data storage**: the Rust backend now stores `config.json`, gallery data, authentication state, caches, and other application data only under `com.mooshieui.f`, so the F edition no longer shares the official edition's `com.mooshieui.desktop` directory. Automatic migration from the shared directory is intentionally skipped because it cannot distinguish official-edition data from F-edition data.
+- **Master UI dependency cleanup**: removed Settings-page references that were accidentally synced from the NewUI branch, keeping master independent of NewUI-only stores and theme APIs and restoring a clean production build.
+- **GPU status i18n**: added the missing System RAM labels and descriptions so the GPU panel no longer displays raw translation keys.
+- **i18n reference validation**: the locale check now scans static `locale.t()` calls and catches keys missing from `en.ts`, preventing raw keys such as the GPU System RAM labels from reaching the UI.
+
+---
+
 ## What's New in v1.1.0 (MooshieUI F)
 
 ### Release

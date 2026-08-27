@@ -40,6 +40,45 @@ if (!en) {
 
 let failed = false;
 
+function sourceFiles(root) {
+  const found = [];
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const full = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...sourceFiles(full));
+    } else if (/\.(?:svelte|ts)$/.test(entry.name) && !full.includes(`${path.sep}locales${path.sep}`)) {
+      found.push(full);
+    }
+  }
+  return found;
+}
+
+const referencedKeys = new Map();
+for (const file of sourceFiles("src")) {
+  const content = fs.readFileSync(file, "utf8");
+  for (const match of content.matchAll(/\blocale\.t\(\s*(["'])([^"']+)\1\s*(?=[,)])/g)) {
+    const key = match[2];
+    const locations = referencedKeys.get(key) ?? [];
+    const line = content.slice(0, match.index).split(/\r?\n/).length;
+    locations.push(`${file}:${line}`);
+    referencedKeys.set(key, locations);
+  }
+}
+
+const undefinedReferences = [...referencedKeys.entries()]
+  .filter(([key]) => !en.has(key))
+  .sort(([a], [b]) => a.localeCompare(b));
+
+console.log("Source references vs en.ts:");
+if (undefinedReferences.length) {
+  failed = true;
+  for (const [key, locations] of undefinedReferences) {
+    console.log(`  missing ${key}: ${locations.slice(0, 3).join(", ")}`);
+  }
+} else {
+  console.log(`  ${referencedKeys.size} static locale.t() keys are defined.`);
+}
+
 console.log("Key counts:");
 for (const f of files) console.log(`  ${f}: ${all[f].size}`);
 
