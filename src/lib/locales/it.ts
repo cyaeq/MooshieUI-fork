@@ -1176,7 +1176,7 @@ const it: Record<string, string> = {
   "downloads.downloaded": "{filename} scaricato",
 
   // ── Aggiornamento ───────────────────────────────────────
-  "updater.available": "MooshieUI v{version} è disponibile",
+  "updater.available": "MooshieUI F v{version} è disponibile",
   "updater.download_now": "Aggiorna ora",
   "updater.later": "Più tardi",
   "updater.downloading": "Download v{version}...",
@@ -1184,7 +1184,7 @@ const it: Record<string, string> = {
   "updater.restart_now": "Riavvia ora",
   "updater.error": "Aggiornamento fallito: {error}",
   "updater.dismiss": "Ignora",
-  "updater.server_available": "MooshieUI v{version} è disponibile — esegui un nuovo deploy per aggiornare!",
+  "updater.server_available": "MooshieUI F v{version} è disponibile — esegui un nuovo deploy per aggiornare!",
   "updater.version_mismatch": "L'aggiornamento potrebbe non essere stato applicato correttamente. Atteso v{expected}, ma in esecuzione v{current}. Prova a scaricare manualmente l'ultima versione.",
 
   // ── Galleria ─────────────────────────────────────────────
@@ -1732,8 +1732,8 @@ const it: Record<string, string> = {
   "settings.queue.management_desc": "Cancella tutte le generazioni in attesa e attive. Interrompe la generazione in corso di tutti gli utenti.",
 
   // About / issue report (added v0.9.9 — awaiting translation)
-  "settings.about.about_button": "About MooshieUI",
-  "settings.about.modal_title": "About MooshieUI",
+  "settings.about.about_button": "About MooshieUI F",
+  "settings.about.modal_title": "About MooshieUI F",
   "settings.about.modal_tagline": "A friendly desktop interface for AI image generation.",
   "settings.about.github_button": "GitHub Repository",
   "settings.about.manual_update_notice": "Automatic updates are disabled for this unofficial build. Download new fork builds manually from Fork Releases, or switch to the official MooshieUI release.",
@@ -2561,7 +2561,7 @@ const it: Record<string, string> = {
   "settings.lan.time.weeks_ago": "{weeks} sett. fa",
   "settings.lan.time.months_ago": "{months} mesi fa",
   "settings.lan.time.years_ago": "{years} anni fa",
-  "app.brand_name": "MooshieUI",
+  "app.brand_name": "MooshieUI F",
   "app.theme_logo": "Logo del tema",
   "settings.appearance.custom_theme_default": "Tema personalizzato",
   "settings.appearance.logo_preview_alt": "anteprima logo del tema",

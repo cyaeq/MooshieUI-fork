@@ -1176,7 +1176,7 @@ const zhTw: Record<string, string> = {
   "downloads.downloaded": "{filename} 下載完成",
 
   // ── 更新器 ──────────────────────────────────────────────
-  "updater.available": "MooshieUI v{version} 可用",
+  "updater.available": "MooshieUI F v{version} 可用",
   "updater.download_now": "立即更新",
   "updater.later": "稍後",
   "updater.downloading": "正在下載 v{version}...",
@@ -1184,7 +1184,7 @@ const zhTw: Record<string, string> = {
   "updater.restart_now": "立即重啟",
   "updater.error": "更新失敗：{error}",
   "updater.dismiss": "關閉",
-  "updater.server_available": "MooshieUI v{version} 已可用 — 請重新部署以完成更新！",
+  "updater.server_available": "MooshieUI F v{version} 已可用 — 請重新部署以完成更新！",
   "updater.version_mismatch": "更新可能未正確套用。預期 v{expected}，但正在執行 v{current}。請嘗試手動下載最新版本。",
 
   // ── 圖庫 ────────────────────────────────────────────────
@@ -1732,12 +1732,12 @@ const zhTw: Record<string, string> = {
   "settings.queue.management_desc": "清除所有等待中與進行中的生成。會中斷所有使用者正在進行的生成。",
 
   // About / issue report (added v0.9.9 — awaiting translation)
-  "settings.about.about_button": "About MooshieUI",
-  "settings.about.modal_title": "About MooshieUI",
-  "settings.about.modal_tagline": "A friendly desktop interface for AI image generation.",
-  "settings.about.github_button": "GitHub Repository",
-  "settings.about.manual_update_notice": "此非官方版本已停用自動更新。請前往 Fork Releases 手動下載新版本，或改用官方 MooshieUI 版本。",
-  "settings.about.fork_updates": "Fork Releases",
+  "settings.about.about_button": "關於 MooshieUI F",
+  "settings.about.modal_title": "關於 MooshieUI F",
+  "settings.about.modal_tagline": "獨立維護和發佈的 AI 圖像生成桌面介面。",
+  "settings.about.github_button": "MooshieUI F 程式碼倉庫",
+  "settings.about.manual_update_notice": "MooshieUI F 獨立維護和發佈。請從此處取得 F 版更新；官方 MooshieUI 使用單獨的更新通道。",
+  "settings.about.fork_updates": "MooshieUI F 更新",
   "settings.about.official_updates": "官方更新",
   "settings.about.gpu_garden_button": "gpu.garden",
   "settings.about.report_issue_button": "Report an Issue",
@@ -2561,7 +2561,7 @@ const zhTw: Record<string, string> = {
   "settings.lan.time.weeks_ago": "{weeks} 週前",
   "settings.lan.time.months_ago": "{months} 個月前",
   "settings.lan.time.years_ago": "{years} 年前",
-  "app.brand_name": "MooshieUI",
+  "app.brand_name": "MooshieUI F",
   "app.theme_logo": "主題標誌",
   "settings.appearance.custom_theme_default": "自訂主題",
   "settings.appearance.logo_preview_alt": "主題標誌預覽",

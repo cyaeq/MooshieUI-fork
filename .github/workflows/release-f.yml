@@ -1,0 +1,325 @@
+name: Build & Release (MooshieUI F)
+
+on:
+  push:
+    tags:
+      - 'f-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. f-v1.1.0)'
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+
+# All jobs run on GitHub-hosted runners. The self-hosted NUC path is kept behind
+# this flag (flip back to the repository/actor check to re-enable it).
+env:
+  USE_NUC_RUNNER: 'false'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            libgtk-3-dev \
+            libsoup-3.0-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Audit Rust dependencies
+        run: cargo install cargo-audit --locked && cd src-tauri && cargo audit
+        continue-on-error: true
+
+      # Built as three separate `tauri build` invocations (one process per format)
+      # instead of one `--target ... ` call with `targets: "all"`. Tauri's bundler
+      # binary-patches a __TAURI_BUNDLE_TYPE marker into the compiled binary per
+      # package type (deb/rpm/appimage); when all three formats are built in a single
+      # process/job (as before), that patch/restore cycle shares mutable on-disk
+      # state across formats. Isolating each build to its own process — mirroring
+      # how the Windows job already isolates to `--bundles nsis` — removes that
+      # shared state entirely.
+      - name: Build Tauri app (Linux, AppImage)
+        if: runner.os != 'Windows'
+        run: npx tauri build --target ${{ matrix.target }} --bundles appimage
+
+      - name: Build Tauri app (Linux, deb)
+        if: runner.os != 'Windows'
+        run: npx tauri build --target ${{ matrix.target }} --bundles deb
+
+      - name: Build Tauri app (Linux, rpm)
+        if: runner.os != 'Windows'
+        run: npx tauri build --target ${{ matrix.target }} --bundles rpm
+
+      - name: Build Tauri app (Windows, NSIS only)
+        if: runner.os == 'Windows'
+        run: npx tauri build --target ${{ matrix.target }} --bundles nsis
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: artifacts-${{ matrix.target }}
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/
+          if-no-files-found: warn
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: artifacts
+          pattern: artifacts-*
+          merge-multiple: true
+
+      - name: Collect release files
+        run: |
+          mkdir -p release-files
+          find artifacts -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" -o -name "*.exe" -o -name "*.msi*" -o -name "*.nsis.zip*" \) -exec cp {} release-files/ \;
+          echo "=== Release files ==="
+          ls -lh release-files/ || echo "No release files found"
+          [ -f "$(find release-files -type f -print -quit)" ] || { echo "ERROR: No release files collected, aborting"; exit 1; }
+
+      - name: Preserve release files before checkout
+        run: cp -r release-files /tmp/release-files
+
+      - name: Checkout (for release notes)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Create or update GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          VERSION="${TAG#f-v}"
+          # Build release body: installer blurb + changelog from RELEASE_NOTES.md
+          printf '%s\n' \
+            '**One-click installer** — just download and run. The app will automatically install ComfyUI, Python, PyTorch, and everything else you need on first launch.' \
+            '' \
+            '### Downloads' \
+            '| Platform | File |' \
+            '|----------|------|' \
+            '| **Windows** | `.msi` or `.exe` |' \
+            '| **Linux** | `.deb` or `.AppImage` |' \
+            '' \
+            '---' \
+            '' \
+            > /tmp/release-body.md
+
+          # Append only this version's section from RELEASE_NOTES.md
+          if [ -f RELEASE_NOTES.md ]; then
+            # Extract from "## What's New in vX.Y.Z" until the next "---" or next version heading
+            sed -n "/^## What's New in v${VERSION}/,/^---$/p" RELEASE_NOTES.md | sed '$ { /^---$/d }' >> /tmp/release-body.md
+          fi
+
+          if gh release view "${TAG}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists; updating notes and replacing assets."
+            gh release edit "${TAG}" \
+              --repo "${{ github.repository }}" \
+              --title "MooshieUI F v${VERSION}" \
+              --notes-file /tmp/release-body.md
+            upload_log="$(mktemp)"
+            if ! gh release upload "${TAG}" \
+              --repo "${{ github.repository }}" \
+              --clobber \
+              /tmp/release-files/* >"${upload_log}" 2>&1; then
+              if grep -qi "immutable release" "${upload_log}"; then
+                echo "Release ${TAG} is immutable; keeping existing release assets."
+              else
+                cat "${upload_log}"
+                rm -f "${upload_log}"
+                exit 1
+              fi
+            fi
+            rm -f "${upload_log}"
+          else
+            gh release create "${TAG}" \
+              --repo "${{ github.repository }}" \
+              --title "MooshieUI F v${VERSION}" \
+              --notes-file /tmp/release-body.md \
+              /tmp/release-files/*
+          fi
+
+  # -------------------------------------------------------------------------
+  # Headless server binary (no webkit / Tauri deps required)
+  # -------------------------------------------------------------------------
+  build-server:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Prepare local build caches (NUC)
+        if: env.USE_NUC_RUNNER == 'true'
+        run: mkdir -p /home/blob/ci-cache/mooshieui/target /home/blob/ci-cache/npm
+
+      - name: Install build dependencies
+        if: env.USE_NUC_RUNNER != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config libssl-dev
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
+        with:
+          toolchain: stable
+
+      - name: Rust cache
+        if: env.USE_NUC_RUNNER != 'true'
+        uses: swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
+        with:
+          workspaces: src-tauri
+
+      # NUC path pins cargo home/target into the persistent cache dir. Split from the
+      # hosted path because an empty CARGO_TARGET_DIR (the old ternary fallback) makes
+      # cargo abort with "the target directory is set to an empty string".
+      - name: Build server binary (NUC)
+        if: env.USE_NUC_RUNNER == 'true'
+        env:
+          CARGO_HOME: /home/blob/.cargo
+          CARGO_TARGET_DIR: /home/blob/ci-cache/mooshieui/target
+        run: |
+          cd src-tauri
+          cargo build --release --no-default-features --features server --bin mooshieui-server
+
+      # Hosted runners use cargo defaults (CARGO_HOME=~/.cargo, target=src-tauri/target)
+      # so the rust-cache action and the upload path below line up.
+      - name: Build server binary
+        if: env.USE_NUC_RUNNER != 'true'
+        run: |
+          cd src-tauri
+          cargo build --release --no-default-features --features server --bin mooshieui-server
+
+      - name: Upload server binary
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: mooshieui-f-server-linux-x86_64
+          path: ${{ env.USE_NUC_RUNNER == 'true' && '/home/blob/ci-cache/mooshieui/target/release/mooshieui-server' || 'src-tauri/target/release/mooshieui-server' }}
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------------
+  # Docker image → GitHub Container Registry
+  # -------------------------------------------------------------------------
+  docker-publish:
+    needs: build-server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Prepare local Docker build cache (NUC)
+        if: env.USE_NUC_RUNNER == 'true'
+        run: mkdir -p /home/blob/ci-cache/docker/mooshieui
+
+      # The CUDA + PyTorch runtime image needs ~20+ GB during build. Ubuntu
+      # runners ship with Android/.NET/tool caches that can exhaust disk and
+      # kill docker buildx mid-push (v1.3.5 failed with "No space left on device").
+      - name: Free disk space for Docker build
+        if: env.USE_NUC_RUNNER != 'true'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+          sudo docker system prune -af || true
+          df -h
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare Docker metadata
+        id: docker-vars
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          OWNER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          VERSION="${TAG#f-v}"
+          MAJOR_MINOR="$(echo "${VERSION}" | awk -F. '{print $1 "." $2}')"
+          SHORT_SHA="${GITHUB_SHA::12}"
+
+          echo "image=ghcr.io/${OWNER}/mooshieui-f" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "major_minor=${MAJOR_MINOR}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract version metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.docker-vars.outputs.image }}
+          tags: |
+            type=raw,value=${{ steps.docker-vars.outputs.version }}
+            type=raw,value=${{ steps.docker-vars.outputs.major_minor }}
+            type=raw,value=${{ steps.docker-vars.outputs.short_sha }}
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Hosted runners cache to a dedicated :buildcache tag in the same GHCR
+          # package (pushed with the existing GITHUB_TOKEN, no PAT needed). This
+          # sidesteps the 10 GB GitHub Actions cache cap that was evicting the
+          # multi-GB CUDA/torch layer and turning ~5 min builds into ~20 min ones.
+          # mode=max caches every stage; a cache miss/outage falls back to a full
+          # build (ignore-error), never a failure.
+          cache-from: ${{ env.USE_NUC_RUNNER == 'true' && 'type=local,src=/home/blob/ci-cache/docker/mooshieui' || format('type=registry,ref={0}:buildcache', steps.docker-vars.outputs.image) }}
+          cache-to: ${{ env.USE_NUC_RUNNER == 'true' && 'type=local,dest=/home/blob/ci-cache/docker/mooshieui,mode=max' || format('type=registry,ref={0}:buildcache,mode=max,ignore-error=true', steps.docker-vars.outputs.image) }}

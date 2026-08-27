@@ -6,11 +6,12 @@
   import { autocomplete } from "../../stores/autocomplete.svelte.js";
   import { generation, DEFAULT_LORA_WEIGHT_MAX, LORA_WEIGHT_LIMIT_CEILING } from "../../stores/generation.svelte.js";
   import { accessibility } from "../../stores/accessibility.svelte.js";
-  import { locale, LOCALE_OPTIONS, type Locale } from "../../stores/locale.svelte.js";
+  import { locale, LOCALE_OPTIONS } from "../../stores/locale.svelte.js";
   import { gallery } from "../../stores/gallery.svelte.js";
   import { prefsSync } from "../../stores/prefsSync.svelte.js";
   import { models } from "../../stores/models.svelte.js";
   import { promptAssistant } from "../../stores/promptAssistant.svelte.js";
+  import { generationLayout } from "../../stores/generationLayout.svelte.js";
   import PromptAssistantSetupModal from "../generation/PromptAssistantSetupModal.svelte";
   import OpenModelFolders from "./OpenModelFolders.svelte";
   import ModelManagerModal from "./ModelManagerModal.svelte";
@@ -23,13 +24,20 @@
   import { useMobileLayout, isMobileUA, setForceDesktopOverride } from "../../utils/device.js";
   import { mobileNavigation, MOBILE_OPTIONAL_TABS, type MobileTab } from "../../stores/mobileNavigation.svelte.js";
   import {
+    desktopNavigation,
+    DESKTOP_OPTIONAL_RAIL_ITEMS,
+    type DesktopRailItem,
+  } from "../../stores/desktopNavigation.svelte.js";
+  import {
     applyTheme,
     THEME_PALETTES,
     THEME_TONE_FIELDS,
     DEFAULT_THEME_TONE_DARK,
     DEFAULT_THEME_TONE_LIGHT,
+    applyButtonQuality,
+    normalizeButtonQuality,
   } from "../../utils/theme.js";
-  import type { ThemeProfile, ThemeTone } from "../../utils/theme.js";
+  import type { ButtonQuality, ThemeProfile, ThemeTone } from "../../utils/theme.js";
   import { onMount, onDestroy } from "svelte";
   import { marked } from "marked";
   import DOMPurify from "dompurify";
@@ -60,6 +68,18 @@
     artists: "nav.artists",
     prompts: "bottom_panel.tab.prompts",
     characters: "artist_gallery.tab_characters",
+    settings: "nav.settings",
+  };
+
+  const railItemLabelKeys: Record<DesktopRailItem, string> = {
+    generate: "nav.generate",
+    gallery: "nav.gallery",
+    modelhub: "nav.modelhub",
+    artists: "nav.artist_gallery",
+    prompts: "artist_gallery.tab_prompts",
+    characters: "artist_gallery.tab_characters",
+    interrogate: "generation.interrogate.title",
+    sync: "sidebar.sync.title",
     settings: "nav.settings",
   };
 
@@ -124,6 +144,7 @@
   let restartNeeded = $state(false);
   let restarting = $state(false);
   let search = $state("");
+  let activeSection = $state("appearance");
 
   let tagUrlInput = $state("");
   let tagFileLoading = $state(false);
@@ -1153,30 +1174,47 @@
   }
 
   let dyslexicFont = $state(localStorage.getItem("mooshieui.dyslexicFont") === "true");
+  let buttonQuality = $state<ButtonQuality>(normalizeButtonQuality(localStorage.getItem("mooshieui.buttonQuality.v1")));
+
+  function setButtonQuality(value: string) {
+    buttonQuality = applyButtonQuality(value);
+  }
 
   $effect(() => {
     document.documentElement.classList.toggle("dyslexic-font", dyslexicFont);
     localStorage.setItem("mooshieui.dyslexicFont", String(dyslexicFont));
   });
 
-  // Section collapse state (persisted across tab switches)
-  const COLLAPSED_KEY = "mooshieui.settings.collapsed.v1";
+  // Section collapse state (persisted across tab switches). Mobile and desktop
+  // use separate storage keys so their defaults (collapsed vs expanded) don't
+  // clobber each other.
+  const COLLAPSED_KEY = mobileFriendly
+    ? "mooshieui.settings.collapsed.mobile.v1"
+    : "mooshieui.settings.collapsed.v1";
   let collapsed: Record<string, boolean> = $state(loadCollapsedState());
 
   function loadCollapsedState(): Record<string, boolean> {
+    // Mobile has no category sidebar, so collapse every module by default to
+    // keep the single-column list scannable; desktop stays fully expanded.
+    const d = mobileFriendly;
     const defaults: Record<string, boolean> = {
-      connection: false,
-      appearance: false,
-      performance: false,
-      models: false,
-      modelRequests: false,
-      paths: false,
-      autocomplete: false,
-      interrogator: false,
-      prompt_assistant: false,
-      civitai: false,
-      about: false,
-      sync: false,
+      connection: d,
+      appearance: d,
+      performance: d,
+      quality: d,
+      gpu: d,
+      models: d,
+      modelRequests: d,
+      paths: d,
+      gallery: d,
+      autocomplete: d,
+      interrogator: d,
+      prompt_assistant: d,
+      civitai: d,
+      queue: d,
+      about: d,
+      sync: d,
+      developer: d,
     };
     try {
       const raw = localStorage.getItem(COLLAPSED_KEY);
@@ -1216,6 +1254,28 @@
     { key: "about", labelKey: "settings.sections.about", keywords: "version update check updates about troubleshooting logs export diagnostic github report issue" },
     { key: "sync", labelKey: "settings.sections.sync", keywords: "sync preferences cross browser server backup export import data json lora presets prompt history" },
   ];
+
+  // Inner SVG markup (Lucide-style) keyed by section; rendered inside the nav icon slot.
+  const sectionIcons: Record<string, string> = {
+    appMode: '<rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8" /><path d="M12 17v4" />',
+    connection: '<path d="M5 12.55a11 11 0 0 1 14.08 0" /><path d="M1.42 9a16 16 0 0 1 21.16 0" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" />',
+    appearance: '<circle cx="13.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="10.5" r="2.5" /><circle cx="8.5" cy="7.5" r="2.5" /><circle cx="6.5" cy="12.5" r="2.5" /><path d="M12 2a10 10 0 0 0 0 20c1.1 0 2-.9 2-2v-1a2 2 0 0 1 2-2h1a4 4 0 0 0 4-4 10 10 0 0 0-9-9z" />',
+    performance: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />',
+    quality: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />',
+    gpu: '<rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" /><line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" /><line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" /><line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />',
+    models: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />',
+    modelRequests: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><path d="M9 15l2 2 4-4" />',
+    paths: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />',
+    gallery: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />',
+    autocomplete: '<path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />',
+    interrogator: '<circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />',
+    prompt_assistant: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M9 10h.01" /><path d="M13 10h.01" /><path d="M17 10h.01" />',
+    civitai: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" />',
+    queue: '<line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />',
+    about: '<circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />',
+    sync: '<polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />',
+    developer: '<polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />',
+  };
 
   function sectionVisible(key: string): boolean {
     if (!search.trim()) return true;
@@ -1828,10 +1888,10 @@
   }
 </script>
 
-<div class="h-full flex flex-col overflow-hidden">
+<div class="studio-page studio-settings-page h-full flex flex-col overflow-hidden">
   <!-- Persistent top bar -->
   {#if config}
-    <div class="shrink-0 px-6 py-3 bg-neutral-900 border-b border-neutral-800 flex items-center gap-3">
+    <div class="studio-settings-commandbar shrink-0 px-6 py-3 bg-neutral-900 border-b border-neutral-800 flex items-center gap-3">
       <h1 class="text-lg font-medium text-neutral-100 shrink-0">{locale.t('settings.title')}</h1>
 
       <input
@@ -1841,7 +1901,7 @@
         class="flex-1 min-w-0 bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500 transition-colors"
       />
 
-      <div class="ml-auto flex items-center gap-3 shrink-0">
+      <div class="studio-settings-actions ml-auto flex items-center gap-3 shrink-0">
       {#if canManageServer}
       {#if restartNeeded}
         <div class="flex items-center gap-1.5 text-amber-200 text-xs mr-2">
@@ -1884,11 +1944,45 @@
 
   <!-- Scrollable content -->
   <div
-    class="flex-1 overflow-y-auto {mobileFriendly ? 'p-4' : 'p-6'}"
+    class="studio-settings-scroll flex-1 overflow-y-auto {mobileFriendly ? 'p-4' : 'p-6'}"
     bind:this={settingsScrollEl}
     onscroll={onSettingsScroll}
   >
-    <div class="columns-1 {mobileFriendly ? '' : 'lg:columns-2 xl:columns-3'} gap-4">
+    <div class="studio-settings-layout flex items-start gap-6">
+      {#if !mobileFriendly}
+      <aside class="studio-settings-sidebar shrink-0" aria-label={locale.t('settings.title')}>
+        <div class="studio-settings-sidebar-inner">
+          <p class="studio-settings-sidebar-title">{locale.t('settings.title')}</p>
+          <div class="studio-settings-sidebar-search">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
+            <input
+              type="text"
+              bind:value={search}
+              placeholder={locale.t('settings.search_placeholder')}
+              aria-label={locale.t('settings.search_placeholder')}
+            />
+          </div>
+          <nav class="studio-settings-nav" aria-label={locale.t('settings.title')}>
+            {#each visibleSections as section}
+              <button
+                type="button"
+                class:active={activeSection === section.key}
+                onclick={() => focusSettingsSection(section.key)}
+              >
+                <span class="studio-settings-nav-label">
+                  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                  <svg class="studio-settings-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{@html sectionIcons[section.key] ?? ''}</svg>
+                  <span>{locale.t(section.labelKey)}</span>
+                </span>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+              </button>
+            {/each}
+          </nav>
+        </div>
+      </aside>
+      {/if}
+      <div class="studio-settings-content flex-1 min-w-0">
+        <div class="studio-settings-content-inner max-w-5xl">
       {#if loading}
         <div class="flex flex-col items-center justify-center py-12 text-neutral-500 gap-3">
           <div class="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
@@ -2413,6 +2507,73 @@
 
           {#if !collapsed.appearance}
           <div class="px-5 pb-5 space-y-4">
+          <div class="rounded-lg border border-neutral-700 bg-neutral-950/60 p-4">
+            <div>
+              <p class="text-xs font-medium text-neutral-200">{locale.t('settings.appearance.generation_layout_title')}</p>
+              <p class="mt-1 text-[10px] text-neutral-500">{locale.t('settings.appearance.generation_layout_desc')}</p>
+            </div>
+            <div class="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                class="rounded-lg border px-3 py-2 text-left text-xs transition-colors {generationLayout.style === 'studio'
+                  ? 'border-indigo-500/60 bg-indigo-600/15 text-indigo-200'
+                  : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-500'}"
+                onclick={() => generationLayout.setStyle('studio')}
+              >
+                <span class="block font-medium">{locale.t('settings.appearance.generation_layout_studio')}</span>
+                <span class="mt-1 block text-[10px] opacity-70">{locale.t('settings.appearance.generation_layout_studio_desc')}</span>
+              </button>
+              <button
+                type="button"
+                class="rounded-lg border px-3 py-2 text-left text-xs transition-colors {generationLayout.style === 'focus'
+                  ? 'border-indigo-500/60 bg-indigo-600/15 text-indigo-200'
+                  : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-500'}"
+                onclick={() => generationLayout.setStyle('focus')}
+              >
+                <span class="block font-medium">{locale.t('settings.appearance.generation_layout_focus')}</span>
+                <span class="mt-1 block text-[10px] opacity-70">{locale.t('settings.appearance.generation_layout_focus_desc')}</span>
+              </button>
+            </div>
+            {#if generationLayout.style === 'focus'}
+              <div class="mt-3">
+                <label class="block text-[10px] text-neutral-500 mb-1">{locale.t('settings.appearance.generation_controls_side')}</label>
+                <select
+                  value={generationLayout.controlsSide}
+                  onchange={(event) => generationLayout.setControlsSide((event.currentTarget as HTMLSelectElement).value as 'left' | 'right')}
+                  class="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-neutral-100"
+                >
+                  <option value="left">{locale.t('settings.appearance.generation_controls_left')}</option>
+                  <option value="right">{locale.t('settings.appearance.generation_controls_right')}</option>
+                </select>
+              </div>
+            {/if}
+              <div class="mt-3 border-t border-neutral-800 pt-3">
+                <p class="text-xs font-medium text-neutral-200">{locale.t('settings.appearance.mobile_panel_controls_title')}</p>
+                <p class="mt-1 text-[10px] text-neutral-500">{locale.t('settings.appearance.mobile_panel_controls_desc')}</p>
+                <div class="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    class="rounded-lg border px-3 py-2 text-left text-xs transition-colors {generationLayout.mobilePanelControls === 'quick'
+                      ? 'border-indigo-500/60 bg-indigo-600/15 text-indigo-200'
+                      : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-500'}"
+                    onclick={() => generationLayout.setMobilePanelControls('quick')}
+                  >
+                    <span class="block font-medium">{locale.t('settings.appearance.mobile_panel_controls_quick')}</span>
+                    <span class="mt-1 block text-[10px] opacity-70">{locale.t('settings.appearance.mobile_panel_controls_quick_desc')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-lg border px-3 py-2 text-left text-xs transition-colors {generationLayout.mobilePanelControls === 'edge'
+                      ? 'border-indigo-500/60 bg-indigo-600/15 text-indigo-200'
+                      : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-500'}"
+                    onclick={() => generationLayout.setMobilePanelControls('edge')}
+                  >
+                    <span class="block font-medium">{locale.t('settings.appearance.mobile_panel_controls_edge')}</span>
+                    <span class="mt-1 block text-[10px] opacity-70">{locale.t('settings.appearance.mobile_panel_controls_edge_desc')}</span>
+                  </button>
+                </div>
+              </div>
+          </div>
           {#if deviceSupportsMobileLayout}
             <div class="rounded-lg border border-neutral-700 bg-neutral-950/60 p-4">
               <div class="flex items-center justify-between gap-3">
@@ -2448,6 +2609,25 @@
                 {/each}
               </div>
               <p class="mt-2 text-[10px] text-neutral-600">{locale.t("settings.appearance.mobile_tabs_required")}</p>
+            </div>
+          {:else}
+            <div class="rounded-lg border border-neutral-700 bg-neutral-950/60 p-4">
+              <p class="text-xs font-medium text-neutral-200">{locale.t("settings.appearance.desktop_rail_title")}</p>
+              <p class="mt-1 text-[10px] text-neutral-500">{locale.t("settings.appearance.desktop_rail_desc")}</p>
+              <div class="mt-3 grid grid-cols-2 gap-2">
+                {#each DESKTOP_OPTIONAL_RAIL_ITEMS as item}
+                  <label class="flex min-h-11 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs text-neutral-300">
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4 accent-indigo-500"
+                      checked={desktopNavigation.isEnabled(item)}
+                      onchange={(event) => desktopNavigation.setEnabled(item, event.currentTarget.checked)}
+                    />
+                    <span>{locale.t(railItemLabelKeys[item])}</span>
+                  </label>
+                {/each}
+              </div>
+              <p class="mt-2 text-[10px] text-neutral-600">{locale.t("settings.appearance.desktop_rail_required")}</p>
             </div>
           {/if}
           <p class="text-xs font-medium text-neutral-300">{locale.t("settings.appearance.builtin_theme")}</p>
@@ -2497,6 +2677,21 @@
                 step="0.05"
                 class="w-full accent-indigo-500"
               />
+            </div>
+
+            <div class="col-span-2">
+              <label for="button-quality" class="block text-xs text-neutral-400 mb-1">{locale.t('settings.appearance.button_quality')}</label>
+              <select
+                id="button-quality"
+                value={buttonQuality}
+                onchange={(event) => setButtonQuality((event.currentTarget as HTMLSelectElement).value)}
+                class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:border-indigo-500 transition-colors"
+              >
+                <option value="low">{locale.t('settings.appearance.button_quality_low')}</option>
+                <option value="standard">{locale.t('settings.appearance.button_quality_standard')}</option>
+                <option value="high">{locale.t('settings.appearance.button_quality_high')}</option>
+              </select>
+              <p class="mt-1 text-[10px] text-neutral-500">{locale.t('settings.appearance.button_quality_desc')}</p>
             </div>
           </div>
 
@@ -2734,7 +2929,11 @@
 
           <div>
             <label class="block text-xs text-neutral-400 mb-1">{locale.t('settings.performance.memory_mode')}<span class="text-amber-400">*</span></label>
-            <select bind:value={config.memory_mode} onchange={() => { autoSave(); }} class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:border-indigo-500 transition-colors">
+            <select
+              bind:value={config.memory_mode}
+              onchange={() => { autoSave(); }}
+              class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:border-indigo-500 transition-colors"
+            >
               <option value="comfyui_default">{locale.t('settings.performance.memory_comfyui_default')}</option>
               <option value="balanced">{locale.t('settings.performance.memory_balanced')}</option>
               <option value="low_ram">{locale.t('settings.performance.memory_low_ram')}</option>
@@ -4123,6 +4322,26 @@
               </button>
             </div>
 
+            <div class="space-y-3 rounded-lg border border-neutral-800 bg-neutral-950/70 px-3 py-3">
+              <p class="text-sm leading-relaxed text-neutral-300">{locale.t('settings.about.manual_update_notice')}</p>
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onclick={() => openExternalUrl('https://github.com/cyaeq/MooshieUI-fork/releases')}
+                  class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors cursor-pointer"
+                >
+                  {locale.t('settings.about.fork_updates')}
+                </button>
+                <button
+                  type="button"
+                  onclick={() => openExternalUrl('https://github.com/Mooshieblob1/MooshieUI/releases')}
+                  class="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg border border-neutral-700 text-sm transition-colors cursor-pointer"
+                >
+                  {locale.t('settings.about.official_updates')}
+                </button>
+              </div>
+            </div>
+
             <!-- What's New -->
             <details class="rounded-lg border border-neutral-800 bg-neutral-950 overflow-hidden" ontoggle={(e) => { if ((e.target as HTMLDetailsElement).open) loadReleaseNotes(); }}>
               <summary class="px-3 py-2 text-xs font-medium text-neutral-300 hover:text-neutral-100 cursor-pointer select-none transition-colors">
@@ -4149,16 +4368,20 @@
               </div>
             </details>
 
-            <div class="space-y-3 rounded-lg border border-neutral-800 bg-neutral-950/70 px-3 py-3">
-              <p class="text-sm leading-relaxed text-neutral-300">{locale.t('settings.about.manual_update_notice')}</p>
-              <div class="flex flex-wrap items-center gap-2">
-                <button type="button" onclick={() => openExternalUrl('https://github.com/cyaeq/MooshieUI-fork/releases')} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors cursor-pointer">
-                  {locale.t('settings.about.fork_updates')}
-                </button>
-                <button type="button" onclick={() => openExternalUrl('https://github.com/Mooshieblob1/MooshieUI/releases')} class="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg border border-neutral-700 text-sm transition-colors cursor-pointer">
-                  {locale.t('settings.about.official_updates')}
-                </button>
+            <div
+              role="alert"
+              class="flex items-start gap-3 rounded-xl border border-amber-500/60 bg-amber-500/10 px-3 py-3 shadow-[0_0_20px_rgba(245,158,11,0.08)]"
+            >
+              <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/30">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M10.3 2.9 1.8 17a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 2.9a2 2 0 0 0-3.4 0Z" />
+                  <path d="M12 9v4" />
+                  <path d="M12 17h.01" />
+                </svg>
               </div>
+              <p class="text-sm font-medium leading-relaxed text-amber-100">
+                {locale.t('settings.about.fork_notice')}
+              </p>
             </div>
 
             <!-- Troubleshooting -->
@@ -4240,6 +4463,8 @@
           </div>
         {/if}
       {/if}
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -4464,7 +4689,7 @@
     <!-- Links -->
     <div class="space-y-2">
       <button
-        onclick={() => openExternalUrl('https://github.com/Mooshieblob1/MooshieUI')}
+        onclick={() => openExternalUrl('https://github.com/cyaeq/MooshieUI-fork/')}
         class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-sm transition-colors cursor-pointer text-left"
       >
         <svg class="w-4 h-4 shrink-0 text-neutral-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12"/></svg>
@@ -4481,7 +4706,7 @@
 
       <button
         onclick={() => { showAboutModal = false; showReportModal = true; }}
-        class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-sm transition-colors cursor-pointer text-left"
+        class="hidden"
       >
         <svg class="w-4 h-4 shrink-0 text-neutral-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
         {locale.t('settings.about.report_issue_button')}
@@ -4928,4 +5153,3 @@
     }}
   />
 {/if}
-

@@ -1,4 +1,4 @@
-﻿/** German translations. */
+/** German translations. */
 const de: Record<string, string> = {
   // ── Navigation ──────────────────────────────────────────
   "nav.generate": "Generieren",
@@ -1197,7 +1197,7 @@ const de: Record<string, string> = {
   "downloads.downloaded": "{filename} heruntergeladen",
 
   // ── Updater ─────────────────────────────────────────────
-  "updater.available": "MooshieUI v{version} ist verfügbar",
+  "updater.available": "MooshieUI F v{version} ist verfügbar",
   "updater.download_now": "Jetzt aktualisieren",
   "updater.later": "Später",
   "updater.downloading": "v{version} wird heruntergeladen...",
@@ -1205,7 +1205,7 @@ const de: Record<string, string> = {
   "updater.restart_now": "Jetzt neu starten",
   "updater.error": "Update fehlgeschlagen: {error}",
   "updater.dismiss": "Schließen",
-  "updater.server_available": "MooshieUI v{version} ist verfügbar — bitte erneut bereitstellen, um zu aktualisieren!",
+  "updater.server_available": "MooshieUI F v{version} ist verfügbar — bitte erneut bereitstellen, um zu aktualisieren!",
   "updater.version_mismatch": "Update wurde möglicherweise nicht korrekt angewendet. Erwartet v{expected}, aber läuft v{current}. Versuche die neueste Version manuell herunterzuladen.",
 
   // ── Galerie ─────────────────────────────────────────────
@@ -1753,8 +1753,8 @@ const de: Record<string, string> = {
   "settings.queue.management_desc": "Alle ausstehenden und aktiven Generierungen löschen. Unterbricht die laufende Generierung aller Nutzer.",
 
   // About / issue report (added v0.9.9 — awaiting translation)
-  "settings.about.about_button": "About MooshieUI",
-  "settings.about.modal_title": "About MooshieUI",
+  "settings.about.about_button": "About MooshieUI F",
+  "settings.about.modal_title": "About MooshieUI F",
   "settings.about.modal_tagline": "A friendly desktop interface for AI image generation.",
   "settings.about.github_button": "GitHub Repository",
   "settings.about.manual_update_notice": "Automatic updates are disabled for this unofficial build. Download new fork builds manually from Fork Releases, or switch to the official MooshieUI release.",
@@ -2564,7 +2564,7 @@ const de: Record<string, string> = {
   "settings.lan.time.weeks_ago": "vor {weeks} W.",
   "settings.lan.time.months_ago": "vor {months} Mon.",
   "settings.lan.time.years_ago": "vor {years} J.",
-  "app.brand_name": "MooshieUI",
+  "app.brand_name": "MooshieUI F",
   "app.theme_logo": "Theme-Logo",
   "settings.appearance.custom_theme_default": "Benutzerdefiniertes Theme",
   "settings.appearance.logo_preview_alt": "Theme-Logo-Vorschau",

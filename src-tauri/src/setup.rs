@@ -1675,9 +1675,14 @@ fn recommended_vram_mode(vram_mb: u64) -> &'static str {
     }
 }
 
+/// Choose the system-RAM mode based on installed RAM.
+///
+/// ComfyUI pins 40% of RAM for weight transfers on Windows and only reclaims it
+/// once RAM is nearly exhausted, so on a 16 GB machine the default costs ~6.4 GB
+/// of non-pageable memory. Below 24 GB that trade is not worth the transfer speed.
 fn recommended_memory_mode(ram_mb: u64) -> &'static str {
     if ram_mb == 0 || ram_mb >= 24000 {
-        "balanced"
+        "balanced" // unknown, or enough headroom for ComfyUI's defaults
     } else if ram_mb >= 12000 {
         "low_ram"
     } else {
@@ -2414,11 +2419,17 @@ pub async fn run_setup(
     );
     let vram_mb = detect_vram_mb().await;
     let vram_mode = recommended_vram_mode(vram_mb);
-    let memory_mode = recommended_memory_mode(crate::prompt_assistant::hardware::system_ram_mb());
+    let ram_mb = crate::prompt_assistant::hardware::system_ram_mb();
+    let memory_mode = recommended_memory_mode(ram_mb);
     log::info!(
         "Detected {}MB VRAM, setting vram_mode={}",
         vram_mb,
         vram_mode
+    );
+    log::info!(
+        "Detected {}MB system RAM, setting memory_mode={}",
+        ram_mb,
+        memory_mode
     );
     {
         let mut cfg = state.config.write().await;

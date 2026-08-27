@@ -1,3 +1,12 @@
+## What's New in v1.1.0 (MooshieUI F)
+
+### Release
+- MooshieUI F is an independently branded distribution with its own application identifier and packaging metadata.
+- Dedicated GitHub Actions automation builds and publishes F edition artifacts and container images separately.
+- Frontend, Rust, Tauri, and release metadata are synchronized at version 1.1.0.
+
+---
+
 ## What's New in v2.1.3
 
 ### Fixes and maintenance

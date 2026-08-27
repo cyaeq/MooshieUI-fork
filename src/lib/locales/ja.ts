@@ -1198,7 +1198,7 @@ const ja: Record<string, string> = {
   "downloads.downloaded": "{filename}をダウンロード済み",
 
   // ── アップデーター ──────────────────────────────────────
-  "updater.available": "MooshieUI v{version}が利用可能です",
+  "updater.available": "MooshieUI F v{version}が利用可能です",
   "updater.download_now": "今すぐ更新",
   "updater.later": "後で",
   "updater.downloading": "v{version}をダウンロード中...",
@@ -1206,7 +1206,7 @@ const ja: Record<string, string> = {
   "updater.restart_now": "今すぐ再起動",
   "updater.error": "更新に失敗：{error}",
   "updater.dismiss": "閉じる",
-  "updater.server_available": "MooshieUI v{version} が利用可能です — 再デプロイして更新してください！",
+  "updater.server_available": "MooshieUI F v{version} が利用可能です — 再デプロイして更新してください！",
   "updater.version_mismatch": "アップデートが正しく適用されていない可能性があります。v{expected}が期待されますが、v{current}が実行中です。最新バージョンを手動でダウンロードしてみてください。",
 
   // ── ギャラリー ──────────────────────────────────────────
@@ -1757,8 +1757,8 @@ const ja: Record<string, string> = {
   "settings.queue.management_desc": "すべての待機中および実行中の生成をクリアします。全員の進行中の生成が中断されます。",
 
   // About / issue report (added v0.9.9 — awaiting translation)
-  "settings.about.about_button": "About MooshieUI",
-  "settings.about.modal_title": "About MooshieUI",
+  "settings.about.about_button": "About MooshieUI F",
+  "settings.about.modal_title": "About MooshieUI F",
   "settings.about.modal_tagline": "A friendly desktop interface for AI image generation.",
   "settings.about.github_button": "GitHub Repository",
   "settings.about.manual_update_notice": "Automatic updates are disabled for this unofficial build. Download new fork builds manually from Fork Releases, or switch to the official MooshieUI release.",
@@ -2586,7 +2586,7 @@ const ja: Record<string, string> = {
   "settings.lan.time.weeks_ago": "{weeks} 週間前",
   "settings.lan.time.months_ago": "{months} か月前",
   "settings.lan.time.years_ago": "{years} 年前",
-  "app.brand_name": "MooshieUI",
+  "app.brand_name": "MooshieUI F",
   "app.theme_logo": "テーマロゴ",
   "settings.appearance.custom_theme_default": "カスタムテーマ",
   "settings.appearance.logo_preview_alt": "テーマロゴのプレビュー",

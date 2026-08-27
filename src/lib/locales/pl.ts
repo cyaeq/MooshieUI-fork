@@ -1428,7 +1428,7 @@ const pl: Record<string, string> = {
   "downloads.downloaded": "Pobrano {filename}",
 
   // ── Updater ─────────────────────────────────────────────
-  "updater.available": "MooshieUI v{version} jest dostępna",
+  "updater.available": "MooshieUI F v{version} jest dostępna",
   "updater.download_now": "Aktualizuj teraz",
   "updater.later": "Później",
   "updater.downloading": "Pobieranie v{version}...",
@@ -1436,7 +1436,7 @@ const pl: Record<string, string> = {
   "updater.restart_now": "Uruchom ponownie",
   "updater.error": "Aktualizacja nie powiodła się: {error}",
   "updater.dismiss": "Zamknij",
-  "updater.server_available": "MooshieUI v{version} jest dostępna -- wdróż ponownie, aby zaktualizować!",
+  "updater.server_available": "MooshieUI F v{version} jest dostępna -- wdróż ponownie, aby zaktualizować!",
   "updater.version_mismatch": "Aktualizacja mogła nie zostać zastosowana poprawnie. Oczekiwano v{expected}, ale uruchomiono v{current}. Spróbuj pobrać najnowszą wersję ręcznie.",
 
   // ── Gallery ─────────────────────────────────────────────
@@ -1948,8 +1948,8 @@ const pl: Record<string, string> = {
   "settings.about.data_dir_hint": "Aby zainstalować na innym dysku, ustaw zmienną środowiskową MOOSHIEUI_DATA_DIR na preferowaną ścieżkę przed uruchomieniem.",
 
   // About modal
-  "settings.about.about_button": "O MooshieUI",
-  "settings.about.modal_title": "O MooshieUI",
+  "settings.about.about_button": "O MooshieUI F",
+  "settings.about.modal_title": "O MooshieUI F",
   "settings.about.modal_tagline": "Przyjazny interfejs do generowania obrazów AI na komputerze.",
   "settings.about.github_button": "Repozytorium GitHub",
   "settings.about.manual_update_notice": "Automatic updates are disabled for this unofficial build. Download new fork builds manually from Fork Releases, or switch to the official MooshieUI release.",
@@ -2628,7 +2628,7 @@ const pl: Record<string, string> = {
   "settings.lan.time.weeks_ago": "{weeks} tyg. temu",
   "settings.lan.time.months_ago": "{months} mies. temu",
   "settings.lan.time.years_ago": "{years} lat temu",
-  "app.brand_name": "MooshieUI",
+  "app.brand_name": "MooshieUI F",
   "app.theme_logo": "Logo motywu",
   "settings.appearance.custom_theme_default": "Motyw niestandardowy",
   "settings.appearance.logo_preview_alt": "podgląd logo motywu",

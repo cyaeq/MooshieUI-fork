@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { getGpuStats } from "../../utils/api.js";
+  import { getGpuStats, checkServerHealth } from "../../utils/api.js";
   import { locale } from "../../stores/locale.svelte.js";
-  import type { GpuStats } from "../../types/index.js";
+  import type { GpuStats, SystemStats } from "../../types/index.js";
 
   let gpus = $state<GpuStats[]>([]);
+  let stats = $state<SystemStats | null>(null);
   let error = $state<string | null>(null);
   let loading = $state(true);
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -17,6 +18,12 @@
     } finally {
       loading = false;
     }
+    // System RAM is reported by ComfyUI itself, so it stays null when the server is down.
+    try {
+      stats = await checkServerHealth();
+    } catch {
+      stats = null;
+    }
   }
 
   $effect(() => {
@@ -26,6 +33,12 @@
       if (timer) clearInterval(timer);
     };
   });
+
+  const ramUsedMb = $derived(
+    stats ? Math.round((stats.system.ram_total - stats.system.ram_free) / (1024 * 1024)) : 0,
+  );
+  const ramTotalMb = $derived(stats ? Math.round(stats.system.ram_total / (1024 * 1024)) : 0);
+  const ramPercent = $derived(ramTotalMb ? Math.round((ramUsedMb / ramTotalMb) * 100) : 0);
 
   function vramPercent(gpu: GpuStats): number {
     if (!gpu.vram_total_mb) return 0;
@@ -56,6 +69,12 @@
     return "bg-indigo-500";
   }
 
+  function ramBarColor(pct: number): string {
+    if (pct > 85) return "bg-red-500";
+    if (pct > 70) return "bg-amber-500";
+    return "bg-sky-500";
+  }
+
   function tempColor(temp: number): string {
     if (temp > 85) return "text-red-400";
     if (temp > 70) return "text-amber-400";
@@ -76,6 +95,21 @@
 {:else if gpus.length === 0}
   <div class="text-sm text-neutral-500 py-2">{locale.t("settings.gpu.none")}</div>
 {:else}
+  {#if stats}
+    <div class="bg-neutral-800/60 border border-neutral-700/50 rounded-lg p-4 mb-3">
+      <div class="flex items-center justify-between text-[11px] mb-1">
+        <span class="text-neutral-400">{locale.t("settings.gpu.system_ram")}</span>
+        <span class="text-neutral-300">{ramUsedMb} / {ramTotalMb} MiB ({ramPercent}%)</span>
+      </div>
+      <div class="w-full h-2 bg-neutral-700 rounded-full overflow-hidden">
+        <div
+          class="h-full rounded-full transition-all duration-500 {ramBarColor(ramPercent)}"
+          style="width: {ramPercent}%"
+        ></div>
+      </div>
+      <p class="text-[10px] text-neutral-600 mt-2">{locale.t("settings.gpu.system_ram_desc")}</p>
+    </div>
+  {/if}
   <div class="space-y-3">
     {#each gpus as gpu (gpu.index)}
       <div class="bg-neutral-800/60 border border-neutral-700/50 rounded-lg p-4 space-y-3">
