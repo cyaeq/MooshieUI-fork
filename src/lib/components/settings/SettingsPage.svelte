@@ -1243,6 +1243,7 @@
   let originalPort = 0;
   let originalMode = "";
   let originalVramMode = "";
+  let originalMemoryMode = "";
   let originalAttentionBackend = "";
   let originalExtraArgs = "";
   let originalModelPaths = "";
@@ -1368,6 +1369,7 @@
     originalPort = config.server_port;
     originalMode = config.server_mode;
     originalVramMode = config.vram_mode;
+    originalMemoryMode = config.memory_mode;
     originalAttentionBackend = config.attention_backend;
     originalExtraArgs = config.extra_args.join(" ");
     originalModelPaths = config.extra_model_paths ?? "";
@@ -1382,6 +1384,7 @@
       config.server_port !== originalPort ||
       config.server_mode !== originalMode ||
       config.vram_mode !== originalVramMode ||
+      config.memory_mode !== originalMemoryMode ||
       config.attention_backend !== originalAttentionBackend ||
       config.ui_server_port !== originalUiServerPort ||
       config.lan_enabled !== originalLanEnabled ||
@@ -2727,6 +2730,18 @@
               <option value="none">{locale.t('settings.performance.vram_none')}</option>
             </select>
             <p class="text-[10px] text-neutral-500 mt-0.5">{locale.t('settings.performance.vram_note')}</p>
+          </div>
+
+          <div>
+            <label class="block text-xs text-neutral-400 mb-1">{locale.t('settings.performance.memory_mode')}<span class="text-amber-400">*</span></label>
+            <select bind:value={config.memory_mode} onchange={() => { autoSave(); }} class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:border-indigo-500 transition-colors">
+              <option value="comfyui_default">{locale.t('settings.performance.memory_comfyui_default')}</option>
+              <option value="balanced">{locale.t('settings.performance.memory_balanced')}</option>
+              <option value="low_ram">{locale.t('settings.performance.memory_low_ram')}</option>
+              <option value="minimal">{locale.t('settings.performance.memory_minimal')}</option>
+            </select>
+            <p class="text-[10px] text-neutral-500 mt-0.5">{locale.t(`settings.performance.memory_desc_${config.memory_mode}`)}</p>
+            <p class="text-[10px] text-neutral-500 mt-0.5">{locale.t('settings.performance.memory_note')}</p>
           </div>
 
           <div>
