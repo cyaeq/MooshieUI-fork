@@ -3161,5 +3161,15 @@ const de: Record<string, string> = {
 
   "generation.sampler.cfg_range": "CFG: {min}-{max}",
 
+  "settings.performance.memory_mode": "System-RAM-Modus",
+  "settings.performance.memory_comfyui_default": "ComfyUI-Standard — keine Speicher-Flags übergeben",
+  "settings.performance.memory_balanced": "Ausgewogen — ComfyUI-Standardwerte",
+  "settings.performance.memory_low_ram": "Wenig RAM — gepinnten Speicher deaktivieren",
+  "settings.performance.memory_minimal": "Minimal — gepinnten Speicher und Node-Cache deaktivieren",
+  "settings.performance.memory_desc_comfyui_default": "Übergibt keine Speicher-Flags und entspricht dem nativen ComfyUI-Verhalten.",
+  "settings.performance.memory_desc_balanced": "Behält die ComfyUI-Standardwerte einschließlich gepinntem Host-Speicher.",
+  "settings.performance.memory_desc_low_ram": "Deaktiviert gepinnten Host-Speicher, um den RAM-Verbrauch zu senken.",
+  "settings.performance.memory_desc_minimal": "Deaktiviert zusätzlich den Node-Ausgabe-Cache für minimalen RAM-Verbrauch.",
+  "settings.performance.memory_note": "Wird bei der Installation automatisch erkannt. Senken Sie den Wert, wenn python.exe zu viel System-RAM belegt.",
 };
 export default de;

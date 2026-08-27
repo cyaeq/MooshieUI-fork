@@ -3159,5 +3159,15 @@ const it: Record<string, string> = {
 
   "generation.sampler.cfg_range": "CFG: {min}-{max}",
 
+  "settings.performance.memory_mode": "Modalità RAM di sistema",
+  "settings.performance.memory_comfyui_default": "Predefinito ComfyUI — nessun parametro di memoria",
+  "settings.performance.memory_balanced": "Bilanciato — valori predefiniti di ComfyUI",
+  "settings.performance.memory_low_ram": "RAM bassa — disattiva la memoria bloccata",
+  "settings.performance.memory_minimal": "Minimo — disattiva memoria bloccata e cache dei nodi",
+  "settings.performance.memory_desc_comfyui_default": "Non passa parametri di memoria e mantiene il comportamento nativo di ComfyUI.",
+  "settings.performance.memory_desc_balanced": "Mantiene i valori predefiniti di ComfyUI, inclusa la memoria host bloccata.",
+  "settings.performance.memory_desc_low_ram": "Disattiva la memoria host bloccata per ridurre l'uso della RAM.",
+  "settings.performance.memory_desc_minimal": "Disattiva anche la cache degli output dei nodi per ridurre al minimo la RAM.",
+  "settings.performance.memory_note": "Rilevato automaticamente durante l'installazione. Abbassa questo valore se python.exe usa troppa RAM di sistema.",
 };
 export default it;

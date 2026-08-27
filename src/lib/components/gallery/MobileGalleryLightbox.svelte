@@ -49,12 +49,64 @@
     mode: "gallery.meta.mode",
     size: "gallery.meta.size",
     loras: "gallery.meta.loras",
+    bit_depth: "gallery.meta.bit_depth",
     upscale_model: "gallery.meta.upscale_model",
     upscale_scale: "gallery.meta.upscale_scale",
     upscale_denoise: "gallery.meta.upscale_denoise",
+    mooshie_upscale_steps: "gallery.meta.upscale_steps",
+    mooshie_upscale_tiling: "gallery.meta.upscale_tiling",
+    mooshie_upscale_tile_size: "gallery.meta.upscale_tile_size",
+    mooshie_soft_guidance: "gallery.meta.soft_guidance",
+    mooshie_model_architecture: "gallery.meta.model_architecture",
+    mooshie_smart_guidance: "gallery.meta.smart_guidance",
+    mooshie_differential_diffusion: "gallery.meta.differential_diffusion",
+    mooshie_controlnet_preset: "gallery.meta.controlnet_preset",
+    mooshie_controlnet_model: "gallery.meta.controlnet_model",
+    mooshie_controlnet_strength: "gallery.meta.controlnet_strength",
+    mooshie_prompt_schedule: "gallery.meta.prompt_schedule",
     date: "gallery.meta.date",
     generation_time: "gallery.meta.generation_time",
   };
+
+  // Explicit display order for the settings table so the details view is stable
+  // and logically grouped instead of following raw object-insertion order.
+  const settingsOrder = [
+    "model",
+    "vae",
+    "mode",
+    "size",
+    "sampler",
+    "scheduler",
+    "steps",
+    "cfg",
+    "seed",
+    "denoise",
+    "loras",
+    "bit_depth",
+    "mooshie_model_architecture",
+    "mooshie_smart_guidance",
+    "mooshie_differential_diffusion",
+    "mooshie_controlnet_preset",
+    "mooshie_controlnet_model",
+    "mooshie_controlnet_strength",
+    "mooshie_prompt_schedule",
+    "upscale_model",
+    "upscale_scale",
+    "upscale_denoise",
+    "mooshie_upscale_steps",
+    "mooshie_upscale_tiling",
+    "mooshie_upscale_tile_size",
+    "mooshie_soft_guidance",
+    "date",
+    "generation_time",
+  ];
+
+  function orderedSettingKeys(meta: Record<string, string>): string[] {
+    const present = Object.keys(meta).filter((key) => !promptKeys.includes(key) && meta[key]);
+    const ranked = settingsOrder.filter((key) => present.includes(key));
+    const extras = present.filter((key) => !settingsOrder.includes(key));
+    return [...ranked, ...extras];
+  }
 
   function metadataLabel(key: string): string {
     const translationKey = metadataLabels[key];
@@ -206,16 +258,16 @@
           <p class="metadata-muted text-sm">{locale.t("common.loading")}</p>
         {:else if metadata}
           {@const promptEntries = promptKeys.filter((key) => metadata[key])}
-          {@const settingEntries = Object.keys(metadata).filter((key) => !promptKeys.includes(key) && metadata[key])}
+          {@const settingEntries = orderedSettingKeys(metadata)}
           {#each promptEntries as key}
             <section class="mb-3">
               <h3 class="metadata-label mb-1 text-[11px] font-medium uppercase tracking-wide">{metadataLabel(key)}</h3>
               <p class="metadata-prompt whitespace-pre-wrap wrap-break-word rounded-lg px-3 py-2 text-sm leading-relaxed">{metadata[key]}</p>
             </section>
           {/each}
-          <div class="metadata-settings divide-y overflow-hidden rounded-lg border shadow-sm">
+          <div class="metadata-settings overflow-hidden rounded-lg border shadow-sm">
             {#each settingEntries as key}
-              <div class="flex items-start justify-between gap-3 px-3 py-2.5 text-xs">
+              <div class="metadata-row flex items-start justify-between gap-3 px-3 py-2.5 text-xs">
                 <span class="metadata-label shrink-0">{metadataLabel(key)}</span>
                 <span class="metadata-value break-all text-right font-medium">{metadata[key]}</span>
               </div>
@@ -251,8 +303,8 @@
     border-color: color-mix(in srgb, var(--theme-text) 14%, transparent);
   }
 
-  .metadata-settings > div + div {
-    border-color: color-mix(in srgb, var(--theme-text) 10%, transparent);
+  .metadata-row + .metadata-row {
+    border-top: 1px solid color-mix(in srgb, var(--theme-text) 10%, transparent);
   }
 
   .metadata-value {

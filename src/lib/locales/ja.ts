@@ -3184,5 +3184,15 @@ const ja: Record<string, string> = {
 
   "generation.sampler.cfg_range": "CFG: {min}-{max}",
 
+  "settings.performance.memory_mode": "システムRAMモード",
+  "settings.performance.memory_comfyui_default": "ComfyUIデフォルト — メモリ関連フラグを渡さない",
+  "settings.performance.memory_balanced": "バランス — ComfyUIのデフォルト設定",
+  "settings.performance.memory_low_ram": "低RAM — ピンメモリを無効化",
+  "settings.performance.memory_minimal": "最小 — ピンメモリとノードキャッシュを無効化",
+  "settings.performance.memory_desc_comfyui_default": "メモリ関連フラグを渡さず、ComfyUI本来の挙動を維持します。",
+  "settings.performance.memory_desc_balanced": "ピンメモリを含むComfyUIのデフォルト設定を維持します。",
+  "settings.performance.memory_desc_low_ram": "ピンホストメモリを無効化してRAM使用量を減らします。",
+  "settings.performance.memory_desc_minimal": "ノード出力キャッシュも無効化してRAM使用量を最小化します。",
+  "settings.performance.memory_note": "セットアップ時に自動検出されます。python.exeがシステムRAMを使いすぎる場合は下げてください。",
 };
 export default ja;

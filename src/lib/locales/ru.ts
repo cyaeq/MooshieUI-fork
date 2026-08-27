@@ -3159,5 +3159,15 @@ const ru: Record<string, string> = {
 
   "generation.sampler.cfg_range": "CFG: {min}-{max}",
 
+  "settings.performance.memory_mode": "Режим системной памяти",
+  "settings.performance.memory_comfyui_default": "По умолчанию ComfyUI — без флагов памяти",
+  "settings.performance.memory_balanced": "Сбалансированный — настройки ComfyUI по умолчанию",
+  "settings.performance.memory_low_ram": "Мало ОЗУ — отключить закреплённую память",
+  "settings.performance.memory_minimal": "Минимальный — отключить закреплённую память и кэш узлов",
+  "settings.performance.memory_desc_comfyui_default": "Не передаёт флаги памяти и сохраняет штатное поведение ComfyUI.",
+  "settings.performance.memory_desc_balanced": "Сохраняет настройки ComfyUI по умолчанию, включая закреплённую память хоста.",
+  "settings.performance.memory_desc_low_ram": "Отключает закреплённую память хоста для снижения потребления ОЗУ.",
+  "settings.performance.memory_desc_minimal": "Также отключает кэширование выводов узлов для минимального потребления ОЗУ.",
+  "settings.performance.memory_note": "Определяется автоматически при установке. Понизьте, если python.exe занимает слишком много системной памяти.",
 };
 export default ru;

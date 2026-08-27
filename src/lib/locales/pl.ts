@@ -3198,5 +3198,15 @@ const pl: Record<string, string> = {
 
   "generation.sampler.cfg_range": "CFG: {min}-{max}",
 
+  "settings.performance.memory_mode": "Tryb pamięci systemowej",
+  "settings.performance.memory_comfyui_default": "Domyślne ComfyUI — bez flag pamięci",
+  "settings.performance.memory_balanced": "Zbalansowany — domyślne ustawienia ComfyUI",
+  "settings.performance.memory_low_ram": "Mało RAM — wyłącz pamięć przypiętą",
+  "settings.performance.memory_minimal": "Minimalny — wyłącz pamięć przypiętą i cache węzłów",
+  "settings.performance.memory_desc_comfyui_default": "Nie przekazuje flag pamięci i zachowuje natywne działanie ComfyUI.",
+  "settings.performance.memory_desc_balanced": "Zachowuje domyślne ustawienia ComfyUI, włącznie z przypiętą pamięcią hosta.",
+  "settings.performance.memory_desc_low_ram": "Wyłącza przypiętą pamięć hosta, aby zmniejszyć zużycie RAM.",
+  "settings.performance.memory_desc_minimal": "Wyłącza także cache wyjść węzłów, aby zminimalizować zużycie RAM.",
+  "settings.performance.memory_note": "Wykrywane automatycznie podczas konfiguracji. Obniż, jeśli python.exe zajmuje zbyt dużo pamięci systemowej.",
 };
 export default pl;

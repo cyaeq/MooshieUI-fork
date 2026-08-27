@@ -3159,5 +3159,15 @@ const ko: Record<string, string> = {
 
   "generation.sampler.cfg_range": "CFG: {min}-{max}",
 
+  "settings.performance.memory_mode": "시스템 RAM 모드",
+  "settings.performance.memory_comfyui_default": "ComfyUI 기본값 — 메모리 관련 인자 전달 없음",
+  "settings.performance.memory_balanced": "균형 — ComfyUI 기본 설정",
+  "settings.performance.memory_low_ram": "낮은 RAM — 고정 메모리 비활성화",
+  "settings.performance.memory_minimal": "최소 — 고정 메모리와 노드 캐시 비활성화",
+  "settings.performance.memory_desc_comfyui_default": "메모리 관련 인자를 전달하지 않고 ComfyUI 기본 동작을 유지합니다.",
+  "settings.performance.memory_desc_balanced": "고정 호스트 메모리를 포함한 ComfyUI 기본 설정을 유지합니다.",
+  "settings.performance.memory_desc_low_ram": "고정 호스트 메모리를 꺼서 RAM 사용량을 줄입니다.",
+  "settings.performance.memory_desc_minimal": "노드 출력 캐싱도 꺼서 RAM 사용량을 최소화합니다.",
+  "settings.performance.memory_note": "설정 시 자동 감지됩니다. python.exe가 시스템 RAM을 너무 많이 사용하면 낮추세요.",
 };
 export default ko;

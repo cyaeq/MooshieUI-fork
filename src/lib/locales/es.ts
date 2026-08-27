@@ -3188,5 +3188,15 @@ const es: Record<string, string> = {
 
   "generation.sampler.cfg_range": "CFG: {min}-{max}",
 
+  "settings.performance.memory_mode": "Modo de RAM del sistema",
+  "settings.performance.memory_comfyui_default": "Predeterminado de ComfyUI — sin parámetros de memoria",
+  "settings.performance.memory_balanced": "Equilibrado — valores por defecto de ComfyUI",
+  "settings.performance.memory_low_ram": "RAM baja — desactivar memoria fijada",
+  "settings.performance.memory_minimal": "Mínimo — desactivar memoria fijada y caché de nodos",
+  "settings.performance.memory_desc_comfyui_default": "No pasa parámetros de memoria y conserva el comportamiento nativo de ComfyUI.",
+  "settings.performance.memory_desc_balanced": "Mantiene los valores por defecto de ComfyUI, incluida la memoria fijada del host.",
+  "settings.performance.memory_desc_low_ram": "Desactiva la memoria fijada del host para reducir el uso de RAM.",
+  "settings.performance.memory_desc_minimal": "También desactiva la caché de salidas de nodos para minimizar el uso de RAM.",
+  "settings.performance.memory_note": "Detectado automáticamente durante la instalación. Baja este valor si python.exe usa demasiada RAM del sistema.",
 };
 export default es;

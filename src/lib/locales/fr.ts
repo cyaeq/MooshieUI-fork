@@ -3185,5 +3185,15 @@ const fr: Record<string, string> = {
 
   "generation.sampler.cfg_range": "CFG : {min}-{max}",
 
+  "settings.performance.memory_mode": "Mode RAM système",
+  "settings.performance.memory_comfyui_default": "Par défaut ComfyUI — aucun paramètre mémoire",
+  "settings.performance.memory_balanced": "Équilibré — valeurs par défaut de ComfyUI",
+  "settings.performance.memory_low_ram": "RAM faible — désactiver la mémoire épinglée",
+  "settings.performance.memory_minimal": "Minimal — désactiver la mémoire épinglée et le cache de nœuds",
+  "settings.performance.memory_desc_comfyui_default": "Ne transmet aucun paramètre mémoire et conserve le comportement natif de ComfyUI.",
+  "settings.performance.memory_desc_balanced": "Conserve les valeurs par défaut de ComfyUI, y compris la mémoire hôte épinglée.",
+  "settings.performance.memory_desc_low_ram": "Désactive la mémoire hôte épinglée pour réduire l'utilisation de RAM.",
+  "settings.performance.memory_desc_minimal": "Désactive aussi le cache des sorties de nœuds pour minimiser l'utilisation de RAM.",
+  "settings.performance.memory_note": "Détecté automatiquement lors de l'installation. Abaissez ce réglage si python.exe consomme trop de RAM système.",
 };
 export default fr;

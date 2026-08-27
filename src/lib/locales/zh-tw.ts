@@ -3159,5 +3159,15 @@ const zhTw: Record<string, string> = {
 
   "generation.sampler.cfg_range": "CFG：{min}-{max}",
 
+  "settings.performance.memory_mode": "系統記憶體模式",
+  "settings.performance.memory_comfyui_default": "ComfyUI 預設 — 不傳遞記憶體參數",
+  "settings.performance.memory_balanced": "均衡 — 使用 ComfyUI 預設值",
+  "settings.performance.memory_low_ram": "低記憶體 — 停用鎖頁記憶體",
+  "settings.performance.memory_minimal": "最小 — 停用鎖頁記憶體與節點快取",
+  "settings.performance.memory_desc_comfyui_default": "不傳遞記憶體參數，保持 ComfyUI 原生行為。",
+  "settings.performance.memory_desc_balanced": "保持 ComfyUI 預設設定，包含鎖頁主機記憶體。",
+  "settings.performance.memory_desc_low_ram": "停用鎖頁主機記憶體以降低記憶體使用量。",
+  "settings.performance.memory_desc_minimal": "同時停用節點輸出快取，將記憶體使用量降至最低。",
+  "settings.performance.memory_note": "安裝時自動偵測。若 python.exe 佔用過多系統記憶體，請降低此設定。",
 };
 export default zhTw;
