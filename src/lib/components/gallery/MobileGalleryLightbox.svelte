@@ -2,6 +2,7 @@
   import { gallery, isVideoImage } from "../../stores/gallery.svelte.js";
   import { locale } from "../../stores/locale.svelte.js";
   import { formatGenerationTime } from "../../utils/localeFormat.js";
+  import { readImageMetadata } from "../../utils/api.js";
   import type { OutputImage } from "../../types/index.js";
 
   /**
@@ -28,6 +29,74 @@
   function boardLabel(image: OutputImage): string {
     return gallery.getBoard(image);
   }
+
+  let showMetadata = $state(false);
+  let metadata = $state<Record<string, string> | null>(null);
+  let loadingMetadata = $state(false);
+
+  const promptKeys = ["positive_prompt", "negative_prompt"];
+  const metadataLabels: Record<string, string> = {
+    positive_prompt: "gallery.meta.prompt",
+    negative_prompt: "gallery.meta.negative_prompt",
+    model: "gallery.meta.model",
+    vae: "gallery.meta.vae",
+    seed: "gallery.meta.seed",
+    steps: "gallery.meta.steps",
+    cfg: "gallery.meta.cfg",
+    sampler: "gallery.meta.sampler",
+    scheduler: "gallery.meta.scheduler",
+    denoise: "gallery.meta.denoise",
+    mode: "gallery.meta.mode",
+    size: "gallery.meta.size",
+    loras: "gallery.meta.loras",
+    upscale_model: "gallery.meta.upscale_model",
+    upscale_scale: "gallery.meta.upscale_scale",
+    upscale_denoise: "gallery.meta.upscale_denoise",
+    date: "gallery.meta.date",
+    generation_time: "gallery.meta.generation_time",
+  };
+
+  function metadataLabel(key: string): string {
+    const translationKey = metadataLabels[key];
+    return translationKey ? locale.t(translationKey) : key;
+  }
+
+  async function loadMetadata() {
+    if (!gallery.selectedImage) return;
+    const image = gallery.selectedImage;
+    if (image.metadata) {
+      metadata = image.metadata;
+      return;
+    }
+    if (!image.gallery_filename) {
+      metadata = null;
+      return;
+    }
+    loadingMetadata = true;
+    try {
+      const loaded = await readImageMetadata(image.gallery_filename);
+      if (gallery.selectedImage === image) {
+        metadata = loaded;
+        image.metadata = loaded;
+      }
+    } catch {
+      metadata = null;
+    } finally {
+      loadingMetadata = false;
+    }
+  }
+
+  function closeMetadata() {
+    showMetadata = false;
+    gallery.lightboxInfoRequested = false;
+  }
+
+  $effect(() => {
+    gallery.selectedImage;
+    showMetadata = gallery.lightboxInfoRequested;
+    metadata = null;
+    if (showMetadata) void loadMetadata();
+  });
 </script>
 
 {#if gallery.lightboxOpen}
@@ -50,6 +119,7 @@
       </button>
     </div>
 
+    {#if !showMetadata}
     <!-- Media -->
     <div class="flex-1 min-h-0 relative flex items-center justify-center px-2">
       {#if gallery.lightboxUrl}
@@ -130,5 +200,62 @@
         </div>
       </div>
     {/if}
+    {:else if gallery.selectedImage}
+      <div class="metadata-view flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
+        {#if loadingMetadata}
+          <p class="metadata-muted text-sm">{locale.t("common.loading")}</p>
+        {:else if metadata}
+          {@const promptEntries = promptKeys.filter((key) => metadata[key])}
+          {@const settingEntries = Object.keys(metadata).filter((key) => !promptKeys.includes(key) && metadata[key])}
+          {#each promptEntries as key}
+            <section class="mb-3">
+              <h3 class="metadata-label mb-1 text-[11px] font-medium uppercase tracking-wide">{metadataLabel(key)}</h3>
+              <p class="metadata-prompt whitespace-pre-wrap wrap-break-word rounded-lg px-3 py-2 text-sm leading-relaxed">{metadata[key]}</p>
+            </section>
+          {/each}
+          <div class="metadata-settings divide-y overflow-hidden rounded-lg border shadow-sm">
+            {#each settingEntries as key}
+              <div class="flex items-start justify-between gap-3 px-3 py-2.5 text-xs">
+                <span class="metadata-label shrink-0">{metadataLabel(key)}</span>
+                <span class="metadata-value break-all text-right font-medium">{metadata[key]}</span>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <p class="metadata-muted text-sm">{locale.t("gallery.no_metadata")}</p>
+        {/if}
+      </div>
+    {/if}
   </div>
 {/if}
+
+<style>
+  .metadata-view {
+    background: color-mix(in srgb, var(--theme-background) 94%, var(--theme-text) 6%);
+    color: color-mix(in srgb, var(--theme-text) 88%, var(--theme-background));
+  }
+
+  .metadata-label,
+  .metadata-muted {
+    color: color-mix(in srgb, var(--theme-text) 54%, var(--theme-background));
+  }
+
+  .metadata-prompt {
+    background: color-mix(in srgb, var(--theme-surface-800) 82%, var(--theme-background));
+    border: 1px solid color-mix(in srgb, var(--theme-text) 12%, transparent);
+    color: color-mix(in srgb, var(--theme-text) 90%, var(--theme-background));
+  }
+
+  .metadata-settings {
+    background: color-mix(in srgb, var(--theme-surface-900) 88%, var(--theme-background));
+    border-color: color-mix(in srgb, var(--theme-text) 14%, transparent);
+  }
+
+  .metadata-settings > div + div {
+    border-color: color-mix(in srgb, var(--theme-text) 10%, transparent);
+  }
+
+  .metadata-value {
+    color: color-mix(in srgb, var(--theme-text) 82%, var(--theme-background));
+  }
+</style>

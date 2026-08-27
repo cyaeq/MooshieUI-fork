@@ -35,7 +35,7 @@ const zh: Record<string, string> = {
   "common.go_to_top": "回到顶部",
   "common.or": "或",
   "common.on": "开启",
-  "common.details": "Details",
+  "common.details": "详细信息",
   "common.dismiss_notification": "关闭通知",
   "common.done": "Done",
   "common.local": "Local",

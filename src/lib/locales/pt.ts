@@ -35,7 +35,7 @@ const pt: Record<string, string> = {
   "common.go_to_top": "Voltar ao topo",
   "common.or": "ou",
   "common.on": "Ligado",
-  "common.details": "Details",
+  "common.details": "Detalhes",
   "common.dismiss_notification": "Dispensar notificação",
   "common.done": "Done",
   "common.local": "Local",

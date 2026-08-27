@@ -35,7 +35,7 @@ const ru: Record<string, string> = {
   "common.go_to_top": "Наверх",
   "common.or": "или",
   "common.on": "Вкл",
-  "common.details": "Details",
+  "common.details": "Детали",
   "common.dismiss_notification": "Закрыть уведомление",
   "common.done": "Done",
   "common.local": "Local",

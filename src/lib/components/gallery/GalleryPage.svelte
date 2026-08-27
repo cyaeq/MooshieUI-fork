@@ -616,6 +616,10 @@
       </div>
       <div class="h-px bg-neutral-800 my-1"></div>
       <div class="grid grid-cols-4 gap-2 pt-1">
+        <button type="button" class="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg bg-neutral-800 active:bg-neutral-700 text-neutral-200" onclick={() => { gallery.openLightbox(action, true); mobileActionImage = null; }}>
+          <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="12" y1="7" x2="12.01" y2="7"/></svg>
+          <span class="text-[10px] leading-none">{locale.t("common.details")}</span>
+        </button>
         {#if isVideoImage(action)}
           <button type="button" class="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg bg-neutral-800 active:bg-neutral-700 text-neutral-200" onclick={() => { gallery.openLightbox(action); mobileActionImage = null; }}>
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
