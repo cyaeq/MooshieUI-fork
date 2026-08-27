@@ -313,16 +313,32 @@ fn apply_highvram_flag(cmd: &mut tokio::process::Command, config: &AppConfig) {
 }
 
 const MEMORY_MODE_CONFLICTING_ARGS: &[&str] = &[
-    "--cache-ram", "--cache-classic", "--cache-lru", "--cache-none",
-    "--high-ram", "--disable-pinned-memory",
+    "--cache-ram",
+    "--cache-classic",
+    "--cache-lru",
+    "--cache-none",
+    "--high-ram",
+    "--disable-pinned-memory",
 ];
 
 fn apply_memory_mode_flags(cmd: &mut tokio::process::Command, config: &AppConfig) {
-    if config.memory_mode == "comfyui_default" { return; }
-    if config.extra_args.iter().any(|a| MEMORY_MODE_CONFLICTING_ARGS.contains(&a.as_str())) { return; }
+    if config.memory_mode == "comfyui_default" {
+        return;
+    }
+    if config
+        .extra_args
+        .iter()
+        .any(|a| MEMORY_MODE_CONFLICTING_ARGS.contains(&a.as_str()))
+    {
+        return;
+    }
     match config.memory_mode.as_str() {
-        "low_ram" => { cmd.arg("--disable-pinned-memory"); }
-        "minimal" => { cmd.arg("--disable-pinned-memory").arg("--cache-none"); }
+        "low_ram" => {
+            cmd.arg("--disable-pinned-memory");
+        }
+        "minimal" => {
+            cmd.arg("--disable-pinned-memory").arg("--cache-none");
+        }
         _ => {}
     }
 }

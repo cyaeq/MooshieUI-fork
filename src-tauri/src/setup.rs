@@ -1676,9 +1676,13 @@ fn recommended_vram_mode(vram_mb: u64) -> &'static str {
 }
 
 fn recommended_memory_mode(ram_mb: u64) -> &'static str {
-    if ram_mb == 0 || ram_mb >= 24000 { "balanced" }
-    else if ram_mb >= 12000 { "low_ram" }
-    else { "minimal" }
+    if ram_mb == 0 || ram_mb >= 24000 {
+        "balanced"
+    } else if ram_mb >= 12000 {
+        "low_ram"
+    } else {
+        "minimal"
+    }
 }
 
 // ─── Tauri commands ─────────────────────────────────────────────────────────
