@@ -1675,6 +1675,12 @@ fn recommended_vram_mode(vram_mb: u64) -> &'static str {
     }
 }
 
+fn recommended_memory_mode(ram_mb: u64) -> &'static str {
+    if ram_mb == 0 || ram_mb >= 24000 { "balanced" }
+    else if ram_mb >= 12000 { "low_ram" }
+    else { "minimal" }
+}
+
 // ─── Tauri commands ─────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -2404,6 +2410,7 @@ pub async fn run_setup(
     );
     let vram_mb = detect_vram_mb().await;
     let vram_mode = recommended_vram_mode(vram_mb);
+    let memory_mode = recommended_memory_mode(crate::prompt_assistant::hardware::system_ram_mb());
     log::info!(
         "Detected {}MB VRAM, setting vram_mode={}",
         vram_mb,
@@ -2414,6 +2421,7 @@ pub async fn run_setup(
         cfg.comfyui_path = base.join("comfyui").to_string_lossy().to_string();
         cfg.venv_path = base.join("venv").to_string_lossy().to_string();
         cfg.vram_mode = vram_mode.to_string();
+        cfg.memory_mode = memory_mode.to_string();
         cfg.attention_backend = attention;
         cfg.network_proxy = net.network_proxy.clone();
         cfg.pip_index_url = net.pip_index_url.clone();

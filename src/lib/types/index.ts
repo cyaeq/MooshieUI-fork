@@ -384,6 +384,7 @@ export interface AppConfig {
   default_width: number;
   default_height: number;
   vram_mode: string;
+  memory_mode: string;
   keep_alive: boolean;
   auto_start: boolean;
   theme: string;
