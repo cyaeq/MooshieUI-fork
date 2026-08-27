@@ -113,7 +113,7 @@ const pl: Record<string, string> = {
   "app.external_comfy.kill_failed": "Nie udało się zwolnić portu {port}: {error}",
 
   // ── Setup Wizard ────────────────────────────────────────
-  "setup.title": "MooshieUI",
+  "setup.title": "MooshieUI F",
   "setup.subtitle": "Przyjazne dla początkujących generowanie obrazów AI",
   "setup.logo_alt": "Logo MooshieUI",
   "setup.intro": "MooshieUI automatycznie zainstaluje wszystko, czego potrzebujesz — ComfyUI, Python i odpowiednie biblioteki AI dla Twojego sprzętu. Nie wymaga ręcznej konfiguracji.",
@@ -1467,7 +1467,7 @@ const pl: Record<string, string> = {
   "downloads.downloaded": "Pobrano {filename}",
 
   // ── Updater ─────────────────────────────────────────────
-  "updater.available": "MooshieUI v{version} jest dostępna",
+  "updater.available": "MooshieUI F v{version} jest dostępna",
   "updater.download_now": "Aktualizuj teraz",
   "updater.later": "Później",
   "updater.downloading": "Pobieranie v{version}...",
@@ -1475,7 +1475,7 @@ const pl: Record<string, string> = {
   "updater.restart_now": "Uruchom ponownie",
   "updater.error": "Aktualizacja nie powiodła się: {error}",
   "updater.dismiss": "Zamknij",
-  "updater.server_available": "MooshieUI v{version} jest dostępna -- wdróż ponownie, aby zaktualizować!",
+  "updater.server_available": "MooshieUI F v{version} jest dostępna -- wdróż ponownie, aby zaktualizować!",
   "updater.version_mismatch": "Aktualizacja mogła nie zostać zastosowana poprawnie. Oczekiwano v{expected}, ale uruchomiono v{current}. Spróbuj pobrać najnowszą wersję ręcznie.",
 
   // ── Gallery ─────────────────────────────────────────────
@@ -2003,8 +2003,8 @@ const pl: Record<string, string> = {
   "settings.about.data_dir_hint": "Aby zainstalować na innym dysku, ustaw zmienną środowiskową MOOSHIEUI_DATA_DIR na preferowaną ścieżkę przed uruchomieniem.",
 
   // About modal
-  "settings.about.about_button": "O MooshieUI",
-  "settings.about.modal_title": "O MooshieUI",
+  "settings.about.about_button": "O MooshieUI F",
+  "settings.about.modal_title": "O MooshieUI F",
   "settings.about.modal_tagline": "Przyjazny interfejs do generowania obrazów AI na komputerze.",
   "settings.about.fork_notice": "This is an unofficial modified build of MooshieUI. Please do not report issues from this build to the official project; report fork-specific issues to the fork maintainer instead.",
   "settings.about.github_button": "Repozytorium GitHub",
@@ -2687,7 +2687,7 @@ const pl: Record<string, string> = {
   "settings.lan.time.weeks_ago": "{weeks} tyg. temu",
   "settings.lan.time.months_ago": "{months} mies. temu",
   "settings.lan.time.years_ago": "{years} lat temu",
-  "app.brand_name": "MooshieUI",
+  "app.brand_name": "MooshieUI F",
   "app.theme_logo": "Logo motywu",
   "settings.appearance.custom_theme_default": "Motyw niestandardowy",
   "settings.appearance.logo_preview_alt": "podgląd logo motywu",

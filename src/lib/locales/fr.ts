@@ -113,7 +113,7 @@ const fr: Record<string, string> = {
   "common.click_to_type": "Cliquez pour saisir une valeur",
 
   // ── Assistant d'installation ────────────────────────────
-  "setup.title": "MooshieUI",
+  "setup.title": "MooshieUI F",
   "setup.subtitle": "Génération d'images IA accessible à tous",
   "setup.logo_alt": "Logo MooshieUI",
   "setup.intro": "MooshieUI installera automatiquement tout ce dont vous avez besoin — ComfyUI, Python et les bibliothèques IA adaptées à votre matériel. Aucune configuration manuelle requise.",
@@ -1235,7 +1235,7 @@ const fr: Record<string, string> = {
   "downloads.downloaded": "{filename} téléchargé",
 
   // ── Mises à jour ────────────────────────────────────────
-  "updater.available": "MooshieUI v{version} est disponible",
+  "updater.available": "MooshieUI F v{version} est disponible",
   "updater.download_now": "Mettre à jour",
   "updater.later": "Plus tard",
   "updater.downloading": "Téléchargement de v{version}...",
@@ -1243,7 +1243,7 @@ const fr: Record<string, string> = {
   "updater.restart_now": "Redémarrer maintenant",
   "updater.error": "Échec de la mise à jour : {error}",
   "updater.dismiss": "Fermer",
-  "updater.server_available": "MooshieUI v{version} est disponible — veuillez redéployer pour mettre à jour !",
+  "updater.server_available": "MooshieUI F v{version} est disponible — veuillez redéployer pour mettre à jour !",
   "updater.version_mismatch": "La mise à jour n'a peut-être pas été appliquée correctement. v{expected} était attendu, mais v{current} est en cours d'exécution. Essayez de télécharger la dernière version manuellement.",
 
   // ── Galerie ─────────────────────────────────────────────
@@ -1810,8 +1810,8 @@ const fr: Record<string, string> = {
   "settings.queue.management_desc": "Efface toutes les générations en attente et actives. Interrompt la génération en cours de tous les utilisateurs.",
 
   // About / issue report (added v0.9.9 — awaiting translation)
-  "settings.about.about_button": "About MooshieUI",
-  "settings.about.modal_title": "About MooshieUI",
+  "settings.about.about_button": "About MooshieUI F",
+  "settings.about.modal_title": "About MooshieUI F",
   "settings.about.modal_tagline": "A friendly desktop interface for AI image generation.",
   "settings.about.fork_notice": "This is an unofficial modified build of MooshieUI. Please do not report issues from this build to the official project; report fork-specific issues to the fork maintainer instead.",
   "settings.about.github_button": "GitHub Repository",
@@ -2646,7 +2646,7 @@ const fr: Record<string, string> = {
   "settings.lan.time.weeks_ago": "il y a {weeks} sem.",
   "settings.lan.time.months_ago": "il y a {months} mois",
   "settings.lan.time.years_ago": "il y a {years} an(s)",
-  "app.brand_name": "MooshieUI",
+  "app.brand_name": "MooshieUI F",
   "app.theme_logo": "Logo du thème",
   "settings.appearance.custom_theme_default": "Thème personnalisé",
   "settings.appearance.logo_preview_alt": "aperçu du logo du thème",

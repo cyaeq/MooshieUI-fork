@@ -342,8 +342,14 @@ pub fn gallery_dir() -> Option<PathBuf> {
     Some(data_dir.join("gallery"))
 }
 
-const APP_IDENTIFIER: &str = "com.mooshieui.desktop";
-const OLD_APP_IDENTIFIER: &str = "com.comfyui.desktop";
+/// Must stay in sync with `identifier` in `tauri.conf.json` so the Rust data dir
+/// and the Tauri plugin-store dir are the same folder.
+const APP_IDENTIFIER: &str = "com.mooshieui.f";
+/// Older identifiers, newest first. Data is migrated from the first one found.
+const LEGACY_APP_IDENTIFIERS: &[&str] = &["com.mooshieui.desktop", "com.comfyui.desktop"];
+/// Files carried over from a legacy data dir. `data_dir.txt` must come first:
+/// it redirects every other path lookup to the real install location.
+const MIGRATED_FILES: &[&str] = &["data_dir.txt", "config.json", "store.json"];
 
 /// The platform-default app data directory (always the same location).
 /// Used to store the bootstrap pointer file that redirects to the real data dir.
@@ -397,39 +403,43 @@ pub fn app_data_dir() -> Option<PathBuf> {
     platform_default_data_dir()
 }
 
-/// Migrate data from the old `com.comfyui.desktop` directory to the new one.
-/// Copies config.json if the new directory doesn't have one yet.
+/// Migrate data from a legacy identifier directory (`com.mooshieui.desktop`,
+/// `com.comfyui.desktop`) into the current one. Copies the bootstrap pointer,
+/// config and frontend store when the new directory lacks them.
 fn migrate_from_old_data_dir() {
     let data_dir = match dirs::data_dir() {
         Some(d) => d,
         None => return,
     };
-    let old_dir = data_dir.join(OLD_APP_IDENTIFIER);
     let new_dir = data_dir.join(APP_IDENTIFIER);
 
-    // Only migrate if old dir exists and new config doesn't
-    if !old_dir.exists() {
-        return;
-    }
-    let new_config = new_dir.join("config.json");
-    if new_config.exists() {
+    // Nothing to do once the new dir has a pointer or a config of its own.
+    if new_dir.join("data_dir.txt").exists() || new_dir.join("config.json").exists() {
         return;
     }
 
-    let old_config = old_dir.join("config.json");
-    if old_config.exists() {
-        if let Err(e) = std::fs::create_dir_all(&new_dir) {
-            eprintln!("Migration: failed to create new data dir: {}", e);
-            return;
+    let Some(old_dir) = LEGACY_APP_IDENTIFIERS
+        .iter()
+        .map(|id| data_dir.join(id))
+        .find(|d| d.join("data_dir.txt").exists() || d.join("config.json").exists())
+    else {
+        return;
+    };
+
+    if let Err(e) = std::fs::create_dir_all(&new_dir) {
+        eprintln!("Migration: failed to create new data dir: {}", e);
+        return;
+    }
+
+    for name in MIGRATED_FILES {
+        let src = old_dir.join(name);
+        let dst = new_dir.join(name);
+        if !src.is_file() || dst.exists() {
+            continue;
         }
-        if let Err(e) = std::fs::copy(&old_config, &new_config) {
-            eprintln!("Migration: failed to copy config.json: {}", e);
-        } else {
-            println!(
-                "Migrated config from {} to {}",
-                old_dir.display(),
-                new_dir.display()
-            );
+        match std::fs::copy(&src, &dst) {
+            Ok(_) => println!("Migrated {} from {}", name, old_dir.display()),
+            Err(e) => eprintln!("Migration: failed to copy {}: {}", name, e),
         }
     }
 }

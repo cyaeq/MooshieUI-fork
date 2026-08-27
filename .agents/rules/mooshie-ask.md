@@ -7,7 +7,7 @@ description: MooshieUI project map, naming, docs index. Use when explaining the 
 
 ## Identity
 
-- Product: **MooshieUI**; npm package `comfyui-desktop`; Tauri id `com.mooshieui.desktop`.
+- Product: **MooshieUI**; npm package `comfyui-desktop`; Tauri id `com.mooshieui.f`.
 
 ## Layout
 

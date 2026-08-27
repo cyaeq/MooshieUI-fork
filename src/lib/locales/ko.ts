@@ -113,7 +113,7 @@ const ko: Record<string, string> = {
   "common.click_to_type": "클릭하여 값 입력",
 
   // ── 설정 마법사 ─────────────────────────────────────────
-  "setup.title": "MooshieUI",
+  "setup.title": "MooshieUI F",
   "setup.subtitle": "초보자를 위한 AI 이미지 생성",
   "setup.logo_alt": "MooshieUI 로고",
   "setup.intro": "MooshieUI가 필요한 모든 것(ComfyUI, Python, 하드웨어에 맞는 AI 라이브러리)을 자동으로 설치합니다. 수동 설정이 필요 없습니다.",
@@ -1213,7 +1213,7 @@ const ko: Record<string, string> = {
   "downloads.downloaded": "{filename} 다운로드 완료",
 
   // ── 업데이터 ────────────────────────────────────────────
-  "updater.available": "MooshieUI v{version}을 사용할 수 있습니다",
+  "updater.available": "MooshieUI F v{version}을 사용할 수 있습니다",
   "updater.download_now": "지금 업데이트",
   "updater.later": "나중에",
   "updater.downloading": "v{version} 다운로드 중...",
@@ -1221,7 +1221,7 @@ const ko: Record<string, string> = {
   "updater.restart_now": "지금 재시작",
   "updater.error": "업데이트 실패: {error}",
   "updater.dismiss": "닫기",
-  "updater.server_available": "MooshieUI v{version} 사용 가능 — 업데이트하려면 다시 배포해 주세요!",
+  "updater.server_available": "MooshieUI F v{version} 사용 가능 — 업데이트하려면 다시 배포해 주세요!",
   "updater.version_mismatch": "업데이트가 올바르게 적용되지 않았을 수 있습니다. v{expected}를 기대했지만 v{current}가 실행 중입니다. 최신 버전을 수동으로 다운로드해 보세요.",
 
   // ── 갤러리 ──────────────────────────────────────────────
@@ -1785,8 +1785,8 @@ const ko: Record<string, string> = {
   "settings.queue.management_desc": "대기 및 실행 중인 모든 생성을 지웁니다. 모든 사용자의 진행 중인 생성이 중단됩니다.",
 
   // About / issue report (added v0.9.9 — awaiting translation)
-  "settings.about.about_button": "About MooshieUI",
-  "settings.about.modal_title": "About MooshieUI",
+  "settings.about.about_button": "About MooshieUI F",
+  "settings.about.modal_title": "About MooshieUI F",
   "settings.about.modal_tagline": "A friendly desktop interface for AI image generation.",
   "settings.about.fork_notice": "This is an unofficial modified build of MooshieUI. Please do not report issues from this build to the official project; report fork-specific issues to the fork maintainer instead.",
   "settings.about.github_button": "GitHub Repository",
@@ -2620,7 +2620,7 @@ const ko: Record<string, string> = {
   "settings.lan.time.weeks_ago": "{weeks}주 전",
   "settings.lan.time.months_ago": "{months}개월 전",
   "settings.lan.time.years_ago": "{years}년 전",
-  "app.brand_name": "MooshieUI",
+  "app.brand_name": "MooshieUI F",
   "app.theme_logo": "테마 로고",
   "settings.appearance.custom_theme_default": "사용자 지정 테마",
   "settings.appearance.logo_preview_alt": "테마 로고 미리보기",

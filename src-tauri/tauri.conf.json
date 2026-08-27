@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicerlab/files/main/tauri/tauri.conf.json.schema",
-  "productName": "MooshieUI",
+  "productName": "MooshieUI F",
   "version": "0.0.4",
-  "identifier": "com.mooshieui.desktop",
+  "identifier": "com.mooshieui.f",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "MooshieUI",
+        "title": "MooshieUI F",
         "width": 1440,
         "height": 900,
         "minWidth": 900,
@@ -42,13 +42,13 @@
     },
     "category": "Graphics and Design",
     "createUpdaterArtifacts": false,
-    "shortDescription": "Beginner-friendly AI image generation frontend for ComfyUI",
-    "longDescription": "MooshieUI is a modern desktop frontend that hides ComfyUI's node-graph complexity behind a clean, intuitive interface. Features text-to-image, image-to-image, inpainting, built-in upscaling, and one-click setup."
+    "shortDescription": "MooshieUI F desktop frontend for ComfyUI",
+    "longDescription": "MooshieUI F is an independent desktop frontend that hides ComfyUI's node-graph complexity behind a clean, intuitive interface. Features text-to-image, image-to-image, inpainting, built-in upscaling, and one-click setup."
   },
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/Mooshieblob1/MooshieUI/releases/latest/download/latest.json"
+        "https://github.com/cyaeq/MooshieUI-fork/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk2QjY5NzZFRjhDODhFMkYKUldRdmpzajRicGUybGx6Y0V5OWpuZFZSMUZnTnVBdDlwWkZxVURyRGx2d0JZQlI4cVN6OGN2cFcK",
       "windows": {

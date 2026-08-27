@@ -6282,7 +6282,7 @@ pub async fn fetch_release_notes(
         .get("https://api.github.com/repos/cyaeq/MooshieUI-fork/releases")
         .query(&[("per_page", "20")])
         .header("Accept", "application/vnd.github+json")
-        .header("User-Agent", "MooshieUI")
+        .header("User-Agent", "MooshieUI-F")
         .send()
         .await?;
 

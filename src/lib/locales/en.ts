@@ -114,7 +114,7 @@ const en: Record<string, string> = {
   "app.external_comfy.kill_failed": "Failed to free port {port}: {error}",
 
   // ── Setup Wizard ────────────────────────────────────────
-  "setup.title": "MooshieUI",
+  "setup.title": "MooshieUI F",
   "setup.subtitle": "Beginner-friendly AI image generation",
   "setup.logo_alt": "MooshieUI logo",
   "setup.intro": "MooshieUI will automatically install everything you need — ComfyUI, Python, and the right AI libraries for your hardware. No manual setup required.",
@@ -1494,7 +1494,7 @@ const en: Record<string, string> = {
   "downloads.downloaded": "Downloaded {filename}",
 
   // ── Updater ─────────────────────────────────────────────
-  "updater.available": "MooshieUI v{version} is available",
+  "updater.available": "MooshieUI F v{version} is available",
   "updater.download_now": "Update Now",
   "updater.later": "Later",
   "updater.downloading": "Downloading v{version}...",
@@ -1502,7 +1502,7 @@ const en: Record<string, string> = {
   "updater.restart_now": "Restart Now",
   "updater.error": "Update failed: {error}",
   "updater.dismiss": "Dismiss",
-  "updater.server_available": "MooshieUI v{version} is available — please redeploy to update!",
+  "updater.server_available": "MooshieUI F v{version} is available — please redeploy to update!",
   "updater.version_mismatch": "Update may not have applied correctly. Expected v{expected}, but running v{current}. Try downloading the latest version manually.",
 
   // ── Gallery ─────────────────────────────────────────────
@@ -2030,13 +2030,13 @@ const en: Record<string, string> = {
   "settings.about.data_dir_hint": "To install on a different drive, set the MOOSHIEUI_DATA_DIR environment variable to your preferred path before launching.",
 
   // About modal
-  "settings.about.about_button": "About MooshieUI",
-  "settings.about.modal_title": "About MooshieUI",
-  "settings.about.modal_tagline": "A friendly desktop interface for AI image generation.",
+  "settings.about.about_button": "About MooshieUI F",
+  "settings.about.modal_title": "About MooshieUI F",
+  "settings.about.modal_tagline": "Independent MooshieUI F edition for AI image generation.",
   "settings.about.fork_notice": "This is an unofficial modified build of MooshieUI. Please do not report issues from this build to the official project; report fork-specific issues to the fork maintainer instead.",
-  "settings.about.github_button": "GitHub Repository",
-  "settings.about.manual_update_notice": "Automatic updates are disabled for this unofficial build. Download new fork builds manually from Fork Releases, or switch to the official MooshieUI release.",
-  "settings.about.fork_updates": "Fork Releases",
+  "settings.about.github_button": "MooshieUI F Repository",
+  "settings.about.manual_update_notice": "MooshieUI F is maintained and released independently. Download F edition updates here; official MooshieUI releases use a separate update channel.",
+  "settings.about.fork_updates": "MooshieUI F Releases",
   "settings.about.official_updates": "Official Updates",
   "settings.about.gpu_garden_button": "gpu.garden",
   "settings.about.report_issue_button": "Report an Issue",
@@ -2730,7 +2730,7 @@ const en: Record<string, string> = {
   "settings.lan.time.weeks_ago": "{weeks}w ago",
   "settings.lan.time.months_ago": "{months}mo ago",
   "settings.lan.time.years_ago": "{years}y ago",
-  "app.brand_name": "MooshieUI",
+  "app.brand_name": "MooshieUI F",
   "app.theme_logo": "Theme logo",
   "settings.appearance.custom_theme_default": "Custom Theme",
   "settings.appearance.logo_preview_alt": "theme logo preview",

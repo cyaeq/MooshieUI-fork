@@ -113,7 +113,7 @@ const zh: Record<string, string> = {
   "common.click_to_type": "点击输入值",
 
   // ── 安装向导 ────────────────────────────────────────────
-  "setup.title": "MooshieUI",
+  "setup.title": "MooshieUI F",
   "setup.subtitle": "面向初学者的 AI 图像生成平台",
   "setup.logo_alt": "MooshieUI 徽标",
   "setup.intro": "MooshieUI 将自动安装所有必需组件（ComfyUI、Python 以及适合您硬件的 AI 库）。无需手动配置。",
@@ -1219,7 +1219,7 @@ const zh: Record<string, string> = {
   "downloads.downloaded": "{filename} 下载完成",
 
   // ── 更新器 ──────────────────────────────────────────────
-  "updater.available": "MooshieUI v{version} 可用",
+  "updater.available": "MooshieUI F v{version} 可用",
   "updater.download_now": "立即更新",
   "updater.later": "稍后",
   "updater.downloading": "正在下载 v{version}...",
@@ -1227,7 +1227,7 @@ const zh: Record<string, string> = {
   "updater.restart_now": "立即重启",
   "updater.error": "更新失败：{error}",
   "updater.dismiss": "关闭",
-  "updater.server_available": "MooshieUI v{version} 已可用 — 请重新部署以完成更新！",
+  "updater.server_available": "MooshieUI F v{version} 已可用 — 请重新部署以完成更新！",
   "updater.version_mismatch": "更新可能未正确应用。预期 v{expected}，但正在运行 v{current}。请尝试手动下载最新版本。",
 
   // ── 图库 ────────────────────────────────────────────────
@@ -1832,13 +1832,13 @@ const zh: Record<string, string> = {
   "settings.queue.management_desc": "清除所有等待中和进行中的生成。会中断所有用户正在进行的生成。",
 
   // About / issue report (added v0.9.9 — awaiting translation)
-  "settings.about.about_button": "About MooshieUI",
-  "settings.about.modal_title": "About MooshieUI",
-  "settings.about.modal_tagline": "A friendly desktop interface for AI image generation.",
+  "settings.about.about_button": "关于 MooshieUI F",
+  "settings.about.modal_title": "关于 MooshieUI F",
+  "settings.about.modal_tagline": "独立维护和发布的 AI 图像生成桌面界面。",
   "settings.about.fork_notice": "当前使用的是 MooshieUI 的非官方二次修改版本。本版本的问题请勿反馈给官方项目，请联系本二改版本的维护者。",
-  "settings.about.github_button": "GitHub Repository",
-  "settings.about.manual_update_notice": "此非官方版本已禁用自动更新。请前往 Fork Releases 手动下载新版本，或改用官方 MooshieUI 版本。",
-  "settings.about.fork_updates": "Fork Releases",
+  "settings.about.github_button": "MooshieUI F 代码仓库",
+  "settings.about.manual_update_notice": "MooshieUI F 独立维护和发布。请从此处获取 F 版更新；官方 MooshieUI 使用单独的更新通道。",
+  "settings.about.fork_updates": "MooshieUI F 更新",
   "settings.about.official_updates": "官方更新",
   "settings.about.gpu_garden_button": "gpu.garden",
   "settings.about.report_issue_button": "Report an Issue",
@@ -2627,7 +2627,7 @@ const zh: Record<string, string> = {
   "settings.lan.time.weeks_ago": "{weeks} 周前",
   "settings.lan.time.months_ago": "{months} 个月前",
   "settings.lan.time.years_ago": "{years} 年前",
-  "app.brand_name": "MooshieUI",
+  "app.brand_name": "MooshieUI F",
   "app.theme_logo": "主题标志",
   "settings.appearance.custom_theme_default": "自定义主题",
   "settings.appearance.logo_preview_alt": "主题标志预览",
