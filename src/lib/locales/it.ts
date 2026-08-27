@@ -461,9 +461,9 @@ const it: Record<string, string> = {
   "settings.quality_warning.keep": "Mantieni abilitato",
   "settings.quality_warning.disable": "Disabilita comunque",
   "settings.advanced_mode.label": "Advanced Mode",
-  "settings.advanced_mode.desc": "Stop auto-applying recommended steps, CFG, sampler, scheduler, and dimensions when you switch checkpoints. Your current settings are kept on every model swap.",
+  "settings.advanced_mode.desc": "Attivo per impostazione predefinita: cambiare checkpoint non applica mai automaticamente step, CFG, sampler, scheduler o dimensioni consigliati. I consigli restano visibili per applicarli manualmente. Disattivalo per far sì che il cambio di modello regoli quei parametri per te.",
   "settings.advanced_mode.warning_title": "Enable Advanced Mode?",
-  "settings.advanced_mode.warning_body": "With Advanced Mode on, switching checkpoints will no longer auto-tune steps, CFG, sampler, scheduler, or dimensions for the selected model. You'll set these yourself. Model family detection still works.",
+  "settings.advanced_mode.warning_body": "Con la modalità avanzata attiva, cambiare checkpoint non regolerà più automaticamente step, CFG, sampler, scheduler o dimensioni per il modello selezionato. Li imposterai tu, usando i suggerimenti. Il rilevamento della famiglia di modelli continua a funzionare.",
   "settings.advanced_mode.enable": "Enable",
   "settings.advanced_mode.cancel": "Cancel",
 
@@ -3088,6 +3088,76 @@ const it: Record<string, string> = {
   "prompt_brackets.extra_closing": "{count} {brackets} di chiusura in eccesso.",
 
   "prompt_brackets.badge": "Parentesi",
+
+  "settings.lora_weight_limit.label": "Sblocca il limite di peso LoRA",
+
+  "settings.lora_weight_limit.desc": "Estende gli slider di forza LoRA oltre il limite predefinito di 2. I pesi superiori al limite mostrano un avviso nel pannello LoRA.",
+
+  "settings.lora_weight_limit.warning_title": "Sbloccare il limite di peso LoRA?",
+
+  "settings.lora_weight_limit.warning_body": "Forze LoRA superiori a 2 di solito bruciano l'immagine: colori slavati, artefatti o anatomia deformata. Sbloccalo solo se sai che un LoRA specifico lo richiede.",
+
+  "settings.lora_weight_limit.enable": "Sblocca",
+
+  "settings.lora_weight_limit.cancel": "Annulla",
+
+  "settings.lora_weight_limit.max_label": "Peso LoRA massimo",
+
+  "settings.lora_weight_limit.max_desc": "Tra 2 e 10. Vale per gli slider di forza del modello e di CLIP.",
+
+  "generation.model.lora_over_cap_warning": "Uno o più LoRA superano il peso predefinito di 2. Pesi molto alti bruciano spesso l'immagine (colori slavati, artefatti, anatomia deformata).",
+
+  "param_presets.title": "Preset dei parametri",
+
+  "param_presets.select_placeholder": "Seleziona preset...",
+
+  "param_presets.name_placeholder": "Nome del nuovo preset (opzionale)",
+
+  "param_presets.save_current": "Salva attuale",
+
+  "param_presets.update": "Aggiorna",
+
+  "param_presets.delete": "Elimina",
+
+  "param_presets.apply": "Applica",
+
+  "param_presets.untitled": "Preset senza nome",
+
+  "param_presets.default_name": "Preset {n}",
+
+  "param_presets.saved": "Preset \"{name}\" salvato",
+
+  "param_presets.error.select_first": "Seleziona prima un preset.",
+
+  "param_presets.error.not_found": "Preset non trovato.",
+
+  "param_presets.updated": "Preset \"{name}\" aggiornato",
+
+  "param_presets.applied": "Preset applicato.",
+
+  "param_presets.delete_confirm": "Eliminare il preset \"{name}\"?",
+
+  "param_presets.deleted": "Preset eliminato.",
+
+  "generation.sampler.family_recommended": "Impostazioni consigliate per {model}",
+
+  "generation.sampler.family_recommended_generic": "Impostazioni consigliate",
+
+  "generation.sampler.family_rec_hint": "Valori predefiniti della famiglia di modelli rilevata. La Modalità avanzata mantiene i tuoi valori quando cambi modello, quindi applicali manualmente se li desideri.",
+
+  "generation.sampler.family_rec_hint_unknown": "Non è stato possibile rilevare la famiglia del modello, quindi questi sono i valori predefiniti generici del progetto.",
+
+  "generation.sampler.family_rec_res": "Risoluzione",
+
+  "generation.sampler.family_rec_upscale_denoise": "Denoise upscale",
+
+  "generation.sampler.family_rec_flux_guidance": "Guida Flux",
+
+  "generation.sampler.family_rec_matches": "I valori attuali corrispondono già alla raccomandazione.",
+
+  "generation.sampler.steps_range": "Step: {min}-{max}",
+
+  "generation.sampler.cfg_range": "CFG: {min}-{max}",
 
 };
 export default it;

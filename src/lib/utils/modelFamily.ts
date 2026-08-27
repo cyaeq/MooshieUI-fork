@@ -52,6 +52,54 @@ export const TURBO_MODEL_VARIANTS = [
 
 export type TurboModelVariant = typeof TURBO_MODEL_VARIANTS[number];
 
+/** Human-readable display names per model family, for recommendation labels. */
+export const MODEL_FAMILY_LABELS: Record<ModelFamily, string> = {
+  anima: "Anima",
+  sdxl: "SDXL",
+  illustrious: "Illustrious",
+  pony: "Pony",
+  sd15: "SD 1.5",
+  sd3: "SD3",
+  flux: "Flux",
+  flux1d: "Flux.1 Dev",
+  flux1s: "Flux.1 Schnell",
+  flux1krea: "Flux.1 Krea",
+  flux1kontext: "Flux.1 Kontext",
+  flux2d: "Flux.2 Dev",
+  flux2klein9b: "Flux.2 Klein 9B",
+  flux2klein9bbase: "Flux.2 Klein 9B Base",
+  flux2klein4b: "Flux.2 Klein 4B",
+  flux2klein4bbase: "Flux.2 Klein 4B Base",
+  chroma: "Chroma",
+  zib: "Z-Image Base",
+  zit: "Z-Image Turbo",
+  wan: "Wan",
+  qwen: "Qwen",
+  qwen_edit: "Qwen Image Edit",
+  qwen_edit_plus: "Qwen Image Edit Plus",
+  ideogram4: "Ideogram 4.0",
+  krea2: "Krea 2",
+  auraflow: "AuraFlow",
+  pixart: "PixArt",
+  hunyuandit: "HunyuanDiT",
+  cascade: "Stable Cascade",
+  kolors: "Kolors",
+  mugen: "Mugen",
+  nanosaur: "Nanosaur",
+  unknown: "",
+};
+
+/** Display suffix for a detected acceleration variant (empty for `none`). */
+export const TURBO_VARIANT_LABELS: Record<TurboModelVariant, string> = {
+  none: "",
+  turbo: "Turbo",
+  lightning: "Lightning",
+  lcm: "LCM",
+  hyper: "Hyper",
+  dmd: "DMD",
+  dmd2: "DMD2",
+};
+
 export interface ModelFamilySignals {
   /** Checkpoint filename or diffusion UNET filename */
   filename?: string | null;

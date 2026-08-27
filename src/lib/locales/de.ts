@@ -482,9 +482,9 @@ const de: Record<string, string> = {
   "settings.quality_warning.keep": "Aktiviert lassen",
   "settings.quality_warning.disable": "Trotzdem deaktivieren",
   "settings.advanced_mode.label": "Advanced Mode",
-  "settings.advanced_mode.desc": "Stop auto-applying recommended steps, CFG, sampler, scheduler, and dimensions when you switch checkpoints. Your current settings are kept on every model swap.",
+  "settings.advanced_mode.desc": "Standardmäßig aktiv: Beim Wechsel des Checkpoints werden empfohlene Schritte, CFG, Sampler, Scheduler oder Abmessungen nie automatisch übernommen. Empfehlungen werden weiterhin angezeigt, damit du sie selbst anwenden kannst. Deaktiviere dies, damit Modellwechsel diese Parameter für dich abstimmen.",
   "settings.advanced_mode.warning_title": "Enable Advanced Mode?",
-  "settings.advanced_mode.warning_body": "With Advanced Mode on, switching checkpoints will no longer auto-tune steps, CFG, sampler, scheduler, or dimensions for the selected model. You'll set these yourself. Model family detection still works.",
+  "settings.advanced_mode.warning_body": "Mit aktiviertem Erweiterten Modus stimmt ein Checkpoint-Wechsel Schritte, CFG, Sampler, Scheduler und Abmessungen nicht mehr automatisch auf das gewählte Modell ab. Du legst diese Werte selbst fest und nutzt dabei die Empfehlungshinweise. Die Erkennung der Modellfamilie funktioniert weiterhin.",
   "settings.advanced_mode.enable": "Enable",
   "settings.advanced_mode.cancel": "Cancel",
 
@@ -3090,6 +3090,76 @@ const de: Record<string, string> = {
   "prompt_brackets.extra_closing": "{count} überzählige schließende {brackets}.",
 
   "prompt_brackets.badge": "Klammern",
+
+  "settings.lora_weight_limit.label": "LoRA-Gewichtungsgrenze aufheben",
+
+  "settings.lora_weight_limit.desc": "Hebt die LoRA-Stärkeregler über die Standardgrenze von 2 hinaus. Gewichtungen über der Standardgrenze zeigen im LoRA-Panel eine Warnung.",
+
+  "settings.lora_weight_limit.warning_title": "LoRA-Gewichtungsgrenze aufheben?",
+
+  "settings.lora_weight_limit.warning_body": "LoRA-Stärken über 2 verbrennen das Bild meist: ausgewaschene Farben, Artefakte oder verzerrte Anatomie. Hebe die Grenze nur auf, wenn du weißt, dass ein bestimmtes LoRA das benötigt.",
+
+  "settings.lora_weight_limit.enable": "Aufheben",
+
+  "settings.lora_weight_limit.cancel": "Abbrechen",
+
+  "settings.lora_weight_limit.max_label": "Maximale LoRA-Gewichtung",
+
+  "settings.lora_weight_limit.max_desc": "Zwischen 2 und 10. Gilt für Modell- und CLIP-Stärkeregler.",
+
+  "generation.model.lora_over_cap_warning": "Ein oder mehrere LoRAs überschreiten die Standardgewichtung von 2. Sehr hohe Gewichtungen verbrennen das Bild häufig (ausgewaschene Farben, Artefakte, verzerrte Anatomie).",
+
+  "param_presets.title": "Parameter-Voreinstellungen",
+
+  "param_presets.select_placeholder": "Voreinstellung wählen...",
+
+  "param_presets.name_placeholder": "Name der neuen Voreinstellung (optional)",
+
+  "param_presets.save_current": "Aktuelle speichern",
+
+  "param_presets.update": "Aktualisieren",
+
+  "param_presets.delete": "Löschen",
+
+  "param_presets.apply": "Anwenden",
+
+  "param_presets.untitled": "Unbenannte Voreinstellung",
+
+  "param_presets.default_name": "Voreinstellung {n}",
+
+  "param_presets.saved": "Voreinstellung \"{name}\" gespeichert",
+
+  "param_presets.error.select_first": "Wähle zuerst eine Voreinstellung.",
+
+  "param_presets.error.not_found": "Voreinstellung nicht gefunden.",
+
+  "param_presets.updated": "Voreinstellung \"{name}\" aktualisiert",
+
+  "param_presets.applied": "Voreinstellung angewendet.",
+
+  "param_presets.delete_confirm": "Voreinstellung \"{name}\" löschen?",
+
+  "param_presets.deleted": "Voreinstellung gelöscht.",
+
+  "generation.sampler.family_recommended": "Empfohlene Einstellungen für {model}",
+
+  "generation.sampler.family_recommended_generic": "Empfohlene Einstellungen",
+
+  "generation.sampler.family_rec_hint": "Standardwerte der erkannten Modellfamilie. Im Erweiterten Modus bleiben beim Modellwechsel deine eigenen Werte erhalten – übernimm diese Werte daher manuell, wenn du sie möchtest.",
+
+  "generation.sampler.family_rec_hint_unknown": "Die Modellfamilie konnte nicht erkannt werden, daher sind dies die allgemeinen Projekt-Standardwerte.",
+
+  "generation.sampler.family_rec_res": "Auflösung",
+
+  "generation.sampler.family_rec_upscale_denoise": "Upscale-Denoise",
+
+  "generation.sampler.family_rec_flux_guidance": "Flux-Guidance",
+
+  "generation.sampler.family_rec_matches": "Die aktuellen Werte entsprechen bereits der Empfehlung.",
+
+  "generation.sampler.steps_range": "Schritte: {min}-{max}",
+
+  "generation.sampler.cfg_range": "CFG: {min}-{max}",
 
 };
 export default de;

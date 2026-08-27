@@ -9,6 +9,8 @@
   } from "../../utils/api.js";
   import { onMount } from "svelte";
   import InfoTip from "../ui/InfoTip.svelte";
+  import EditableValue from "../ui/EditableValue.svelte";
+  import { scrollCapture } from "../../utils/scrollCapture.js";
 
   let untwistingAvailable = $state<boolean | null>(null);
   let scaleImageAvailable = $state<boolean | null>(null);
@@ -308,13 +310,23 @@
       </div>
     </div>
 
-    <div>
+    <div use:scrollCapture>
       <label class="text-xs text-neutral-400 flex items-center gap-1 mb-1">
         {locale.t("generation.style_transfer.style_strength")}
         <InfoTip text={locale.t("generation.style_transfer.style_strength_tip")} />
-        <span class="ml-auto tabular-nums text-neutral-500"
-          >{generation.styleTransferLowScaleEnd.toFixed(2)}</span
-        >
+        <span class="ml-auto">
+          <EditableValue
+            value={generation.styleTransferLowScaleEnd}
+            min={1}
+            max={1.5}
+            step={0.01}
+            decimals={2}
+            onchange={(v) => {
+              generation.styleTransferLowScaleEnd = v;
+              generation.saveSettings();
+            }}
+          />
+        </span>
       </label>
       <input
         type="range"
@@ -327,13 +339,23 @@
       />
     </div>
 
-    <div>
+    <div use:scrollCapture>
       <label class="text-xs text-neutral-400 flex items-center gap-1 mb-1">
         {locale.t("generation.style_transfer.structure_match")}
         <InfoTip text={locale.t("generation.style_transfer.structure_match_tip")} />
-        <span class="ml-auto tabular-nums text-neutral-500"
-          >{generation.styleTransferHighScaleStart.toFixed(2)}</span
-        >
+        <span class="ml-auto">
+          <EditableValue
+            value={generation.styleTransferHighScaleStart}
+            min={1}
+            max={1.15}
+            step={0.01}
+            decimals={2}
+            onchange={(v) => {
+              generation.styleTransferHighScaleStart = v;
+              generation.saveSettings();
+            }}
+          />
+        </span>
       </label>
       <input
         type="range"

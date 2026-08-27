@@ -4,7 +4,7 @@
   import type { ReleaseNote, ImportResult, AttentionBackendStatus, BackendSupport, ComfyUiVersionInfo } from "../../utils/api.js";
   import { connection } from "../../stores/connection.svelte.js";
   import { autocomplete } from "../../stores/autocomplete.svelte.js";
-  import { generation } from "../../stores/generation.svelte.js";
+  import { generation, DEFAULT_LORA_WEIGHT_MAX, LORA_WEIGHT_LIMIT_CEILING } from "../../stores/generation.svelte.js";
   import { accessibility } from "../../stores/accessibility.svelte.js";
   import { locale, LOCALE_OPTIONS, type Locale } from "../../stores/locale.svelte.js";
   import { gallery } from "../../stores/gallery.svelte.js";
@@ -129,6 +129,7 @@
   let tagFileLoading = $state(false);
   let showQualityTagsWarning = $state(false);
   let showAdvancedModeWarning = $state(false);
+  let showLoraLimitWarning = $state(false);
 
   // Attention backend state
   let attentionInstalling = $state(false);
@@ -2936,6 +2937,56 @@
           <div class="flex items-start gap-3">
             <input
               type="checkbox"
+              id="lora-weight-limit"
+              checked={generation.loraWeightLimitEnabled}
+              onchange={(e) => {
+                const target = e.target as HTMLInputElement;
+                if (target.checked) {
+                  // Revert — confirm via popup before unlocking
+                  target.checked = false;
+                  showLoraLimitWarning = true;
+                } else {
+                  generation.loraWeightLimitEnabled = false;
+                  generation.loraWeightLimitMax = DEFAULT_LORA_WEIGHT_MAX;
+                  generation.saveSettings();
+                }
+              }}
+              class="w-4 h-4 mt-0.5 accent-indigo-500 rounded"
+            />
+            <div>
+              <label for="lora-weight-limit" class="text-sm text-neutral-200">{locale.t('settings.lora_weight_limit.label')}</label>
+              <p class="text-[10px] text-neutral-500 mt-0.5">{locale.t('settings.lora_weight_limit.desc')}</p>
+            </div>
+          </div>
+
+          {#if generation.loraWeightLimitEnabled}
+            <div class="ml-7">
+              <label for="lora-weight-limit-max" class="text-sm text-neutral-200">{locale.t('settings.lora_weight_limit.max_label')}</label>
+              <p class="text-[10px] text-neutral-500 mt-0.5 mb-1.5">{locale.t('settings.lora_weight_limit.max_desc')}</p>
+              <input
+                type="number"
+                id="lora-weight-limit-max"
+                min={DEFAULT_LORA_WEIGHT_MAX}
+                max={LORA_WEIGHT_LIMIT_CEILING}
+                step="0.5"
+                value={generation.loraWeightLimitMax}
+                onchange={(e) => {
+                  const raw = parseFloat((e.target as HTMLInputElement).value);
+                  const next = Number.isFinite(raw)
+                    ? Math.min(Math.max(raw, DEFAULT_LORA_WEIGHT_MAX), LORA_WEIGHT_LIMIT_CEILING)
+                    : DEFAULT_LORA_WEIGHT_MAX;
+                  generation.loraWeightLimitMax = next;
+                  (e.target as HTMLInputElement).value = String(next);
+                  generation.saveSettings();
+                }}
+                class="w-24 bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-neutral-100 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+          {/if}
+
+          <div class="flex items-start gap-3">
+            <input
+              type="checkbox"
               id="preflight-model-check"
               checked={generation.preflightModelCheck}
               onchange={(e) => {
@@ -4568,6 +4619,33 @@
         class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-colors cursor-pointer"
       >
         {locale.t('settings.advanced_mode.enable')}
+      </button>
+    </div>
+  </div>
+</div>
+{/if}
+
+{#if showLoraLimitWarning}
+<div class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center" role="dialog">
+  <div class="bg-neutral-900 border border-neutral-700 rounded-xl p-6 max-w-md mx-4 shadow-2xl">
+    <h3 class="text-sm font-semibold text-neutral-100 mb-3">{locale.t('settings.lora_weight_limit.warning_title')}</h3>
+    <p class="text-xs text-neutral-400 mb-4">{locale.t('settings.lora_weight_limit.warning_body')}</p>
+    <div class="flex gap-3 justify-end">
+      <button
+        onclick={() => { showLoraLimitWarning = false; }}
+        class="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-400 rounded-lg text-xs transition-colors cursor-pointer"
+      >
+        {locale.t('settings.lora_weight_limit.cancel')}
+      </button>
+      <button
+        onclick={() => {
+          generation.loraWeightLimitEnabled = true;
+          generation.saveSettings();
+          showLoraLimitWarning = false;
+        }}
+        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-colors cursor-pointer"
+      >
+        {locale.t('settings.lora_weight_limit.enable')}
       </button>
     </div>
   </div>

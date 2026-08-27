@@ -461,9 +461,9 @@ const zhTw: Record<string, string> = {
   "settings.quality_warning.keep": "保持啟用",
   "settings.quality_warning.disable": "仍然停用",
   "settings.advanced_mode.label": "Advanced Mode",
-  "settings.advanced_mode.desc": "Stop auto-applying recommended steps, CFG, sampler, scheduler, and dimensions when you switch checkpoints. Your current settings are kept on every model swap.",
+  "settings.advanced_mode.desc": "預設開啟：切換模型時不會自動套用建議的步數、CFG、採樣器、排程器或尺寸。建議值仍會顯示，你可以自行套用。關閉後，切換模型會自動幫你調整這些參數。",
   "settings.advanced_mode.warning_title": "Enable Advanced Mode?",
-  "settings.advanced_mode.warning_body": "With Advanced Mode on, switching checkpoints will no longer auto-tune steps, CFG, sampler, scheduler, or dimensions for the selected model. You'll set these yourself. Model family detection still works.",
+  "settings.advanced_mode.warning_body": "開啟進階模式後，切換模型不再依所選模型自動調整步數、CFG、採樣器、排程器和尺寸，需要你參考建議提示自行設定。模型系列偵測仍然有效。",
   "settings.advanced_mode.enable": "Enable",
   "settings.advanced_mode.cancel": "Cancel",
 
@@ -3088,6 +3088,76 @@ const zhTw: Record<string, string> = {
   "prompt_brackets.extra_closing": "有 {count} 個多餘的右{brackets}。",
 
   "prompt_brackets.badge": "括號",
+
+  "settings.lora_weight_limit.label": "解除 LoRA 權重上限",
+
+  "settings.lora_weight_limit.desc": "讓 LoRA 強度滑桿超過預設上限 2。超過預設上限的權重會在 LoRA 面板顯示警告。",
+
+  "settings.lora_weight_limit.warning_title": "解除 LoRA 權重上限？",
+
+  "settings.lora_weight_limit.warning_body": "LoRA 強度超過 2 通常會燒壞畫面：顏色發灰、出現雜訊或肢體崩壞。只有在確定某個 LoRA 需要時才解除上限。",
+
+  "settings.lora_weight_limit.enable": "解除",
+
+  "settings.lora_weight_limit.cancel": "取消",
+
+  "settings.lora_weight_limit.max_label": "LoRA 權重最大值",
+
+  "settings.lora_weight_limit.max_desc": "數值 2 到 10，同時套用於模型強度與 CLIP 強度滑桿。",
+
+  "generation.model.lora_over_cap_warning": "有 LoRA 的權重超過預設值 2。過高的權重常會燒壞畫面（顏色發灰、雜訊、肢體崩壞）。",
+
+  "param_presets.title": "參數預設",
+
+  "param_presets.select_placeholder": "選擇預設...",
+
+  "param_presets.name_placeholder": "新預設名稱（選填）",
+
+  "param_presets.save_current": "儲存目前設定",
+
+  "param_presets.update": "更新",
+
+  "param_presets.delete": "刪除",
+
+  "param_presets.apply": "套用",
+
+  "param_presets.untitled": "未命名預設",
+
+  "param_presets.default_name": "預設 {n}",
+
+  "param_presets.saved": "已儲存預設「{name}」",
+
+  "param_presets.error.select_first": "請先選擇一個預設。",
+
+  "param_presets.error.not_found": "找不到該預設。",
+
+  "param_presets.updated": "已更新預設「{name}」",
+
+  "param_presets.applied": "已套用預設。",
+
+  "param_presets.delete_confirm": "刪除預設「{name}」？",
+
+  "param_presets.deleted": "預設已刪除。",
+
+  "generation.sampler.family_recommended": "{model} 建議設定",
+
+  "generation.sampler.family_recommended_generic": "建議設定",
+
+  "generation.sampler.family_rec_hint": "已辨識模型系列的預設值。進階模式在切換模型時會保留你自己的參數，因此需要時請手動套用這些建議值。",
+
+  "generation.sampler.family_rec_hint_unknown": "無法辨識模型系列，此處顯示的是專案通用預設值。",
+
+  "generation.sampler.family_rec_res": "解析度",
+
+  "generation.sampler.family_rec_upscale_denoise": "放大重繪幅度",
+
+  "generation.sampler.family_rec_flux_guidance": "Flux 引導",
+
+  "generation.sampler.family_rec_matches": "目前的參數已與建議值一致。",
+
+  "generation.sampler.steps_range": "步數：{min}-{max}",
+
+  "generation.sampler.cfg_range": "CFG：{min}-{max}",
 
 };
 export default zhTw;

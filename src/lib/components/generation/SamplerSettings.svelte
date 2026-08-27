@@ -5,9 +5,11 @@
   import { locale } from "../../stores/locale.svelte.js";
   import InfoTip from "../ui/InfoTip.svelte";
   import EditableValue from "../ui/EditableValue.svelte";
+  import ParamPresetBar from "./ParamPresetBar.svelte";
   import { scrollCapture } from "../../utils/scrollCapture.js";
   import { downloadModel } from "../../utils/api.js";
   import { ipcListen } from "../../utils/ipc.js";
+  import { MODEL_FAMILY_LABELS, TURBO_VARIANT_LABELS } from "../../utils/modelFamily.js";
   import { onMount } from "svelte";
 
   const RDBT_ANIMA_FILENAME = "rdbt_v1.0_anima_b1_16-step.safetensors";
@@ -83,15 +85,58 @@
   let animaRecOpen = $state(true);
   let juiceRecOpen = $state(true);
   let nanosaurRecOpen = $state(true);
+  let familyRecOpen = $state(true);
 
+  /**
+   * Per-family recommended params, mirrored from the store's preset table. In
+   * Advanced Mode these are no longer applied automatically on model swaps, so
+   * they are surfaced here as a recommendation the user can apply manually.
+   */
+  const familyPreset = $derived(generation.recommendedModelPresetResolved);
+  const familyKnown = $derived(generation.modelFamily !== "unknown");
+
+  /** The three legacy cards below already cover their models, so avoid a duplicate card. */
+  const hasDedicatedRecommendation = $derived(
+    hasAnimaRecommendation || hasJuiceRecommendation || hasNanosaurRecommendation
+  );
+  const showFamilyRecommendation = $derived(!hasDedicatedRecommendation);
+
+  const familyLabel = $derived(
+    [MODEL_FAMILY_LABELS[generation.modelFamily] ?? "", TURBO_VARIANT_LABELS[generation.modelTurboVariant] ?? ""]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  const familyRecMatches = $derived(
+    generation.steps === familyPreset.steps &&
+      generation.cfg === familyPreset.cfg &&
+      generation.samplerName === familyPreset.samplerName &&
+      generation.scheduler === familyPreset.scheduler
+  );
+
+  /**
+   * Acceptance band around the family target. Falls back to the sampler-name
+   * heuristic only when the model family is unknown.
+   */
   function recommendedStepRange() {
+    if (familyKnown) {
+      const target = familyPreset.steps;
+      return { min: Math.max(1, Math.round(target * 0.75)), max: Math.round(target * 1.3), target };
+    }
     const sampler = generation.samplerName.toLowerCase();
-    if (sampler.includes("euler")) return { min: 18, max: 28 };
-    if (sampler.includes("dpmpp")) return { min: 24, max: 36 };
-    return { min: 20, max: 30 };
+    if (sampler.includes("euler")) return { min: 18, max: 28, target: 23 };
+    if (sampler.includes("dpmpp")) return { min: 24, max: 36, target: 30 };
+    return { min: 20, max: 30, target: 25 };
   }
 
   function recommendedCfgRange() {
+    if (familyKnown) {
+      const target = familyPreset.cfg;
+      // Distilled/guidance-free families sit near CFG 1, so keep their band tight.
+      const below = target <= 1.5 ? 0.5 : 1.5;
+      const above = target <= 1.5 ? 1.0 : 2.0;
+      return { min: Math.max(0, +(target - below).toFixed(1)), max: +(target + above).toFixed(1), target };
+    }
     if (isCfgPpSampler(generation.samplerName)) return { min: 1.5, max: 2.2, target: 1.8 };
     return { min: 4.0, max: 8.0, target: 6.0 };
   }
@@ -124,10 +169,8 @@
   }
 
   function applyRecommendedSamplerTuning() {
-    const stepRange = recommendedStepRange();
-    const cfgRange = recommendedCfgRange();
-    generation.steps = Math.round((stepRange.min + stepRange.max) / 2);
-    generation.cfg = cfgRange.target;
+    generation.steps = recommendedStepRange().target;
+    generation.cfg = recommendedCfgRange().target;
   }
 
   function applyAnimaRecommendation() {
@@ -271,10 +314,60 @@
     </div>
   {/if}
 
+  {#if showFamilyRecommendation}
+    <div class="rounded-lg border border-neutral-700 bg-neutral-900/60 overflow-hidden">
+      <button
+        class="w-full flex items-center justify-between px-2.5 py-2 text-left"
+        onclick={() => (familyRecOpen = !familyRecOpen)}
+      >
+        <p class="text-xs text-neutral-300 font-medium">
+          {familyKnown && familyLabel
+            ? locale.t('generation.sampler.family_recommended', { model: familyLabel })
+            : locale.t('generation.sampler.family_recommended_generic')}
+        </p>
+        <svg class="w-3 h-3 text-neutral-500 shrink-0 transition-transform {familyRecOpen ? '' : '-rotate-90'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      {#if familyRecOpen}
+        <div class="px-2.5 pb-2.5 space-y-2">
+          <div class="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-neutral-300">
+            <span>{locale.t('generation.sampler.steps')}: <span class="tabular-nums text-neutral-100">{familyPreset.steps}</span></span>
+            <span>{locale.t('generation.sampler.cfg')}: <span class="tabular-nums text-neutral-100">{locale.formatDecimal(familyPreset.cfg, 1)}</span></span>
+            <span>{locale.t('generation.sampler.label')}: <span class="text-neutral-100">{familyPreset.samplerName}</span></span>
+            <span>{locale.t('generation.sampler.scheduler')}: <span class="text-neutral-100">{familyPreset.scheduler}</span></span>
+            <span>{locale.t('generation.sampler.family_rec_res')}: <span class="tabular-nums text-neutral-100">{familyPreset.width}×{familyPreset.height}</span></span>
+            {#if familyPreset.upscaleDenoise !== undefined}
+              <span>{locale.t('generation.sampler.family_rec_upscale_denoise')}: <span class="tabular-nums text-neutral-100">{locale.formatDecimal(familyPreset.upscaleDenoise, 2)}</span></span>
+            {/if}
+            {#if familyPreset.fluxGuidance !== undefined}
+              <span>{locale.t('generation.sampler.family_rec_flux_guidance')}: <span class="tabular-nums text-neutral-100">{locale.formatDecimal(familyPreset.fluxGuidance, 1)}</span></span>
+            {/if}
+          </div>
+          <div class="flex items-start justify-between gap-2">
+            <p class="text-[10px] text-neutral-500">
+              {familyRecMatches
+                ? locale.t('generation.sampler.family_rec_matches')
+                : familyKnown
+                  ? locale.t('generation.sampler.family_rec_hint')
+                  : locale.t('generation.sampler.family_rec_hint_unknown')}
+            </p>
+            <button
+              class="shrink-0 px-2 py-1 text-[10px] rounded border border-neutral-600 text-neutral-300 hover:border-neutral-500 hover:text-neutral-200 transition-colors disabled:opacity-40 disabled:hover:border-neutral-600"
+              onclick={() => generation.applyRecommendedModelPreset()}
+              disabled={familyRecMatches}
+            >
+              {locale.t('common.apply')}
+            </button>
+          </div>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
   <!-- Sampler + Scheduler -->
   <div class="grid grid-cols-2 gap-2">
     <div>
       <label class="block text-xs text-neutral-400 mb-1">{locale.t('generation.sampler.label')}<InfoTip text={locale.t('generation.sampler.label_tip')} /></label>
+
       <select
         bind:value={generation.samplerName}
         onchange={onSamplerChange}
@@ -332,10 +425,10 @@
   <!-- Recommendations row -->
   <div class="flex items-center justify-between gap-2 -mt-1">
     <span class="text-[10px] {stepsOutOfRange ? 'text-amber-400' : 'text-neutral-500'} truncate">
-      Steps: {recommendedStepRange().min}-{recommendedStepRange().max}
+      {locale.t('generation.sampler.steps_range', { min: String(recommendedStepRange().min), max: String(recommendedStepRange().max) })}
     </span>
     <span class="text-[10px] {cfgOutOfRange ? 'text-amber-400' : 'text-neutral-500'} truncate">
-      CFG: {locale.formatDecimal(recommendedCfgRange().min, 1)}-{locale.formatDecimal(recommendedCfgRange().max, 1)}
+      {locale.t('generation.sampler.cfg_range', { min: locale.formatDecimal(recommendedCfgRange().min, 1), max: locale.formatDecimal(recommendedCfgRange().max, 1) })}
     </span>
     {#if cfgOutOfRange || stepsOutOfRange}
       <button
@@ -530,4 +623,5 @@
     </div>
   {/if}
 
+  <ParamPresetBar />
 </div>

@@ -1727,7 +1727,14 @@
             <div use:scrollCapture>
               <div class="flex items-center justify-between text-xs mb-0.5">
                 <span class="text-neutral-400">{locale.t('generation.inpaint.grow_mask')}<InfoTip text={locale.t('generation.inpaint.grow_mask_tip')} /></span>
-                <span class="text-neutral-300 tabular-nums">{generation.growMaskBy}px</span>
+                <EditableValue
+                  value={generation.growMaskBy}
+                  min={0}
+                  max={64}
+                  step={1}
+                  suffix="px"
+                  onchange={(v) => { generation.growMaskBy = v; }}
+                />
               </div>
               <input
                 type="range"

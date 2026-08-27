@@ -470,9 +470,9 @@ const fr: Record<string, string> = {
   "settings.quality_warning.keep": "Garder activé",
   "settings.quality_warning.disable": "Désactiver quand même",
   "settings.advanced_mode.label": "Advanced Mode",
-  "settings.advanced_mode.desc": "Stop auto-applying recommended steps, CFG, sampler, scheduler, and dimensions when you switch checkpoints. Your current settings are kept on every model swap.",
+  "settings.advanced_mode.desc": "Activé par défaut : changer de checkpoint n'applique jamais automatiquement les étapes, le CFG, le sampler, le scheduler ou les dimensions recommandés. Les recommandations restent affichées pour que vous les appliquiez vous-même. Désactivez cette option pour laisser les changements de modèle régler ces paramètres.",
   "settings.advanced_mode.warning_title": "Enable Advanced Mode?",
-  "settings.advanced_mode.warning_body": "With Advanced Mode on, switching checkpoints will no longer auto-tune steps, CFG, sampler, scheduler, or dimensions for the selected model. You'll set these yourself. Model family detection still works.",
+  "settings.advanced_mode.warning_body": "Avec le mode avancé activé, changer de checkpoint n'ajustera plus automatiquement les étapes, le CFG, le sampler, le scheduler ni les dimensions du modèle sélectionné. Vous les définirez vous-même à l'aide des suggestions. La détection de la famille de modèle continue de fonctionner.",
   "settings.advanced_mode.enable": "Enable",
   "settings.advanced_mode.cancel": "Cancel",
 
@@ -3114,6 +3114,76 @@ const fr: Record<string, string> = {
   "prompt_brackets.extra_closing": "{count} {brackets} fermantes en trop.",
 
   "prompt_brackets.badge": "Parenthèses",
+
+  "settings.lora_weight_limit.label": "Débloquer la limite de poids LoRA",
+
+  "settings.lora_weight_limit.desc": "Étend les curseurs de force LoRA au-delà de la limite par défaut de 2. Les poids supérieurs à la limite affichent un avertissement dans le panneau LoRA.",
+
+  "settings.lora_weight_limit.warning_title": "Débloquer la limite de poids LoRA ?",
+
+  "settings.lora_weight_limit.warning_body": "Les forces LoRA supérieures à 2 brûlent généralement l'image : couleurs délavées, artefacts ou anatomie déformée. Ne débloquez cette limite que si vous savez qu'un LoRA précis en a besoin.",
+
+  "settings.lora_weight_limit.enable": "Débloquer",
+
+  "settings.lora_weight_limit.cancel": "Annuler",
+
+  "settings.lora_weight_limit.max_label": "Poids LoRA maximal",
+
+  "settings.lora_weight_limit.max_desc": "Entre 2 et 10. S'applique aux curseurs de force du modèle et de CLIP.",
+
+  "generation.model.lora_over_cap_warning": "Un ou plusieurs LoRA dépassent le poids par défaut de 2. Des poids très élevés brûlent souvent l'image (couleurs délavées, artefacts, anatomie déformée).",
+
+  "param_presets.title": "Préréglages de paramètres",
+
+  "param_presets.select_placeholder": "Choisir un préréglage...",
+
+  "param_presets.name_placeholder": "Nom du nouveau préréglage (facultatif)",
+
+  "param_presets.save_current": "Enregistrer l'actuel",
+
+  "param_presets.update": "Mettre à jour",
+
+  "param_presets.delete": "Supprimer",
+
+  "param_presets.apply": "Appliquer",
+
+  "param_presets.untitled": "Préréglage sans nom",
+
+  "param_presets.default_name": "Préréglage {n}",
+
+  "param_presets.saved": "Préréglage \"{name}\" enregistré",
+
+  "param_presets.error.select_first": "Sélectionnez d'abord un préréglage.",
+
+  "param_presets.error.not_found": "Préréglage introuvable.",
+
+  "param_presets.updated": "Préréglage \"{name}\" mis à jour",
+
+  "param_presets.applied": "Préréglage appliqué.",
+
+  "param_presets.delete_confirm": "Supprimer le préréglage \"{name}\" ?",
+
+  "param_presets.deleted": "Préréglage supprimé.",
+
+  "generation.sampler.family_recommended": "Réglages recommandés pour {model}",
+
+  "generation.sampler.family_recommended_generic": "Réglages recommandés",
+
+  "generation.sampler.family_rec_hint": "Valeurs par défaut de la famille de modèles détectée. Le mode avancé conserve vos propres valeurs lors d'un changement de modèle : appliquez-les manuellement si vous les souhaitez.",
+
+  "generation.sampler.family_rec_hint_unknown": "La famille du modèle n'a pas pu être détectée ; il s'agit donc des valeurs par défaut génériques du projet.",
+
+  "generation.sampler.family_rec_res": "Résolution",
+
+  "generation.sampler.family_rec_upscale_denoise": "Denoise d'agrandissement",
+
+  "generation.sampler.family_rec_flux_guidance": "Guidage Flux",
+
+  "generation.sampler.family_rec_matches": "Les valeurs actuelles correspondent déjà à la recommandation.",
+
+  "generation.sampler.steps_range": "Étapes : {min}-{max}",
+
+  "generation.sampler.cfg_range": "CFG : {min}-{max}",
 
 };
 export default fr;

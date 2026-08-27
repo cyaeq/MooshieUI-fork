@@ -36,6 +36,7 @@ import type {
   GenerationMode,
   GenerationParams,
   LoraEntry,
+  ParamPresetValues,
   RegionalPromptSelection,
   RegionalPromptStrategy,
   VideoAspectRatio,
@@ -105,7 +106,7 @@ export interface GenerationToParamsOptions {
   >;
 }
 
-interface ModelPreset {
+export interface ModelPreset {
   steps: number;
   cfg: number;
   samplerName: string;
@@ -469,6 +470,11 @@ export const DEFAULT_NANOSAUR_NEGATIVE_QUALITY = appendMissingNegativeTags(
   "oldest, low quality, cartoon, blurry, sketch, monochrome, flat color, text, watermark",
 );
 
+/** Default LoRA strength ceiling. Weights above this need the unlock toggle in Settings. */
+export const DEFAULT_LORA_WEIGHT_MAX = 2;
+/** Hard ceiling for the user-defined LoRA strength limit. */
+export const LORA_WEIGHT_LIMIT_CEILING = 10;
+
 class GenerationStore {
   _mode = $state<GenerationMode>("txt2img");
   modeToggles = $state<ModeToggleStates>(createDefaultModeToggles());
@@ -628,8 +634,15 @@ class GenerationStore {
   /** When true, swapping checkpoints no longer auto-applies per-model generation params
    *  (steps/cfg/sampler/scheduler/dimensions). Family/metadata detection still runs.
    *  The first-ever preset application (while `modelPresetAppliedKey` is still unset) is
-   *  exempt so a fresh profile still gets sane defaults; every later swap preserves. */
-  advancedMode = $state(false);
+   *  exempt so a fresh profile still gets sane defaults; every later swap preserves.
+   *  Defaults to on: recommendations are surfaced as hints with manual apply buttons
+   *  instead of silently overwriting the user's params. Profiles that persisted `false`
+   *  keep the old auto-apply behaviour. */
+  advancedMode = $state(true);
+  /** When true, LoRA strength sliders accept values above the default cap of 2. */
+  loraWeightLimitEnabled = $state(false);
+  /** User-defined LoRA strength ceiling, only honoured while `loraWeightLimitEnabled`. */
+  loraWeightLimitMax = $state(DEFAULT_LORA_WEIGHT_MAX);
   /** When true, checkpoint/model swaps never overwrite width/height, regardless of advancedMode. */
   resolutionLocked = $state(false);
   regionalPrompts = $state<RegionalPromptSelection[]>([]);
@@ -892,6 +905,26 @@ class GenerationStore {
   /** True when the selected model is an Anima variant (split diffusion model). */
   get isAnima(): boolean {
     return this.modelFamily === "anima";
+  }
+
+  /** Upper bound for the LoRA strength sliders. */
+  get loraWeightMax(): number {
+    if (!this.loraWeightLimitEnabled) return DEFAULT_LORA_WEIGHT_MAX;
+    return Math.min(
+      Math.max(this.loraWeightLimitMax, DEFAULT_LORA_WEIGHT_MAX),
+      LORA_WEIGHT_LIMIT_CEILING,
+    );
+  }
+
+  /** True when any enabled LoRA carries a strength above the default cap. */
+  get hasOverCapLora(): boolean {
+    return this.loras.some(
+      (lora) =>
+        !!lora.name &&
+        lora.enabled !== false &&
+        (lora.strength_model > DEFAULT_LORA_WEIGHT_MAX ||
+          lora.strength_clip > DEFAULT_LORA_WEIGHT_MAX),
+    );
   }
 
   /** True when the selected model is an Illustrious/NoobAI family variant. */
@@ -1723,7 +1756,15 @@ class GenerationStore {
     if (this.advancedMode && !isFirstPresetApplication) return;
 
     this.modelPresetAppliedKey = presetKey;
+    this.applyResolvedPreset(this.resolveModelPreset());
+  }
 
+  /**
+   * Pure per-family lookup of the recommended steps/CFG/sampler/scheduler/resolution.
+   * Writes nothing — shared by `applyModelSpecificPreset()` and by the recommendation
+   * UI, which must display these values without applying them.
+   */
+  private resolveModelPreset(): ModelPreset {
     let preset: ModelPreset;
     switch (this.modelFamily) {
       // Nanosaur uses a custom DiT/VAE combo and prefers a taller default canvas.
@@ -2015,7 +2056,36 @@ class GenerationStore {
         break;
     }
 
-    this.applyResolvedPreset(preset);
+    return preset;
+  }
+
+  /** Recommended params for the currently detected model family (read-only). */
+  get recommendedModelPreset(): ModelPreset {
+    return this.resolveModelPreset();
+  }
+
+  /**
+   * Resolve the recommended sampler/scheduler against the options the backend
+   * actually enumerates, so the recommendation card never shows a value the
+   * dropdowns cannot select.
+   */
+  get recommendedModelPresetResolved(): ModelPreset {
+    const preset = this.resolveModelPreset();
+    return {
+      ...preset,
+      samplerName: this.resolveAvailableOption(
+        models.samplers,
+        preset.samplerName,
+        preset.samplerFallback ?? "euler"
+      ),
+      scheduler: this.resolveAvailableOption(models.schedulers, preset.scheduler, "normal"),
+    };
+  }
+
+  /** Manually apply the family recommendation (used by the recommendation card). */
+  applyRecommendedModelPreset() {
+    this.applyResolvedPreset(this.resolveModelPreset());
+    this.saveSettings();
   }
 
   async loadSettings() {
@@ -2209,6 +2279,14 @@ class GenerationStore {
           this.preflightModelCheck = !!saved.preflightModelCheck;
         if (saved.manualSaveMode !== undefined) this.manualSaveMode = saved.manualSaveMode;
         if (saved.advancedMode !== undefined) this.advancedMode = saved.advancedMode;
+        if (saved.loraWeightLimitEnabled !== undefined)
+          this.loraWeightLimitEnabled = !!saved.loraWeightLimitEnabled;
+        if (typeof saved.loraWeightLimitMax === "number" && Number.isFinite(saved.loraWeightLimitMax)) {
+          this.loraWeightLimitMax = Math.min(
+            Math.max(saved.loraWeightLimitMax, DEFAULT_LORA_WEIGHT_MAX),
+            LORA_WEIGHT_LIMIT_CEILING,
+          );
+        }
         if (saved.resolutionLocked !== undefined) this.resolutionLocked = saved.resolutionLocked;
         if (Array.isArray(saved.autoSaveDirs)) this.autoSaveDirs = saved.autoSaveDirs;
         if (saved.regionalPromptStrategy === "conditioning" || saved.regionalPromptStrategy === "inpaint_chain") {
@@ -2357,6 +2435,8 @@ class GenerationStore {
         modelFamilyOverrides: this.modelFamilyOverrides,
         manualSaveMode: this.manualSaveMode,
         advancedMode: this.advancedMode,
+        loraWeightLimitEnabled: this.loraWeightLimitEnabled,
+        loraWeightLimitMax: this.loraWeightLimitMax,
         resolutionLocked: this.resolutionLocked,
         autoSaveDirs: this.autoSaveDirs,
         regionalPrompts: this.regionalPrompts,
@@ -2484,6 +2564,8 @@ class GenerationStore {
       customNanosaurNegativeQuality: this.customNanosaurNegativeQuality,
       manualSaveMode: this.manualSaveMode,
       advancedMode: this.advancedMode,
+      loraWeightLimitEnabled: this.loraWeightLimitEnabled,
+      loraWeightLimitMax: this.loraWeightLimitMax,
       resolutionLocked: this.resolutionLocked,
       autoSaveDirs: this.autoSaveDirs,
       regionalPrompts: this.regionalPrompts,
@@ -2947,13 +3029,85 @@ class GenerationStore {
     return params;
   }
 
+  /** Capture the parameter fields a saved preset covers. */
+  snapshotParamPreset(): ParamPresetValues {
+    return {
+      samplerName: this.samplerName,
+      scheduler: this.scheduler,
+      steps: this.steps,
+      cfg: this.cfg,
+      denoise: this.denoise,
+      batchSize: this.batchSize,
+      fluxGuidance: this.fluxGuidance,
+      smartGuidance: this.smartGuidance,
+      width: this.width,
+      height: this.height,
+      upscaleEnabled: this.upscaleEnabled,
+      upscaleMethod: this.upscaleMethod,
+      upscaleModel: this.upscaleModel,
+      upscaleScale: this.upscaleScale,
+      upscaleTargetScaleEnabled: this.upscaleTargetScaleEnabled,
+      upscaleTargetScale: this.upscaleTargetScale,
+      upscaleDenoise: this.upscaleDenoise,
+      upscaleSteps: this.upscaleSteps,
+      upscaleTileSize: this.upscaleTileSize,
+      upscaleTiling: this.upscaleTiling,
+      upscaleFastRefine: this.upscaleFastRefine,
+      upscaleSoftGuidance: this.upscaleSoftGuidance,
+      upscaleSoftGuidanceMultiplier: this.upscaleSoftGuidanceMultiplier,
+      facefixEnabled: this.facefixEnabled,
+      facefixDetector: this.facefixDetector,
+      facefixDenoise: this.facefixDenoise,
+      facefixSteps: this.facefixSteps,
+      facefixGuideSize: this.facefixGuideSize,
+      facefixMaxFaces: this.facefixMaxFaces,
+      facefixAutoPrompt: this.facefixAutoPrompt,
+      controlnetEnabled: this.controlnetEnabled,
+      controlnetMode: this.controlnetMode,
+      controlnetPreset: this.controlnetPreset,
+      controlnetModel: this.controlnetModel,
+      controlnetPreprocessor: this.controlnetPreprocessor,
+      controlnetStrength: this.controlnetStrength,
+      controlnetStartPercent: this.controlnetStartPercent,
+      controlnetEndPercent: this.controlnetEndPercent,
+      styleTransferEnabled: this.styleTransferEnabled,
+      styleTransferLowScaleEnd: this.styleTransferLowScaleEnd,
+      styleTransferHighScaleStart: this.styleTransferHighScaleStart,
+      styleTransferBeta: this.styleTransferBeta,
+      styleTransferAdainStrength: this.styleTransferAdainStrength,
+      styleTransferRfMode: this.styleTransferRfMode,
+      styleTransferGamma: this.styleTransferGamma,
+      styleTransferGammaCurve: this.styleTransferGammaCurve,
+      styleTransferNormStrength: this.styleTransferNormStrength,
+      styleTransferPmiAlpha: this.styleTransferPmiAlpha,
+      styleTransferMegapixels: this.styleTransferMegapixels,
+      styleTransferBlocks: this.styleTransferBlocks,
+      outputFormat: this.outputFormat,
+      outputBitDepth: this.outputBitDepth,
+      metadataMode: this.metadataMode,
+    };
+  }
+
+  /**
+   * Restore a saved parameter snapshot. Missing fields are left untouched so
+   * presets written by older versions still apply cleanly.
+   */
+  applyParamPreset(values: Partial<ParamPresetValues>): void {
+    const snapshot = this.snapshotParamPreset();
+    for (const key of Object.keys(snapshot) as (keyof ParamPresetValues)[]) {
+      const next = values[key];
+      if (next === undefined) continue;
+      (this as any)[key] = next;
+    }
+    this.saveSettings();
+  }
+
   addLora() {
     this.loras = [
       ...this.loras,
       { name: "", strength_model: 1.0, strength_clip: 1.0, enabled: true },
     ];
   }
-
   removeLora(index: number) {
     const removed = this.loras[index];
     this.loras = this.loras.filter((_, i) => i !== index);

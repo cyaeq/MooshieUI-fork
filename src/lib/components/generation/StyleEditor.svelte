@@ -5,6 +5,7 @@
   import { autocomplete } from "../../stores/autocomplete.svelte.js";
   import { generation } from "../../stores/generation.svelte.js";
   import { locale } from "../../stores/locale.svelte.js";
+  import EditableValue from "../ui/EditableValue.svelte";
 
   interface Props {
     styleId: string;
@@ -274,7 +275,16 @@
           <div>
             <div class="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wide text-neutral-500">
               <label for="sty-overall">{locale.t("styles.editor.overall_weight")}</label>
-              <span class="font-mono text-neutral-300">{locale.formatDecimal(style.overallWeight, 2)}</span>
+              <span class="font-mono">
+                <EditableValue
+                  value={style.overallWeight}
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  decimals={2}
+                  onchange={(v) => setOverallWeight(v)}
+                />
+              </span>
             </div>
             <input
               id="sty-overall"
@@ -316,7 +326,16 @@
                   class="w-28"
                   aria-label={`Weight for ${displayTag(artist.tag)}`}
                 />
-                <span class="w-10 shrink-0 text-right font-mono text-[10px] text-neutral-400">{locale.formatDecimal(artist.weight, 2)}</span>
+                <span class="w-10 shrink-0 text-right font-mono text-[10px]">
+                  <EditableValue
+                    value={artist.weight}
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    decimals={2}
+                    onchange={(v) => updateArtistWeight(i, v)}
+                  />
+                </span>
                 <span class="w-14 shrink-0 text-right font-mono text-[10px] text-indigo-300" title={locale.t("styles.editor.effective_weight")}>= {effective}</span>
                 <button
                   type="button"

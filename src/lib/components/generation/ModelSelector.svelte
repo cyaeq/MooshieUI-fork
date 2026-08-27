@@ -7,6 +7,7 @@
   import { ipcListen } from "../../utils/ipc.js";
   import { onMount, onDestroy, tick } from "svelte";
   import InfoTip from "../ui/InfoTip.svelte";
+  import EditableValue from "../ui/EditableValue.svelte";
   import { scrollCapture } from "../../utils/scrollCapture.js";
   import { MODEL_FAMILIES, familyIsSdxlLike } from "../../utils/modelFamily.js";
   import type { ModelFamily } from "../../utils/modelFamily.js";
@@ -1638,6 +1639,16 @@
       </div>
     </div>
     {#if lorasOpen}
+    {#if generation.hasOverCapLora}
+      <div class="mb-2 flex items-start gap-2 rounded-lg border border-amber-600/60 bg-amber-950/30 px-3 py-2">
+        <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="w-4 h-4 mt-0.5 shrink-0 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </svg>
+        <p class="text-[10px] text-amber-300/90">{locale.t('generation.model.lora_over_cap_warning')}</p>
+      </div>
+    {/if}
     {#each generation.loras as lora, i}
       <div
         class="mb-2 rounded-lg border p-2.5 transition-opacity {lora.enabled
@@ -1718,14 +1729,24 @@
             <div use:scrollCapture>
               <div class="flex items-center justify-between text-xs mb-0.5">
                 <span class="text-neutral-500">{locale.t('generation.model.lora_strength_model')}<InfoTip text={locale.t('generation.model.lora_strength_model_tip')} /></span>
-                <span class="text-neutral-300 tabular-nums">{locale.formatDecimal(lora.strength_model, 2)}</span>
+                <EditableValue
+                  value={lora.strength_model}
+                  min={0}
+                  max={generation.loraWeightMax}
+                  step={0.05}
+                  decimals={2}
+                  onchange={(v) => {
+                    lora.strength_model = v;
+                    generation.saveSettings();
+                  }}
+                />
               </div>
               <input
                 type="range"
                 bind:value={lora.strength_model}
                 oninput={() => generation.saveSettings()}
                 min="0"
-                max="2"
+                max={generation.loraWeightMax}
                 step="0.05"
                 class="w-full accent-indigo-500"
               />
@@ -1733,14 +1754,24 @@
             <div use:scrollCapture>
               <div class="flex items-center justify-between text-xs mb-0.5">
                 <span class="text-neutral-500">{locale.t('generation.model.lora_strength_clip')}<InfoTip text={locale.t('generation.model.lora_strength_clip_tip')} /></span>
-                <span class="text-neutral-300 tabular-nums">{locale.formatDecimal(lora.strength_clip, 2)}</span>
+                <EditableValue
+                  value={lora.strength_clip}
+                  min={0}
+                  max={generation.loraWeightMax}
+                  step={0.05}
+                  decimals={2}
+                  onchange={(v) => {
+                    lora.strength_clip = v;
+                    generation.saveSettings();
+                  }}
+                />
               </div>
               <input
                 type="range"
                 bind:value={lora.strength_clip}
                 oninput={() => generation.saveSettings()}
                 min="0"
-                max="2"
+                max={generation.loraWeightMax}
                 step="0.05"
                 class="w-full accent-indigo-500"
               />

@@ -461,9 +461,9 @@ const pt: Record<string, string> = {
   "settings.quality_warning.keep": "Manter ativado",
   "settings.quality_warning.disable": "Desativar mesmo assim",
   "settings.advanced_mode.label": "Advanced Mode",
-  "settings.advanced_mode.desc": "Stop auto-applying recommended steps, CFG, sampler, scheduler, and dimensions when you switch checkpoints. Your current settings are kept on every model swap.",
+  "settings.advanced_mode.desc": "Ativado por padrão: trocar de checkpoint nunca aplica automaticamente os passos, CFG, sampler, scheduler ou dimensões recomendados. As recomendações continuam visíveis para que você as aplique. Desative para que a troca de modelo ajuste esses parâmetros por você.",
   "settings.advanced_mode.warning_title": "Enable Advanced Mode?",
-  "settings.advanced_mode.warning_body": "With Advanced Mode on, switching checkpoints will no longer auto-tune steps, CFG, sampler, scheduler, or dimensions for the selected model. You'll set these yourself. Model family detection still works.",
+  "settings.advanced_mode.warning_body": "Com o modo avançado ativado, trocar de checkpoint não ajustará mais automaticamente passos, CFG, sampler, scheduler ou dimensões para o modelo escolhido. Você definirá esses valores usando as dicas de recomendação. A detecção da família do modelo continua funcionando.",
   "settings.advanced_mode.enable": "Enable",
   "settings.advanced_mode.cancel": "Cancel",
 
@@ -3089,6 +3089,76 @@ const pt: Record<string, string> = {
   "prompt_brackets.extra_closing": "{count} {brackets} de fechamento em excesso.",
 
   "prompt_brackets.badge": "Parênteses",
+
+  "settings.lora_weight_limit.label": "Liberar o limite de peso do LoRA",
+
+  "settings.lora_weight_limit.desc": "Eleva os controles de força do LoRA acima do limite padrão de 2. Pesos acima do limite padrão exibem um aviso no painel de LoRA.",
+
+  "settings.lora_weight_limit.warning_title": "Liberar o limite de peso do LoRA?",
+
+  "settings.lora_weight_limit.warning_body": "Forças de LoRA acima de 2 geralmente queimam a imagem: cores lavadas, artefatos ou anatomia deformada. Só libere se souber que um LoRA específico precisa disso.",
+
+  "settings.lora_weight_limit.enable": "Liberar",
+
+  "settings.lora_weight_limit.cancel": "Cancelar",
+
+  "settings.lora_weight_limit.max_label": "Peso máximo do LoRA",
+
+  "settings.lora_weight_limit.max_desc": "Entre 2 e 10. Vale para os controles de força do modelo e do CLIP.",
+
+  "generation.model.lora_over_cap_warning": "Um ou mais LoRAs excedem o peso padrão de 2. Pesos muito altos costumam queimar a imagem (cores lavadas, artefatos, anatomia deformada).",
+
+  "param_presets.title": "Presets de parâmetros",
+
+  "param_presets.select_placeholder": "Selecionar preset...",
+
+  "param_presets.name_placeholder": "Nome do novo preset (opcional)",
+
+  "param_presets.save_current": "Salvar atual",
+
+  "param_presets.update": "Atualizar",
+
+  "param_presets.delete": "Excluir",
+
+  "param_presets.apply": "Aplicar",
+
+  "param_presets.untitled": "Preset sem nome",
+
+  "param_presets.default_name": "Preset {n}",
+
+  "param_presets.saved": "Preset \"{name}\" salvo",
+
+  "param_presets.error.select_first": "Selecione um preset primeiro.",
+
+  "param_presets.error.not_found": "Preset não encontrado.",
+
+  "param_presets.updated": "Preset \"{name}\" atualizado",
+
+  "param_presets.applied": "Preset aplicado.",
+
+  "param_presets.delete_confirm": "Excluir o preset \"{name}\"?",
+
+  "param_presets.deleted": "Preset excluído.",
+
+  "generation.sampler.family_recommended": "Configurações recomendadas para {model}",
+
+  "generation.sampler.family_recommended_generic": "Configurações recomendadas",
+
+  "generation.sampler.family_rec_hint": "Valores padrão da família de modelos detectada. O Modo avançado mantém os seus valores ao trocar de modelo, então aplique-os manualmente se quiser usá-los.",
+
+  "generation.sampler.family_rec_hint_unknown": "Não foi possível detectar a família do modelo, portanto estes são os valores padrão genéricos do projeto.",
+
+  "generation.sampler.family_rec_res": "Resolução",
+
+  "generation.sampler.family_rec_upscale_denoise": "Denoise do upscale",
+
+  "generation.sampler.family_rec_flux_guidance": "Guia Flux",
+
+  "generation.sampler.family_rec_matches": "Os valores atuais já correspondem à recomendação.",
+
+  "generation.sampler.steps_range": "Passos: {min}-{max}",
+
+  "generation.sampler.cfg_range": "CFG: {min}-{max}",
 
 };
 export default pt;
