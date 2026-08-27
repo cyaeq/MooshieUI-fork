@@ -6,6 +6,8 @@ pub mod interrogator;
 #[cfg(feature = "desktop")]
 pub mod prompt_assistant;
 #[cfg(feature = "desktop")]
+pub mod prompt_favourites;
+#[cfg(feature = "desktop")]
 pub mod server;
 pub mod video_export;
 pub mod video_interpolate;

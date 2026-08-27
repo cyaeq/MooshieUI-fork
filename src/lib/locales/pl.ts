@@ -3078,5 +3078,55 @@ const pl: Record<string, string> = {
 
   "prompt_favourites.negative_prompt_dialog": "Negatywny prompt",
 
+  "prompt_favourites.name": "Nazwa",
+
+  "prompt_favourites.name_placeholder": "Nazwa (opcjonalnie)",
+
+  "prompt_favourites.unnamed": "Bez nazwy",
+
+  "prompt_favourites.move_up": "Przenieś w górę",
+
+  "prompt_favourites.move_down": "Przenieś w dół",
+
+  "prompt_favourites.copy": "Kopiuj",
+
+  "prompt_favourites.copied": "Skopiowano",
+
+  "prompt_favourites.import": "Importuj",
+
+  "prompt_favourites.import_mode": "Tryb importu",
+
+  "prompt_favourites.import_mode_merge": "Scal",
+
+  "prompt_favourites.import_mode_replace": "Zastąp",
+
+  "prompt_favourites.imported": "Zaimportowano {count} promptów",
+
+  "prompt_favourites.edit_title": "Edytuj zapisany prompt",
+
+  "prompt_favourites.edit_desc": "Zmień nazwę, dostosuj prompty lub przenieś do innej grupy.",
+
+  "prompt_favourites.group": "Grupa",
+
+  "prompt_favourites.no_group": "Brak grupy",
+
+  "prompt_favourites.delete_confirm": "Usunąć ten zapisany prompt?",
+
+  "prompt_favourites.loading": "Ładowanie…",
+
+  "prompt_brackets.round": "nawiasy okrągłe",
+
+  "prompt_brackets.square": "nawiasy kwadratowe",
+
+  "prompt_brackets.curly": "nawiasy klamrowe",
+
+  "prompt_brackets.out_of_order": "Zamykający {brackets} występuje przed otwierającym.",
+
+  "prompt_brackets.extra_opening": "{count} niezamkniętych {brackets}.",
+
+  "prompt_brackets.extra_closing": "{count} nadmiarowych zamykających {brackets}.",
+
+  "prompt_brackets.badge": "Nawiasy",
+
 };
 export default pl;

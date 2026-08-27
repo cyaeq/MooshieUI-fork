@@ -3064,5 +3064,55 @@ const ja: Record<string, string> = {
 
   "prompt_favourites.negative_prompt_dialog": "ネガティブプロンプト",
 
+  "prompt_favourites.name": "名前",
+
+  "prompt_favourites.name_placeholder": "名前（任意）",
+
+  "prompt_favourites.unnamed": "無題",
+
+  "prompt_favourites.move_up": "上へ移動",
+
+  "prompt_favourites.move_down": "下へ移動",
+
+  "prompt_favourites.copy": "コピー",
+
+  "prompt_favourites.copied": "コピーしました",
+
+  "prompt_favourites.import": "インポート",
+
+  "prompt_favourites.import_mode": "インポート方法",
+
+  "prompt_favourites.import_mode_merge": "統合",
+
+  "prompt_favourites.import_mode_replace": "置き換え",
+
+  "prompt_favourites.imported": "{count} 件のプロンプトをインポートしました",
+
+  "prompt_favourites.edit_title": "保存したプロンプトを編集",
+
+  "prompt_favourites.edit_desc": "名前の変更、プロンプトの調整、別グループへの移動ができます。",
+
+  "prompt_favourites.group": "グループ",
+
+  "prompt_favourites.no_group": "グループなし",
+
+  "prompt_favourites.delete_confirm": "この保存済みプロンプトを削除しますか？",
+
+  "prompt_favourites.loading": "読み込み中…",
+
+  "prompt_brackets.round": "丸括弧",
+
+  "prompt_brackets.square": "角括弧",
+
+  "prompt_brackets.curly": "波括弧",
+
+  "prompt_brackets.out_of_order": "閉じ{brackets}が開き括弧より前にあります。",
+
+  "prompt_brackets.extra_opening": "閉じられていない{brackets}が {count} 個あります。",
+
+  "prompt_brackets.extra_closing": "余分な閉じ{brackets}が {count} 個あります。",
+
+  "prompt_brackets.badge": "括弧",
+
 };
 export default ja;

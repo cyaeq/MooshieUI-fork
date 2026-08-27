@@ -3047,5 +3047,55 @@ const zh: Record<string, string> = {
 
   "prompt_favourites.negative_prompt_dialog": "负面提示词",
 
+  "prompt_favourites.name": "名称",
+
+  "prompt_favourites.name_placeholder": "名称（可选）",
+
+  "prompt_favourites.unnamed": "未命名",
+
+  "prompt_favourites.move_up": "上移",
+
+  "prompt_favourites.move_down": "下移",
+
+  "prompt_favourites.copy": "复制",
+
+  "prompt_favourites.copied": "已复制",
+
+  "prompt_favourites.import": "导入",
+
+  "prompt_favourites.import_mode": "导入方式",
+
+  "prompt_favourites.import_mode_merge": "合并",
+
+  "prompt_favourites.import_mode_replace": "覆盖",
+
+  "prompt_favourites.imported": "已导入 {count} 条提示词",
+
+  "prompt_favourites.edit_title": "编辑收藏的提示词",
+
+  "prompt_favourites.edit_desc": "可重命名、调整提示词内容或移动到其他分组。",
+
+  "prompt_favourites.group": "分组",
+
+  "prompt_favourites.no_group": "无分组",
+
+  "prompt_favourites.delete_confirm": "确定删除这条收藏的提示词？",
+
+  "prompt_favourites.loading": "加载中…",
+
+  "prompt_brackets.round": "圆括号",
+
+  "prompt_brackets.square": "方括号",
+
+  "prompt_brackets.curly": "花括号",
+
+  "prompt_brackets.out_of_order": "有一个右{brackets}出现在左括号之前。",
+
+  "prompt_brackets.extra_opening": "有 {count} 个未闭合的{brackets}。",
+
+  "prompt_brackets.extra_closing": "有 {count} 个多余的右{brackets}。",
+
+  "prompt_brackets.badge": "括号",
+
 };
 export default zh;

@@ -3039,5 +3039,55 @@ const it: Record<string, string> = {
 
   "prompt_favourites.negative_prompt_dialog": "Prompt negativo",
 
+  "prompt_favourites.name": "Nome",
+
+  "prompt_favourites.name_placeholder": "Nome opzionale",
+
+  "prompt_favourites.unnamed": "Senza titolo",
+
+  "prompt_favourites.move_up": "Sposta su",
+
+  "prompt_favourites.move_down": "Sposta giù",
+
+  "prompt_favourites.copy": "Copia",
+
+  "prompt_favourites.copied": "Copiato",
+
+  "prompt_favourites.import": "Importa",
+
+  "prompt_favourites.import_mode": "Modalità di importazione",
+
+  "prompt_favourites.import_mode_merge": "Unisci",
+
+  "prompt_favourites.import_mode_replace": "Sostituisci",
+
+  "prompt_favourites.imported": "{count} prompt importati",
+
+  "prompt_favourites.edit_title": "Modifica prompt salvato",
+
+  "prompt_favourites.edit_desc": "Rinominalo, modifica i prompt o spostalo in un altro gruppo.",
+
+  "prompt_favourites.group": "Gruppo",
+
+  "prompt_favourites.no_group": "Nessun gruppo",
+
+  "prompt_favourites.delete_confirm": "Eliminare questo prompt salvato?",
+
+  "prompt_favourites.loading": "Caricamento…",
+
+  "prompt_brackets.round": "parentesi tonde",
+
+  "prompt_brackets.square": "parentesi quadre",
+
+  "prompt_brackets.curly": "parentesi graffe",
+
+  "prompt_brackets.out_of_order": "Una {brackets} di chiusura compare prima di quella di apertura.",
+
+  "prompt_brackets.extra_opening": "{count} {brackets} non chiuse.",
+
+  "prompt_brackets.extra_closing": "{count} {brackets} di chiusura in eccesso.",
+
+  "prompt_brackets.badge": "Parentesi",
+
 };
 export default it;

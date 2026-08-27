@@ -424,6 +424,7 @@
       storageKey="mooshieui.promptHeight.positive"
       tagAssist={!isVideoMode}
       highlightLoraWords={true}
+      bracketCheck={true}
     />
     {#if !isVideoMode && hasRegionalPrompting && !regionalPromptingSupported}
       <p class="mt-1 text-[10px] text-amber-300">
@@ -461,6 +462,7 @@
       minHeight="min-h-18"
       storageKey="mooshieui.promptHeight.negative"
       tagAssist={!isVideoMode}
+      bracketCheck={true}
     />
     <ExtraPromptBoxList side="negative" />
   </div>
@@ -541,6 +543,7 @@
       {#if historySectionOpen}
         <div class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
           {#each sortedPromptHistory as entry}
+            {@const favourited = promptFavourites.isFavourited(entry.positivePrompt, entry.negativePrompt, entry.mode)}
             <div class="rounded border border-neutral-800 bg-neutral-900/80 p-2">
               <button
                 class="w-full text-left"
@@ -556,11 +559,12 @@
                 <span class="text-[10px] text-neutral-500">{historyLabel(entry.createdAt)}</span>
                 <div class="flex items-center gap-1">
                   <button
-                    class="px-1.5 py-0.5 text-[10px] rounded border transition-colors border-neutral-700 text-neutral-400 hover:border-amber-500 hover:text-amber-300"
-                    onclick={() => promptFavourites.addFromHistory(entry.id)}
-                    title={locale.t('bottom_panel.favorite')}
+                    class="px-1.5 py-0.5 text-[10px] rounded border transition-colors {favourited ? 'border-amber-500 text-amber-300' : 'border-neutral-700 text-neutral-400 hover:border-amber-500 hover:text-amber-300'}"
+                    onclick={() => void promptFavourites.toggleFromHistory(entry.id)}
+                    title={locale.t(favourited ? 'bottom_panel.unfavorite' : 'bottom_panel.favorite')}
+                    aria-pressed={favourited}
                   >
-                    ★
+                    {favourited ? "★" : "☆"}
                   </button>
                   <button
                     class="px-1.5 py-0.5 text-[10px] rounded border border-neutral-700 text-neutral-400 hover:border-red-500 hover:text-red-300 transition-colors"

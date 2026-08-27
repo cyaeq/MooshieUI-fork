@@ -3040,5 +3040,55 @@ const pt: Record<string, string> = {
 
   "prompt_favourites.negative_prompt_dialog": "Prompt negativo",
 
+  "prompt_favourites.name": "Nome",
+
+  "prompt_favourites.name_placeholder": "Nome opcional",
+
+  "prompt_favourites.unnamed": "Sem título",
+
+  "prompt_favourites.move_up": "Mover para cima",
+
+  "prompt_favourites.move_down": "Mover para baixo",
+
+  "prompt_favourites.copy": "Copiar",
+
+  "prompt_favourites.copied": "Copiado",
+
+  "prompt_favourites.import": "Importar",
+
+  "prompt_favourites.import_mode": "Modo de importação",
+
+  "prompt_favourites.import_mode_merge": "Mesclar",
+
+  "prompt_favourites.import_mode_replace": "Substituir",
+
+  "prompt_favourites.imported": "{count} prompts importados",
+
+  "prompt_favourites.edit_title": "Editar prompt salvo",
+
+  "prompt_favourites.edit_desc": "Renomeie, ajuste os prompts ou mova para outro grupo.",
+
+  "prompt_favourites.group": "Grupo",
+
+  "prompt_favourites.no_group": "Sem grupo",
+
+  "prompt_favourites.delete_confirm": "Excluir este prompt salvo?",
+
+  "prompt_favourites.loading": "Carregando…",
+
+  "prompt_brackets.round": "parênteses",
+
+  "prompt_brackets.square": "colchetes",
+
+  "prompt_brackets.curly": "chaves",
+
+  "prompt_brackets.out_of_order": "Há um fechamento de {brackets} antes da abertura.",
+
+  "prompt_brackets.extra_opening": "{count} {brackets} sem fechar.",
+
+  "prompt_brackets.extra_closing": "{count} {brackets} de fechamento em excesso.",
+
+  "prompt_brackets.badge": "Parênteses",
+
 };
 export default pt;

@@ -3039,5 +3039,55 @@ const ko: Record<string, string> = {
 
   "prompt_favourites.negative_prompt_dialog": "부정 프롬프트",
 
+  "prompt_favourites.name": "이름",
+
+  "prompt_favourites.name_placeholder": "이름 (선택)",
+
+  "prompt_favourites.unnamed": "제목 없음",
+
+  "prompt_favourites.move_up": "위로 이동",
+
+  "prompt_favourites.move_down": "아래로 이동",
+
+  "prompt_favourites.copy": "복사",
+
+  "prompt_favourites.copied": "복사됨",
+
+  "prompt_favourites.import": "가져오기",
+
+  "prompt_favourites.import_mode": "가져오기 방식",
+
+  "prompt_favourites.import_mode_merge": "병합",
+
+  "prompt_favourites.import_mode_replace": "교체",
+
+  "prompt_favourites.imported": "프롬프트 {count}개를 가져왔습니다",
+
+  "prompt_favourites.edit_title": "저장된 프롬프트 편집",
+
+  "prompt_favourites.edit_desc": "이름을 바꾸거나 프롬프트를 수정하거나 다른 그룹으로 옮길 수 있습니다.",
+
+  "prompt_favourites.group": "그룹",
+
+  "prompt_favourites.no_group": "그룹 없음",
+
+  "prompt_favourites.delete_confirm": "이 저장된 프롬프트를 삭제할까요?",
+
+  "prompt_favourites.loading": "불러오는 중…",
+
+  "prompt_brackets.round": "소괄호",
+
+  "prompt_brackets.square": "대괄호",
+
+  "prompt_brackets.curly": "중괄호",
+
+  "prompt_brackets.out_of_order": "닫는 {brackets}가 여는 괄호보다 앞에 있습니다.",
+
+  "prompt_brackets.extra_opening": "닫히지 않은 {brackets} {count}개.",
+
+  "prompt_brackets.extra_closing": "불필요한 닫는 {brackets} {count}개.",
+
+  "prompt_brackets.badge": "괄호",
+
 };
 export default ko;

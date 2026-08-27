@@ -612,6 +612,7 @@
           {:else}
             <div class="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable] px-2 py-2">
               {#each filteredPromptHistory as entry}
+                {@const favourited = promptFavourites.isFavourited(entry.positivePrompt, entry.negativePrompt, entry.mode)}
                 <div class="shrink-0 rounded-lg border bg-neutral-900/60 overflow-hidden border-neutral-800 hover:border-neutral-700 transition-colors">
               <button
                 class="w-full text-left p-2.5"
@@ -630,11 +631,12 @@
                 </div>
                 <div class="flex items-center gap-1">
                   <button
-                    class="px-1.5 py-0.5 text-[10px] rounded border transition-colors border-neutral-700 text-neutral-400 hover:border-amber-500 hover:text-amber-300"
-                    onclick={() => promptFavourites.addFromHistory(entry.id)}
-                    title={locale.t('bottom_panel.favorite')}
+                    class="px-1.5 py-0.5 text-[10px] rounded border transition-colors {favourited ? 'border-amber-500 text-amber-300' : 'border-neutral-700 text-neutral-400 hover:border-amber-500 hover:text-amber-300'}"
+                    onclick={() => void promptFavourites.toggleFromHistory(entry.id)}
+                    title={locale.t(favourited ? 'bottom_panel.unfavorite' : 'bottom_panel.favorite')}
+                    aria-pressed={favourited}
                   >
-                    ★
+                    {favourited ? "★" : "☆"}
                   </button>
                   <button
                     class="px-1.5 py-0.5 text-[10px] rounded border border-neutral-700 text-neutral-400 hover:border-red-500 hover:text-red-300 transition-colors"

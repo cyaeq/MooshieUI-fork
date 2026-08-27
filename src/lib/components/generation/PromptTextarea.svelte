@@ -23,6 +23,7 @@
     type SpellcheckPiece,
   } from "../../utils/promptSpellcheck.js";
   import { SYNTAX_ANGLE_LOOKBEHIND } from "../../utils/promptSyntaxEscape.js";
+  import { checkBrackets, moveTag } from "../../utils/promptBrackets.js";
   import { CLIP_CHUNK_SIZE, estimatePromptTokens, promptTokenLimit } from "../../utils/promptTokens.js";
   import ContextMenu, { type ContextMenuItem } from "../ui/ContextMenu.svelte";
 
@@ -49,6 +50,12 @@
      * a false positive.
      */
     highlightLoraWords?: boolean;
+    /**
+     * Warn about unbalanced `()`, `[]` and `{}` next to the token counter.
+     * Off by default: preset editors legitimately contain `{...}` wildcard
+     * tokens that would trip the checker.
+     */
+    bracketCheck?: boolean;
   }
 
   let {
@@ -59,6 +66,7 @@
     storageKey,
     tagAssist = true,
     highlightLoraWords = false,
+    bracketCheck = false,
   }: Props = $props();
 
   // Restored height is applied as inline style (set in $effect on mount).
@@ -144,6 +152,9 @@
   const tokenCount = $derived(estimatePromptTokens(value));
   const tokenLimit = $derived(promptTokenLimit(tokenCount));
   const tokenOverflow = $derived(tokenCount > CLIP_CHUNK_SIZE);
+
+  // Unbalanced bracket warnings, shown next to the token counter when enabled.
+  const bracketIssues = $derived(bracketCheck ? checkBrackets(value).issues : []);
 
   const categoryOptions = $derived([
     { value: null, label: locale.t("generation.prompt.category_all") },
@@ -447,6 +458,25 @@
         adjustWeight(e.key === "ArrowUp" ? 0.05 : -0.05, start, end);
         return;
       }
+    }
+
+    // Tag reordering: Alt+Left/Right moves the comma-separated tag under the
+    // cursor one slot. Mirrors A1111's edit-order shortcut.
+    if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "ArrowLeft" || e.key === "ArrowRight") && textareaEl) {
+      const moved = moveTag(
+        value,
+        textareaEl.selectionStart,
+        textareaEl.selectionEnd,
+        e.key === "ArrowLeft" ? -1 : 1,
+      );
+      e.preventDefault();
+      if (!moved) return;
+      undoStack = [...undoStack, value];
+      redoStack = [];
+      value = moved.value;
+      const el = textareaEl;
+      requestAnimationFrame(() => el.setSelectionRange(moved.selectionStart, moved.selectionEnd));
+      return;
     }
 
     // NAI-style bracket weighting: { / } wraps selection to increase, [ / ] to decrease.
@@ -1021,8 +1051,14 @@
     {#if !hasSelection}
       <span class="min-w-0 truncate text-[10px] text-neutral-600" title={locale.t('generation.prompt.weight_select_hint')}>{locale.t('generation.prompt.weight_select_hint')}</span>
     {/if}
+    {#if bracketIssues.length > 0}
+      <span
+        class="ml-auto shrink-0 rounded bg-amber-500/10 px-1 text-[10px] text-amber-400"
+        title={bracketIssues.join(" ")}
+      >⚠ {locale.t('prompt_brackets.badge')}</span>
+    {/if}
     <span
-      class="ml-auto shrink-0 rounded bg-neutral-900/70 px-1 tabular-nums text-[10px] {tokenOverflow ? 'text-amber-400' : 'text-neutral-500'}"
+      class="shrink-0 rounded bg-neutral-900/70 px-1 tabular-nums text-[10px] {tokenOverflow ? 'text-amber-400' : 'text-neutral-500'} {bracketIssues.length > 0 ? '' : 'ml-auto'}"
       title={locale.t('generation.prompt.tokens_tip')}
     >{tokenCount}/{tokenLimit}</span>
   </div>

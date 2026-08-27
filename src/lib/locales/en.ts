@@ -2984,5 +2984,55 @@ const en: Record<string, string> = {
 
   "prompt_favourites.negative_prompt_dialog": "Negative prompt",
 
+  "prompt_favourites.name": "Name",
+
+  "prompt_favourites.name_placeholder": "Optional name",
+
+  "prompt_favourites.unnamed": "Untitled",
+
+  "prompt_favourites.move_up": "Move up",
+
+  "prompt_favourites.move_down": "Move down",
+
+  "prompt_favourites.copy": "Copy",
+
+  "prompt_favourites.copied": "Copied",
+
+  "prompt_favourites.import": "Import",
+
+  "prompt_favourites.import_mode": "Import mode",
+
+  "prompt_favourites.import_mode_merge": "Merge",
+
+  "prompt_favourites.import_mode_replace": "Replace",
+
+  "prompt_favourites.imported": "Imported {count} prompts",
+
+  "prompt_favourites.edit_title": "Edit saved prompt",
+
+  "prompt_favourites.edit_desc": "Rename it, tweak the prompts, or move it to another group.",
+
+  "prompt_favourites.group": "Group",
+
+  "prompt_favourites.no_group": "No group",
+
+  "prompt_favourites.delete_confirm": "Delete this saved prompt?",
+
+  "prompt_favourites.loading": "Loading…",
+
+  "prompt_brackets.round": "round brackets",
+
+  "prompt_brackets.square": "square brackets",
+
+  "prompt_brackets.curly": "curly brackets",
+
+  "prompt_brackets.out_of_order": "A closing {brackets} appears before its opening pair.",
+
+  "prompt_brackets.extra_opening": "{count} unclosed {brackets}.",
+
+  "prompt_brackets.extra_closing": "{count} extra closing {brackets}.",
+
+  "prompt_brackets.badge": "Brackets",
+
 };
 export default en;

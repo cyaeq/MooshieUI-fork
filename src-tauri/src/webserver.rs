@@ -5036,6 +5036,56 @@ async fn dispatch_command(
             }
         }
 
+        // --- Prompt favourites (per-user isolated in LAN mode) ---
+        "list_prompt_favourites" => {
+            let snapshot = crate::prompt_favourites_db::list(username)?;
+            serde_json::to_value(snapshot).map_err(|e| e.to_string())
+        }
+        "upsert_prompt_favourite" => {
+            let entry: crate::prompt_favourites_db::PromptFavouriteEntry =
+                serde_json::from_value(args["entry"].clone())
+                    .map_err(|e| format!("Invalid entry: {}", e))?;
+            crate::prompt_favourites_db::upsert_entry(username, &entry)?;
+            Ok(serde_json::json!(null))
+        }
+        "delete_prompt_favourite" => {
+            let id = args["id"].as_str().ok_or("Missing id")?;
+            crate::prompt_favourites_db::delete_entry(username, id)?;
+            Ok(serde_json::json!(null))
+        }
+        "reorder_prompt_favourites" => {
+            let ids: Vec<String> = serde_json::from_value(args["ids"].clone())
+                .map_err(|e| format!("Invalid ids: {}", e))?;
+            crate::prompt_favourites_db::reorder_entries(username, &ids)?;
+            Ok(serde_json::json!(null))
+        }
+        "set_prompt_favourite_group" => {
+            let id = args["id"].as_str().ok_or("Missing id")?;
+            let group_id = args["groupId"].as_str();
+            crate::prompt_favourites_db::set_entry_group(username, id, group_id)?;
+            Ok(serde_json::json!(null))
+        }
+        "upsert_prompt_favourite_group" => {
+            let group: crate::prompt_favourites_db::PromptFavouriteGroup =
+                serde_json::from_value(args["group"].clone())
+                    .map_err(|e| format!("Invalid group: {}", e))?;
+            crate::prompt_favourites_db::upsert_group(username, &group)?;
+            Ok(serde_json::json!(null))
+        }
+        "delete_prompt_favourite_group" => {
+            let id = args["id"].as_str().ok_or("Missing id")?;
+            crate::prompt_favourites_db::delete_group(username, id)?;
+            Ok(serde_json::json!(null))
+        }
+        "import_prompt_favourites" => {
+            let snapshot: crate::prompt_favourites_db::PromptFavouritesSnapshot =
+                serde_json::from_value(args["snapshot"].clone())
+                    .map_err(|e| format!("Invalid snapshot: {}", e))?;
+            let replace = args["mode"].as_str() == Some("replace");
+            let result = crate::prompt_favourites_db::import(username, &snapshot, replace)?;
+            serde_json::to_value(result).map_err(|e| e.to_string())
+        }
+
         // --- File operations ---
         "save_image_file" => {
             let image_bytes: Vec<u8> = serde_json::from_value(args["imageBytes"].clone())
