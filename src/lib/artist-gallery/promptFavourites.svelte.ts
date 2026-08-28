@@ -20,6 +20,8 @@ const STORAGE_KEY = "mooshieui.promptFavourites.v1";
 const MIGRATION_KEY = "mooshieui.promptFavourites.migrated.v1";
 /** Marks the one-time lift of the localStorage library into SQLite. */
 const SQLITE_MIGRATION_KEY = "mooshieui.promptFavourites.sqlite.migrated.v1";
+/** UI preference (not library content): how a card click applies a prompt. */
+const APPLY_MODE_KEY = "mooshieui.promptFavourites.applyMode";
 
 export interface PromptFavouriteEntry {
   id: string;
@@ -41,6 +43,8 @@ export interface PromptFavouriteGroup {
 }
 
 export const PROMPT_FAVOURITES_EXPORT_KIND = "mooshieui.prompt-favourites";
+
+export type PromptFavouriteApplyMode = "replace" | "merge";
 
 function id(prefix: string) { return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`; }
 
@@ -134,6 +138,25 @@ class PromptFavouritesStore {
   loaded = $state(false);
   /** Last failed backend write, surfaced by the panel. Cleared on next success. */
   lastError = $state<string | null>(null);
+  /** How a card click applies a prompt. Persisted in localStorage, not the DB. */
+  applyMode = $state<PromptFavouriteApplyMode>("replace");
+
+  constructor() {
+    try {
+      if (localStorage.getItem(APPLY_MODE_KEY) === "merge") this.applyMode = "merge";
+    } catch {
+      // localStorage unavailable — keep the default.
+    }
+  }
+
+  setApplyMode(mode: PromptFavouriteApplyMode) {
+    this.applyMode = mode;
+    try {
+      localStorage.setItem(APPLY_MODE_KEY, mode);
+    } catch {
+      // Preference stays session-only.
+    }
+  }
 
   /** Called once from `App.svelte` alongside the other store loads. */
   async init() {
@@ -343,9 +366,14 @@ class PromptFavouritesStore {
     else await this.addFromHistory(historyId);
   }
 
-  applyEntry(entryId: string) {
+  /** Returns the number of tags added in merge mode, `null` when replacing. */
+  applyEntry(entryId: string, override?: PromptFavouriteApplyMode): number | null {
     const e = this.entries.find((x) => x.id === entryId);
-    if (e) generation.applyPromptEntry(e);
+    if (!e) return null;
+    const mode = override ?? this.applyMode;
+    if (mode === "merge") return generation.mergePromptEntry(e);
+    generation.applyPromptEntry(e);
+    return null;
   }
 
   async remove(entryId: string) {

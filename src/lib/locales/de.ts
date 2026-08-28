@@ -3116,11 +3116,39 @@ const de: Record<string, string> = {
 
   "prompt_favourites.import": "Importieren",
 
-  "prompt_favourites.import_mode": "Importmodus",
-
   "prompt_favourites.import_mode_merge": "Zusammenführen",
 
   "prompt_favourites.import_mode_replace": "Ersetzen",
+
+  "prompt_favourites.import_confirm_title": "Prompt-Bibliothek importieren",
+
+  "prompt_favourites.import_confirm_body": "Die Datei enthält {entries} Prompts und {groups} Gruppen.",
+
+  "prompt_favourites.import_merge_desc": "Aktuelle Bibliothek behalten und neue Prompts hinzufügen, Duplikate werden übersprungen.",
+
+  "prompt_favourites.import_replace_desc": "Alles jetzt Gespeicherte löschen und dann die Datei importieren.",
+
+  "prompt_favourites.import_replace_title": "Gesamte Bibliothek ersetzen?",
+
+  "prompt_favourites.import_replace_body": "{current} gespeicherte Prompts und {groups} Gruppen werden dauerhaft gelöscht. Das kann nicht widerrufen werden.",
+
+  "prompt_favourites.import_replace_confirm": "Löschen und ersetzen",
+
+  "prompt_favourites.apply_mode": "Anwendungsmodus",
+
+  "prompt_favourites.apply_mode_replace": "Ersetzen",
+
+  "prompt_favourites.apply_mode_merge": "Zusammenführen",
+
+  "prompt_favourites.apply_mode_hint": "Klicken zum Anwenden; Shift+Klick nutzt den anderen Modus",
+
+  "prompt_favourites.apply_mode_replace_desc": "Beide Prompt-Felder überschreiben und Modus/Stil-Preset wechseln",
+
+  "prompt_favourites.apply_mode_merge_desc": "Fehlende Tags anhängen, Modus und Stil-Preset bleiben erhalten",
+
+  "prompt_favourites.merged": "{added} Tags hinzugefügt",
+
+  "prompt_favourites.merge_nothing": "Alle Tags sind bereits im Prompt",
 
   "prompt_favourites.imported": "{count} Prompts importiert",
 

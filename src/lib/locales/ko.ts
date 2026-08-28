@@ -3114,11 +3114,39 @@ const ko: Record<string, string> = {
 
   "prompt_favourites.import": "가져오기",
 
-  "prompt_favourites.import_mode": "가져오기 방식",
-
   "prompt_favourites.import_mode_merge": "병합",
 
   "prompt_favourites.import_mode_replace": "교체",
+
+  "prompt_favourites.import_confirm_title": "프롬프트 라이브러리 가져오기",
+
+  "prompt_favourites.import_confirm_body": "파일에 프롬프트 {entries}개와 그룹 {groups}개가 있습니다.",
+
+  "prompt_favourites.import_merge_desc": "현재 라이브러리를 유지하고 중복을 건너뛰며 새 프롬프트를 추가합니다.",
+
+  "prompt_favourites.import_replace_desc": "지금 저장된 모든 항목을 삭제한 뒤 파일을 가져옵니다.",
+
+  "prompt_favourites.import_replace_title": "라이브러리 전체를 교체할까요?",
+
+  "prompt_favourites.import_replace_body": "저장된 프롬프트 {current}개와 그룹 {groups}개가 영구적으로 삭제됩니다. 되돌릴 수 없습니다.",
+
+  "prompt_favourites.import_replace_confirm": "삭제하고 교체",
+
+  "prompt_favourites.apply_mode": "적용 방식",
+
+  "prompt_favourites.apply_mode_replace": "교체",
+
+  "prompt_favourites.apply_mode_merge": "병합",
+
+  "prompt_favourites.apply_mode_hint": "클릭하면 적용, Shift+클릭은 다른 방식 사용",
+
+  "prompt_favourites.apply_mode_replace_desc": "두 프롬프트 칸을 덮어쓰고 모드/스타일 프리셋도 전환",
+
+  "prompt_favourites.apply_mode_merge_desc": "없는 태그만 추가하고 모드와 스타일 프리셋 유지",
+
+  "prompt_favourites.merged": "태그 {added}개 추가",
+
+  "prompt_favourites.merge_nothing": "모든 태그가 이미 프롬프트에 있습니다",
 
   "prompt_favourites.imported": "프롬프트 {count}개를 가져왔습니다",
 

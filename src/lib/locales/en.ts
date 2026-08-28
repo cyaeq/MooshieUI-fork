@@ -3094,11 +3094,39 @@ const en: Record<string, string> = {
 
   "prompt_favourites.import": "Import",
 
-  "prompt_favourites.import_mode": "Import mode",
-
   "prompt_favourites.import_mode_merge": "Merge",
 
   "prompt_favourites.import_mode_replace": "Replace",
+
+  "prompt_favourites.import_confirm_title": "Import prompt library",
+
+  "prompt_favourites.import_confirm_body": "The file contains {entries} prompts and {groups} groups.",
+
+  "prompt_favourites.import_merge_desc": "Keep the current library and add new prompts, skipping duplicates.",
+
+  "prompt_favourites.import_replace_desc": "Delete everything saved now, then import the file.",
+
+  "prompt_favourites.import_replace_title": "Replace the whole library?",
+
+  "prompt_favourites.import_replace_body": "{current} saved prompts and {groups} groups will be permanently deleted. This cannot be undone.",
+
+  "prompt_favourites.import_replace_confirm": "Delete and replace",
+
+  "prompt_favourites.apply_mode": "Apply mode",
+
+  "prompt_favourites.apply_mode_replace": "Replace",
+
+  "prompt_favourites.apply_mode_merge": "Merge",
+
+  "prompt_favourites.apply_mode_hint": "Click to apply; Shift+click uses the other mode",
+
+  "prompt_favourites.apply_mode_replace_desc": "Overwrite both prompt boxes, and switch mode/style preset",
+
+  "prompt_favourites.apply_mode_merge_desc": "Append missing tags, keeping mode and style preset",
+
+  "prompt_favourites.merged": "Added {added} tags",
+
+  "prompt_favourites.merge_nothing": "Every tag is already in the prompt",
 
   "prompt_favourites.imported": "Imported {count} prompts",
 

@@ -3114,11 +3114,39 @@ const ru: Record<string, string> = {
 
   "prompt_favourites.import": "Импорт",
 
-  "prompt_favourites.import_mode": "Режим импорта",
-
   "prompt_favourites.import_mode_merge": "Объединить",
 
   "prompt_favourites.import_mode_replace": "Заменить",
+
+  "prompt_favourites.import_confirm_title": "Импорт библиотеки промптов",
+
+  "prompt_favourites.import_confirm_body": "Файл содержит {entries} промптов и {groups} групп.",
+
+  "prompt_favourites.import_merge_desc": "Сохранить текущую библиотеку и добавить новые промпты, пропуская дубликаты.",
+
+  "prompt_favourites.import_replace_desc": "Удалить всё сохранённое сейчас, затем импортировать файл.",
+
+  "prompt_favourites.import_replace_title": "Заменить всю библиотеку?",
+
+  "prompt_favourites.import_replace_body": "{current} сохранённых промптов и {groups} групп будут удалены навсегда. Отменить это невозможно.",
+
+  "prompt_favourites.import_replace_confirm": "Удалить и заменить",
+
+  "prompt_favourites.apply_mode": "Способ применения",
+
+  "prompt_favourites.apply_mode_replace": "Заменить",
+
+  "prompt_favourites.apply_mode_merge": "Объединить",
+
+  "prompt_favourites.apply_mode_hint": "Клик — применить; Shift+клик — другой способ",
+
+  "prompt_favourites.apply_mode_replace_desc": "Перезаписывает оба поля промпта и меняет режим/пресет стиля",
+
+  "prompt_favourites.apply_mode_merge_desc": "Добавляет отсутствующие теги, сохраняя режим и пресет стиля",
+
+  "prompt_favourites.merged": "Добавлено тегов: {added}",
+
+  "prompt_favourites.merge_nothing": "Все теги уже есть в промпте",
 
   "prompt_favourites.imported": "Импортировано промптов: {count}",
 

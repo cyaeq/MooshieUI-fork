@@ -3114,11 +3114,39 @@ const zhTw: Record<string, string> = {
 
   "prompt_favourites.import": "匯入",
 
-  "prompt_favourites.import_mode": "匯入方式",
-
   "prompt_favourites.import_mode_merge": "合併",
 
   "prompt_favourites.import_mode_replace": "覆寫",
+
+  "prompt_favourites.import_confirm_title": "匯入提示詞庫",
+
+  "prompt_favourites.import_confirm_body": "檔案包含 {entries} 筆提示詞與 {groups} 個分組。",
+
+  "prompt_favourites.import_merge_desc": "保留目前的庫並加入新提示詞，跳過重複項。",
+
+  "prompt_favourites.import_replace_desc": "刪除目前已儲存的全部內容，然後匯入該檔案。",
+
+  "prompt_favourites.import_replace_title": "覆寫整個提示詞庫？",
+
+  "prompt_favourites.import_replace_body": "已儲存的 {current} 筆提示詞與 {groups} 個分組將被永久刪除，此操作無法復原。",
+
+  "prompt_favourites.import_replace_confirm": "刪除並覆寫",
+
+  "prompt_favourites.apply_mode": "套用方式",
+
+  "prompt_favourites.apply_mode_replace": "覆寫",
+
+  "prompt_favourites.apply_mode_merge": "合併",
+
+  "prompt_favourites.apply_mode_hint": "點擊套用；Shift+點擊使用另一種方式",
+
+  "prompt_favourites.apply_mode_replace_desc": "覆寫正負提示詞，並切換模式與風格預設",
+
+  "prompt_favourites.apply_mode_merge_desc": "附加缺少的標籤，保持模式與風格預設不變",
+
+  "prompt_favourites.merged": "已新增 {added} 個標籤",
+
+  "prompt_favourites.merge_nothing": "所有標籤都已在提示詞中",
 
   "prompt_favourites.imported": "已匯入 {count} 條提示詞",
 

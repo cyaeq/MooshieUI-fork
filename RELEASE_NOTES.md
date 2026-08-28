@@ -1,3 +1,15 @@
+## What's New in v0.0.5
+
+### New features
+- **Prompt favourite apply modes**: saved prompts now support two apply modes. **Replace** overwrites both prompt boxes and switches the mode/style preset; **Merge** appends only the tags missing from the current prompt, preserving the active mode, style preset, and extra prompt boxes. Click applies the selected mode, and Shift+click uses the other one. The chosen mode is remembered across sessions.
+- **Prompt library import dialog**: importing a prompt favourites file now opens a confirmation dialog showing the incoming prompt and group counts, with a clear choice between merging into the current library (skipping duplicates) or replacing it entirely after an explicit "delete and replace" confirmation.
+
+### Fixes and maintenance
+- **Tag-level merge dedupe**: merging skips tags already present in the main prompt or any extra prompt box, matching literally so weighted tags like `(tag:1.2)` stay distinct from `tag`. A toast reports how many tags were added, or that every tag was already present.
+- **i18n coverage**: added prompt favourite apply-mode and import-dialog translations across all 12 supported languages.
+
+---
+
 ## What's New in v0.0.4
 
 ### New features

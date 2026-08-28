@@ -3143,11 +3143,39 @@ const es: Record<string, string> = {
 
   "prompt_favourites.import": "Importar",
 
-  "prompt_favourites.import_mode": "Modo de importación",
-
   "prompt_favourites.import_mode_merge": "Combinar",
 
   "prompt_favourites.import_mode_replace": "Reemplazar",
+
+  "prompt_favourites.import_confirm_title": "Importar biblioteca de prompts",
+
+  "prompt_favourites.import_confirm_body": "El archivo contiene {entries} prompts y {groups} grupos.",
+
+  "prompt_favourites.import_merge_desc": "Conservar la biblioteca actual y añadir los prompts nuevos, omitiendo duplicados.",
+
+  "prompt_favourites.import_replace_desc": "Eliminar todo lo guardado ahora y luego importar el archivo.",
+
+  "prompt_favourites.import_replace_title": "¿Reemplazar toda la biblioteca?",
+
+  "prompt_favourites.import_replace_body": "Se eliminarán permanentemente {current} prompts guardados y {groups} grupos. Esto no se puede deshacer.",
+
+  "prompt_favourites.import_replace_confirm": "Eliminar y reemplazar",
+
+  "prompt_favourites.apply_mode": "Modo de aplicación",
+
+  "prompt_favourites.apply_mode_replace": "Reemplazar",
+
+  "prompt_favourites.apply_mode_merge": "Combinar",
+
+  "prompt_favourites.apply_mode_hint": "Haz clic para aplicar; Shift+clic usa el otro modo",
+
+  "prompt_favourites.apply_mode_replace_desc": "Sobrescribir ambos campos de prompt y cambiar el modo o preajuste de estilo",
+
+  "prompt_favourites.apply_mode_merge_desc": "Añadir las etiquetas que falten, manteniendo el modo y el preajuste de estilo",
+
+  "prompt_favourites.merged": "{added} etiquetas añadidas",
+
+  "prompt_favourites.merge_nothing": "Todas las etiquetas ya están en el prompt",
 
   "prompt_favourites.imported": "{count} prompts importados",
 

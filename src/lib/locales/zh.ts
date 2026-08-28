@@ -3122,11 +3122,39 @@ const zh: Record<string, string> = {
 
   "prompt_favourites.import": "导入",
 
-  "prompt_favourites.import_mode": "导入方式",
-
   "prompt_favourites.import_mode_merge": "合并",
 
   "prompt_favourites.import_mode_replace": "覆盖",
+
+  "prompt_favourites.import_confirm_title": "导入提示词库",
+
+  "prompt_favourites.import_confirm_body": "文件包含 {entries} 条提示词和 {groups} 个分组。",
+
+  "prompt_favourites.import_merge_desc": "保留当前库并添加新提示词，跳过重复项。",
+
+  "prompt_favourites.import_replace_desc": "删除当前已保存的全部内容，然后导入该文件。",
+
+  "prompt_favourites.import_replace_title": "覆盖整个提示词库？",
+
+  "prompt_favourites.import_replace_body": "已保存的 {current} 条提示词和 {groups} 个分组将被永久删除，此操作无法撤销。",
+
+  "prompt_favourites.import_replace_confirm": "删除并覆盖",
+
+  "prompt_favourites.apply_mode": "应用方式",
+
+  "prompt_favourites.apply_mode_replace": "覆盖",
+
+  "prompt_favourites.apply_mode_merge": "合并",
+
+  "prompt_favourites.apply_mode_hint": "点击应用；Shift+点击使用另一种方式",
+
+  "prompt_favourites.apply_mode_replace_desc": "覆写正负提示词，并切换模式与风格预设",
+
+  "prompt_favourites.apply_mode_merge_desc": "追加缺失的标签，保持模式与风格预设不变",
+
+  "prompt_favourites.merged": "已添加 {added} 个标签",
+
+  "prompt_favourites.merge_nothing": "所有标签都已在提示词中",
 
   "prompt_favourites.imported": "已导入 {count} 条提示词",
 

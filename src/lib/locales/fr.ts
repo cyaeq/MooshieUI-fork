@@ -3140,11 +3140,39 @@ const fr: Record<string, string> = {
 
   "prompt_favourites.import": "Importer",
 
-  "prompt_favourites.import_mode": "Mode d'import",
-
   "prompt_favourites.import_mode_merge": "Fusionner",
 
   "prompt_favourites.import_mode_replace": "Remplacer",
+
+  "prompt_favourites.import_confirm_title": "Importer la bibliothèque de prompts",
+
+  "prompt_favourites.import_confirm_body": "Le fichier contient {entries} prompts et {groups} groupes.",
+
+  "prompt_favourites.import_merge_desc": "Conserver la bibliothèque actuelle et ajouter les nouveaux prompts, en ignorant les doublons.",
+
+  "prompt_favourites.import_replace_desc": "Supprimer tout ce qui est enregistré puis importer le fichier.",
+
+  "prompt_favourites.import_replace_title": "Remplacer toute la bibliothèque ?",
+
+  "prompt_favourites.import_replace_body": "{current} prompts enregistrés et {groups} groupes seront définitivement supprimés. Cette action est irréversible.",
+
+  "prompt_favourites.import_replace_confirm": "Supprimer et remplacer",
+
+  "prompt_favourites.apply_mode": "Mode d'application",
+
+  "prompt_favourites.apply_mode_replace": "Remplacer",
+
+  "prompt_favourites.apply_mode_merge": "Fusionner",
+
+  "prompt_favourites.apply_mode_hint": "Cliquez pour appliquer ; Maj+clic utilise l'autre mode",
+
+  "prompt_favourites.apply_mode_replace_desc": "Écrase les deux champs de prompt et change le mode / le préréglage de style",
+
+  "prompt_favourites.apply_mode_merge_desc": "Ajoute les tags manquants en conservant le mode et le préréglage de style",
+
+  "prompt_favourites.merged": "{added} tags ajoutés",
+
+  "prompt_favourites.merge_nothing": "Tous les tags sont déjà dans le prompt",
 
   "prompt_favourites.imported": "{count} prompts importés",
 

@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { promptFavourites, type PromptFavouriteEntry, type PromptFavouriteGroup } from "../promptFavourites.svelte.js";
+  import { promptFavourites, PROMPT_FAVOURITES_EXPORT_KIND, type PromptFavouriteEntry, type PromptFavouriteGroup } from "../promptFavourites.svelte.js";
   import { generation } from "../../stores/generation.svelte.js";
   import { locale } from "../../stores/locale.svelte.js";
   import { cleanPromptDisplay } from "../../utils/promptClean.js";
   import PromptFavouriteEditModal from "./PromptFavouriteEditModal.svelte";
+  import PromptFavouriteImportModal from "./PromptFavouriteImportModal.svelte";
 
   let search = $state("");
   const filtered = $derived(promptFavourites.entries.filter((e) => {
@@ -19,10 +20,11 @@
   let renameValue = $state("");
 
   // Import/export UI state.
-  let importMode = $state<"merge" | "replace">("merge");
   let status = $state<string | null>(null);
   let statusError = $state<string | null>(null);
   let fileInput: HTMLInputElement | null = $state(null);
+  /** Parsed-but-not-yet-imported file, awaiting the merge/replace confirmation. */
+  let pendingImport = $state<{ raw: string; entries: number; groups: number } | null>(null);
 
   function displayName(entry: PromptFavouriteEntry): string {
     const name = entry.name.trim();
@@ -111,7 +113,7 @@
         const { readTextFile } = await import("@tauri-apps/plugin-fs");
         const selected = await open({ multiple: false, filters: [{ name: "JSON", extensions: ["json"] }] });
         if (!selected || typeof selected !== "string") return;
-        await applyImport(await readTextFile(selected));
+        stageImport(await readTextFile(selected));
       } else {
         fileInput?.click();
       }
@@ -126,20 +128,64 @@
     input.value = "";
     if (!file) return;
     try {
-      await applyImport(await file.text());
+      stageImport(await file.text());
     } catch (err) {
       statusError = err instanceof Error ? err.message : String(err);
     }
   }
 
-  async function applyImport(raw: string) {
+  /** Validates the file and opens the confirmation modal; never imports directly. */
+  function stageImport(raw: string) {
     try {
-      const count = await promptFavourites.importJSON(raw, importMode);
+      const data = JSON.parse(raw);
+      if (data?.kind !== PROMPT_FAVOURITES_EXPORT_KIND) {
+        throw new Error("Not a prompt favourites export");
+      }
+      pendingImport = {
+        raw,
+        entries: Array.isArray(data.entries) ? data.entries.length : 0,
+        groups: Array.isArray(data.groups) ? data.groups.length : 0,
+      };
+      statusError = null;
+    } catch (e) {
+      pendingImport = null;
+      statusError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function applyImport(raw: string, mode: "merge" | "replace") {
+    pendingImport = null;
+    try {
+      const count = await promptFavourites.importJSON(raw, mode);
       status = locale.t("prompt_favourites.imported", { count });
       statusError = null;
     } catch (e) {
       statusError = e instanceof Error ? e.message : String(e);
     }
+  }
+
+  /** Card click: Shift temporarily flips the persisted apply mode. */
+  function applyFavourite(entry: PromptFavouriteEntry, event: MouseEvent) {
+    const override = event.shiftKey
+      ? promptFavourites.applyMode === "replace"
+        ? "merge"
+        : "replace"
+      : undefined;
+    const added = promptFavourites.applyEntry(entry.id, override);
+    if (added === null) return;
+    statusError = null;
+    status = added > 0
+      ? locale.t("prompt_favourites.merged", { added })
+      : locale.t("prompt_favourites.merge_nothing");
+  }
+
+  function applyHistory(id: string, event: MouseEvent) {
+    const mode = event.shiftKey
+      ? promptFavourites.applyMode === "replace"
+        ? "merge"
+        : "replace"
+      : promptFavourites.applyMode;
+    generation.applyPromptHistoryEntry(id, mode);
   }
 
   /** Transient label shown above an icon button when tapped (mobile UX). */
@@ -194,22 +240,24 @@
       </button>
       <div
         role="group"
-        aria-label={locale.t("prompt_favourites.import_mode")}
-        title={locale.t("prompt_favourites.import_mode")}
+        aria-label={locale.t("prompt_favourites.apply_mode")}
+        title={locale.t("prompt_favourites.apply_mode_hint")}
         class="flex items-center gap-0.5 rounded-lg border border-neutral-800 bg-neutral-900/70 p-0.5"
       >
         <button
           type="button"
-          class="cursor-pointer rounded-md px-2 py-1 text-[11px] font-medium transition-colors {importMode === 'merge' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
-          aria-pressed={importMode === "merge"}
-          onclick={() => (importMode = "merge")}
-        >{locale.t("prompt_favourites.import_mode_merge")}</button>
+          class="cursor-pointer rounded-md px-2 py-1 text-[11px] font-medium transition-colors {promptFavourites.applyMode === 'replace' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
+          aria-pressed={promptFavourites.applyMode === "replace"}
+          title={locale.t("prompt_favourites.apply_mode_replace_desc")}
+          onclick={() => promptFavourites.setApplyMode("replace")}
+        >{locale.t("prompt_favourites.apply_mode_replace")}</button>
         <button
           type="button"
-          class="cursor-pointer rounded-md px-2 py-1 text-[11px] font-medium transition-colors {importMode === 'replace' ? 'bg-red-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
-          aria-pressed={importMode === "replace"}
-          onclick={() => (importMode = "replace")}
-        >{locale.t("prompt_favourites.import_mode_replace")}</button>
+          class="cursor-pointer rounded-md px-2 py-1 text-[11px] font-medium transition-colors {promptFavourites.applyMode === 'merge' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'}"
+          aria-pressed={promptFavourites.applyMode === "merge"}
+          title={locale.t("prompt_favourites.apply_mode_merge_desc")}
+          onclick={() => promptFavourites.setApplyMode("merge")}
+        >{locale.t("prompt_favourites.apply_mode_merge")}</button>
       </div>
     </div>
     <!-- Hidden file input used only in browser mode -->
@@ -288,7 +336,12 @@
       <div class="space-y-1">
         {#each generation.promptHistory.slice(0, 30) as entry}
           <div class="flex items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-xs transition-colors hover:border-neutral-800 hover:bg-neutral-900/50">
-            <span class="min-w-0 flex-1 truncate text-neutral-300">{cleanPromptDisplay(entry.positivePrompt || entry.negativePrompt)}</span>
+            <button
+              type="button"
+              class="min-w-0 flex-1 cursor-pointer truncate text-left text-neutral-300 transition-colors hover:text-indigo-300"
+              title={locale.t("prompt_favourites.apply_mode_hint")}
+              onclick={(e) => applyHistory(entry.id, e)}
+            >{cleanPromptDisplay(entry.positivePrompt || entry.negativePrompt)}</button>
             <button
               type="button"
               class={BTN_SECONDARY}
@@ -314,6 +367,18 @@
   {#key editingId}
     <PromptFavouriteEditModal entryId={editingId} onclose={() => (editingId = null)} />
   {/key}
+{/if}
+
+{#if pendingImport}
+  <PromptFavouriteImportModal
+    entries={pendingImport.entries}
+    groups={pendingImport.groups}
+    current={promptFavourites.entries.length}
+    currentGroups={promptFavourites.groups.length}
+    onmerge={() => void applyImport(pendingImport!.raw, "merge")}
+    onreplace={() => void applyImport(pendingImport!.raw, "replace")}
+    onclose={() => (pendingImport = null)}
+  />
 {/if}
 
 {#snippet Entry(entry: PromptFavouriteEntry)}
@@ -344,7 +409,8 @@
       <button
         type="button"
         class="block w-full cursor-pointer text-left"
-        onclick={() => promptFavourites.applyEntry(entry.id)}
+        title={locale.t("prompt_favourites.apply_mode_hint")}
+        onclick={(e) => applyFavourite(entry, e)}
       >
         <div class="line-clamp-2 text-xs text-neutral-200">{cleanPromptDisplay(entry.positive || locale.t("bottom_panel.empty_prompt"))}</div>
         {#if entry.negative}<div class="mt-1 line-clamp-1 text-[10px] text-neutral-500">{cleanPromptDisplay(entry.negative)}</div>{/if}

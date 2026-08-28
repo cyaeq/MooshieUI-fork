@@ -3115,11 +3115,39 @@ const pt: Record<string, string> = {
 
   "prompt_favourites.import": "Importar",
 
-  "prompt_favourites.import_mode": "Modo de importação",
-
   "prompt_favourites.import_mode_merge": "Mesclar",
 
   "prompt_favourites.import_mode_replace": "Substituir",
+
+  "prompt_favourites.import_confirm_title": "Importar biblioteca de prompts",
+
+  "prompt_favourites.import_confirm_body": "O arquivo contém {entries} prompts e {groups} grupos.",
+
+  "prompt_favourites.import_merge_desc": "Manter a biblioteca atual e adicionar novos prompts, ignorando duplicados.",
+
+  "prompt_favourites.import_replace_desc": "Excluir tudo o que está salvo agora e depois importar o arquivo.",
+
+  "prompt_favourites.import_replace_title": "Substituir toda a biblioteca?",
+
+  "prompt_favourites.import_replace_body": "{current} prompts salvos e {groups} grupos serão excluídos permanentemente. Isso não pode ser desfeito.",
+
+  "prompt_favourites.import_replace_confirm": "Excluir e substituir",
+
+  "prompt_favourites.apply_mode": "Modo de aplicação",
+
+  "prompt_favourites.apply_mode_replace": "Substituir",
+
+  "prompt_favourites.apply_mode_merge": "Mesclar",
+
+  "prompt_favourites.apply_mode_hint": "Clique para aplicar; Shift+clique usa o outro modo",
+
+  "prompt_favourites.apply_mode_replace_desc": "Sobrescreve os dois campos de prompt e troca o modo/preset de estilo",
+
+  "prompt_favourites.apply_mode_merge_desc": "Adiciona as tags que faltam, mantendo o modo e o preset de estilo",
+
+  "prompt_favourites.merged": "{added} tags adicionadas",
+
+  "prompt_favourites.merge_nothing": "Todas as tags já estão no prompt",
 
   "prompt_favourites.imported": "{count} prompts importados",
 

@@ -642,7 +642,7 @@ dependencies = [
 
 [[package]]
 name = "comfyui-desktop"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "argon2",
  "axum",

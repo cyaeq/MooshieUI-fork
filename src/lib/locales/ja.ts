@@ -3139,11 +3139,39 @@ const ja: Record<string, string> = {
 
   "prompt_favourites.import": "インポート",
 
-  "prompt_favourites.import_mode": "インポート方法",
-
   "prompt_favourites.import_mode_merge": "統合",
 
   "prompt_favourites.import_mode_replace": "置き換え",
+
+  "prompt_favourites.import_confirm_title": "プロンプトライブラリをインポート",
+
+  "prompt_favourites.import_confirm_body": "ファイルには {entries} 件のプロンプトと {groups} 件のグループが含まれています。",
+
+  "prompt_favourites.import_merge_desc": "現在のライブラリを保持し、重複を除いて新しいプロンプトを追加します。",
+
+  "prompt_favourites.import_replace_desc": "保存済みのすべてを削除してから、ファイルをインポートします。",
+
+  "prompt_favourites.import_replace_title": "ライブラリ全体を置き換えますか？",
+
+  "prompt_favourites.import_replace_body": "保存済みの {current} 件のプロンプトと {groups} 件のグループが完全に削除されます。この操作は取り消せません。",
+
+  "prompt_favourites.import_replace_confirm": "削除して置き換える",
+
+  "prompt_favourites.apply_mode": "適用方法",
+
+  "prompt_favourites.apply_mode_replace": "置き換え",
+
+  "prompt_favourites.apply_mode_merge": "統合",
+
+  "prompt_favourites.apply_mode_hint": "クリックで適用、Shift+クリックでもう一方の方法",
+
+  "prompt_favourites.apply_mode_replace_desc": "両方のプロンプト欄を上書きし、モードとスタイルプリセットも切り替えます",
+
+  "prompt_favourites.apply_mode_merge_desc": "不足しているタグを追加し、モードとスタイルプリセットは維持します",
+
+  "prompt_favourites.merged": "{added} 個のタグを追加しました",
+
+  "prompt_favourites.merge_nothing": "すべてのタグはすでにプロンプトに含まれています",
 
   "prompt_favourites.imported": "{count} 件のプロンプトをインポートしました",
 

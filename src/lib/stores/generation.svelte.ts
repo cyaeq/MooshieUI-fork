@@ -10,6 +10,7 @@ import {
 import { parseSegmentDetailPrompt } from "../utils/promptSegmentDetail.js";
 import { joinPromptBoxes, sanitizePromptForSend } from "../utils/promptSanitize.js";
 import { cleanPromptDisplay } from "../utils/promptClean.js";
+import { mergePromptTags } from "../utils/promptMerge.js";
 import { extractScaleFromModel } from "../utils/upscalers.js";
 import {
   MODEL_FAMILIES,
@@ -1635,11 +1636,12 @@ class GenerationStore {
     this.savePromptHistory();
   }
 
-  applyPromptHistoryEntry(id: string) {
+  applyPromptHistoryEntry(id: string, mode: "replace" | "merge" = "replace") {
     const entry = this.promptHistory.find((item) => item.id === id);
     if (!entry) return;
 
-    this.applyPromptEntry(entry);
+    if (mode === "merge") this.mergePromptEntry(entry);
+    else this.applyPromptEntry(entry);
     this.promptHistory = [
       { ...entry, createdAt: Date.now() },
       ...this.promptHistory.filter((item) => item.id !== entry.id),
@@ -1662,6 +1664,30 @@ class GenerationStore {
     this.extraNegativeBoxes = [];
     this.stylePreset = entry.stylePreset as StylePresetId;
     this.saveSettings();
+  }
+
+  /**
+   * Appends the entry's missing tags to the current prompts. Mode, style preset
+   * and the extra boxes are left alone: merging adds to the current setup
+   * instead of moving to the entry's one. Returns the number of tags added.
+   */
+  mergePromptEntry(entry: { positivePrompt?: string; negativePrompt?: string; positive?: string; negative?: string }): number {
+    const positive = cleanPromptDisplay(entry.positivePrompt ?? entry.positive ?? "");
+    const negative = cleanPromptDisplay(entry.negativePrompt ?? entry.negative ?? "");
+    const mergedPositive = mergePromptTags(
+      this.positivePrompt,
+      positive,
+      this.extraPositiveBoxes.map((b) => b.content),
+    );
+    const mergedNegative = mergePromptTags(
+      this.negativePrompt,
+      negative,
+      this.extraNegativeBoxes.map((b) => b.content),
+    );
+    this.positivePrompt = mergedPositive.text;
+    this.negativePrompt = mergedNegative.text;
+    this.saveSettings();
+    return mergedPositive.added + mergedNegative.added;
   }
 
   private newBoxId(): string {

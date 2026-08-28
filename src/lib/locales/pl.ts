@@ -3153,11 +3153,39 @@ const pl: Record<string, string> = {
 
   "prompt_favourites.import": "Importuj",
 
-  "prompt_favourites.import_mode": "Tryb importu",
-
   "prompt_favourites.import_mode_merge": "Scal",
 
   "prompt_favourites.import_mode_replace": "Zastąp",
+
+  "prompt_favourites.import_confirm_title": "Importuj bibliotekę promptów",
+
+  "prompt_favourites.import_confirm_body": "Plik zawiera {entries} promptów i {groups} grup.",
+
+  "prompt_favourites.import_merge_desc": "Zachowaj obecną bibliotekę i dodaj nowe prompty, pomijając duplikaty.",
+
+  "prompt_favourites.import_replace_desc": "Usuń wszystko, co jest teraz zapisane, a potem zaimportuj plik.",
+
+  "prompt_favourites.import_replace_title": "Zastąpić całą bibliotekę?",
+
+  "prompt_favourites.import_replace_body": "{current} zapisanych promptów i {groups} grup zostanie trwale usuniętych. Tego nie da się cofnąć.",
+
+  "prompt_favourites.import_replace_confirm": "Usuń i zastąp",
+
+  "prompt_favourites.apply_mode": "Tryb zastosowania",
+
+  "prompt_favourites.apply_mode_replace": "Zastąp",
+
+  "prompt_favourites.apply_mode_merge": "Scal",
+
+  "prompt_favourites.apply_mode_hint": "Kliknij, aby zastosować; Shift+klik używa drugiego trybu",
+
+  "prompt_favourites.apply_mode_replace_desc": "Nadpisuje oba pola promptu oraz zmienia tryb i preset stylu",
+
+  "prompt_favourites.apply_mode_merge_desc": "Dodaje brakujące tagi, zachowując tryb i preset stylu",
+
+  "prompt_favourites.merged": "Dodano {added} tagów",
+
+  "prompt_favourites.merge_nothing": "Wszystkie tagi są już w promptcie",
 
   "prompt_favourites.imported": "Zaimportowano {count} promptów",
 
