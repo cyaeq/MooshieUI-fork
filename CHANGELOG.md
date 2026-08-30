@@ -3,12 +3,12 @@
 ## What's New in v0.0.6
 
 ### New features
-- **Prompt breakdown in image metadata**: generated images now record the prompt you actually typed separately from the quality tags MooshieUI injects for the active model family (Anima, Illustrious/NoobAI, Pony, Nanosaur). The gallery details view and the mobile lightbox show four new rows — User Prompt (Positive/Negative) and Auto Quality Tags (Positive/Negative) — so it is clear which tags came from you and which were added automatically.
+- **Quality Tags panel on the generate page**: the automatic quality tags for the active model family (Anima, Illustrious/NoobAI, Pony, Nanosaur) can now be toggled and edited directly from a collapsible "Quality Tags" section instead of only from Settings > Performance. The panel shows which family is detected, exposes the positive and negative tag boxes for that family, and offers a reset-to-defaults action. Unsupported model families show an explanatory note instead of empty inputs.
+- **Sensible default placement**: the new section is draggable like every other generate-page panel and, for existing saved layouts, is inserted directly beneath the Prompts panel rather than appended to the end.
 
 ### Fixes and maintenance
-- **Single generation submission path**: the batch grid in the generate button and the upscale pass in the preview panel now go through the shared submission helper instead of calling the backend directly, so resolved seeds and queue bookkeeping behave identically everywhere.
-- **Frontend-only metadata fields stay frontend-only**: the new prompt breakdown fields are stripped before the workflow request reaches the Rust backend, keeping the ComfyUI payload unchanged.
-- **i18n coverage**: added the four prompt breakdown metadata labels across all 12 supported languages.
+- **Reverted prompt breakdown metadata**: the User Prompt and Auto Quality Tags metadata rows introduced earlier have been removed from image metadata, the gallery details view, and the mobile lightbox. Prompt and negative prompt are recorded as the final resolved values again, and the generation payload no longer carries frontend-only fields that had to be stripped before submission.
+- **i18n coverage**: added the Quality Tags section title and unsupported-family note across all 12 supported languages, and removed the now-unused prompt breakdown labels.
 
 ---
 

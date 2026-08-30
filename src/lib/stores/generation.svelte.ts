@@ -2734,19 +2734,6 @@ class GenerationStore {
 
     let positivePrompt = this.mergeTagPrompts(parsedSegmentDetails.baseText, style.positive);
     let negativePrompt = this.mergeTagPrompts(inlineNegative, style.negative);
-    let autoQualityPositivePrompt: string | null = null;
-    let autoQualityNegativePrompt: string | null = null;
-    const qualityTagsToInsert = (base: string, extra: string): string => {
-      const existing = new Set(this.splitTags(base).map((tag) => tag.toLowerCase()));
-      const inserted: string[] = [];
-      for (const tag of this.splitTags(extra)) {
-        const normalized = tag.toLowerCase();
-        if (existing.has(normalized)) continue;
-        existing.add(normalized);
-        inserted.push(tag);
-      }
-      return inserted.join(", ");
-    };
 
     // Inject tags contributed by any currently-active Artist Styles. These are
     // not visible in the prompt textbox — they flow straight into the payload
@@ -2780,32 +2767,24 @@ class GenerationStore {
     if (!isVideo && this.autoQualityTags) {
       // Anima models (positive before, negative after)
       if (this.isAnima) {
-        autoQualityPositivePrompt = qualityTagsToInsert(positivePrompt, this.customAnimaPositiveQuality);
-        autoQualityNegativePrompt = qualityTagsToInsert(negativePrompt, this.customAnimaNegativeQuality);
         positivePrompt = this.mergeTagPrompts(this.customAnimaPositiveQuality, positivePrompt);
         negativePrompt = this.mergeTagPrompts(negativePrompt, this.customAnimaNegativeQuality);
       }
 
       // Illustrious/NoobAI family (positive before, negative after)
       if (this.isIllustrious) {
-        autoQualityPositivePrompt = qualityTagsToInsert(positivePrompt, this.customIllustriousPositiveQuality);
-        autoQualityNegativePrompt = qualityTagsToInsert(negativePrompt, this.customIllustriousNegativeQuality);
         positivePrompt = this.mergeTagPrompts(this.customIllustriousPositiveQuality, positivePrompt);
         negativePrompt = this.mergeTagPrompts(negativePrompt, this.customIllustriousNegativeQuality);
       }
 
       // Pony Diffusion (score-based quality tags)
       if (this.isPony) {
-        autoQualityPositivePrompt = qualityTagsToInsert(positivePrompt, this.customPonyPositiveQuality);
-        autoQualityNegativePrompt = qualityTagsToInsert(negativePrompt, this.customPonyNegativeQuality);
         positivePrompt = this.mergeTagPrompts(this.customPonyPositiveQuality, positivePrompt);
         negativePrompt = this.mergeTagPrompts(negativePrompt, this.customPonyNegativeQuality);
       }
 
       // Nanosaur (newest/oldest quality tags)
       if (this.isNanosaur) {
-        autoQualityPositivePrompt = qualityTagsToInsert(positivePrompt, this.customNanosaurPositiveQuality);
-        autoQualityNegativePrompt = qualityTagsToInsert(negativePrompt, this.customNanosaurNegativeQuality);
         positivePrompt = this.mergeTagPrompts(this.customNanosaurPositiveQuality, positivePrompt);
         negativePrompt = this.mergeTagPrompts(negativePrompt, this.customNanosaurNegativeQuality);
       }
@@ -2942,10 +2921,6 @@ class GenerationStore {
       mode: this.mode,
       positive_prompt: translatedPositiveBase,
       negative_prompt: translatePromptWeightSyntax(parsedNegative.baseText),
-      user_positive_prompt: translatePromptWeightSyntax(parsedSegmentDetails.baseText),
-      user_negative_prompt: translatePromptWeightSyntax(inlineNegative),
-      auto_quality_positive_prompt: autoQualityPositivePrompt,
-      auto_quality_negative_prompt: autoQualityNegativePrompt,
       positive_segments: translatedPositiveSegments,
       negative_segments: parsedNegative.segments.map((s) => ({
         text: translatePromptWeightSyntax(s.text),

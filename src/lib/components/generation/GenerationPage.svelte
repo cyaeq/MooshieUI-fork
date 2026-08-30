@@ -5,6 +5,7 @@
   import { scrollCapture } from "../../utils/scrollCapture.js";
   import { wheelScrollLock } from "../../utils/wheelScrollLock.js";
   import PromptInputs from "./PromptInputs.svelte";
+  import QualityTagsPanel from "./QualityTagsPanel.svelte";
   import RegionalPromptModal from "./RegionalPromptModal.svelte";
   import ModelSelector from "./ModelSelector.svelte";
   import SamplerSettings from "./SamplerSettings.svelte";
@@ -67,6 +68,7 @@
   type SectionId =
     | "dimensions"
     | "prompts"
+    | "qualityTags"
     | "imageInputs"
     | "imageEdit"
     | "videoSettings"
@@ -105,6 +107,7 @@
   let maskDragOver = $state(false);
   let imagePasteTarget = $state<"input" | "mask" | null>(null);
   let promptsSectionOpen = $state(true);
+  let qualityTagsSectionOpen = $state(false);
   let regionalPromptModalOpen = $state(false);
 
   /** Which section (or "preview") currently has an image dragged over it */
@@ -115,6 +118,7 @@
   let sectionSides = $state<Record<SectionId, SectionSide>>({
     dimensions: "left",
     prompts: "left",
+    qualityTags: "left",
     imageInputs: "left",
     imageEdit: "left",
     videoSettings: "left",
@@ -144,6 +148,7 @@
   const SECTION_ORDER: SectionId[] = [
     "dimensions",
     "prompts",
+    "qualityTags",
     "imageInputs",
     "imageEdit",
     "videoSettings",
@@ -182,7 +187,17 @@
       out.push(id);
     }
     for (const id of SECTION_ORDER) {
-      if (!seen.has(id)) out.push(id);
+      if (seen.has(id)) continue;
+      // Newly added sections default to the end, except "qualityTags", which
+      // belongs directly beneath the prompts panel for existing saved layouts.
+      if (id === "qualityTags") {
+        const promptsIndex = out.indexOf("prompts");
+        if (promptsIndex !== -1) {
+          out.splice(promptsIndex + 1, 0, id);
+          continue;
+        }
+      }
+      out.push(id);
     }
     return out;
   }
@@ -291,6 +306,7 @@
   function sectionLabel(section: SectionId): string {
     if (section === "dimensions") return locale.t('generation.dimensions.title');
     if (section === "prompts") return locale.t('generation.prompts.title');
+    if (section === "qualityTags") return locale.t('generation.quality_tags.title');
     if (section === "imageInputs") return locale.t('generation.image.title');
     if (section === "imageEdit") return locale.t('generation.image_edit.title');
     if (section === "videoSettings") return locale.t('generation.video.title');
@@ -309,6 +325,7 @@
     if (generation.mode === "video")
       return section === "prompts" || section === "videoSettings";
     if (section === "videoSettings") return false;
+    if (section === "qualityTags") return true;
     if (section === "imageInputs")
       return generation.mode === "img2img" || generation.mode === "inpainting";
     if (section === "imageEdit") return generation.mode === "image_edit";
@@ -1549,6 +1566,27 @@
     </div>
   {/snippet}
 
+  {#snippet qualityTagsSection()}
+    <div bind:this={sectionRefs['qualityTags']} class="rounded-lg border border-neutral-800 bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'qualityTags' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'}">
+      <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
+        {@render dragHandle("qualityTags")}
+        <button
+          class="flex-1 px-3 py-2 flex items-center justify-between text-xs text-neutral-300 hover:text-neutral-100 transition-colors"
+          onclick={() => (qualityTagsSectionOpen = !qualityTagsSectionOpen)}
+          title={qualityTagsSectionOpen ? locale.t('common.collapse', { section: locale.t('generation.quality_tags.title') }) : locale.t('common.expand', { section: locale.t('generation.quality_tags.title') })}
+        >
+          <span class="font-medium">{locale.t('generation.quality_tags.title')}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform {qualityTagsSectionOpen ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      {#if qualityTagsSectionOpen}
+        <div class="px-3 pb-2 pt-0.5">
+          <QualityTagsPanel />
+        </div>
+      {/if}
+    </div>
+  {/snippet}
+
   {#snippet imageInputsSection()}
     <div bind:this={sectionRefs['imageInputs']} class="rounded-lg border border-neutral-800 bg-neutral-900/40 transition-[height,opacity] duration-150 {draggingSection === 'imageInputs' ? 'h-0 overflow-hidden opacity-0 m-0! p-0! border-0!' : 'opacity-100'}">
       <div class="flex items-stretch w-full rounded-t-lg transition-colors hover:bg-neutral-800/50">
@@ -2084,6 +2122,8 @@
       {@render dimensionsSection()}
     {:else if section === "prompts"}
       {@render promptsSection()}
+    {:else if section === "qualityTags"}
+      {@render qualityTagsSection()}
     {:else if section === "imageInputs"}
       {@render imageInputsSection()}
     {:else if section === "imageEdit"}

@@ -169,12 +169,6 @@ export interface GenerationParams {
   mode: GenerationMode;
   positive_prompt: string;
   negative_prompt: string;
-  /** Frontend-only prompt breakdown; stripped before backend submission. */
-  user_positive_prompt?: string;
-  user_negative_prompt?: string;
-  /** Quality tags injected automatically for the active model family. */
-  auto_quality_positive_prompt?: string | null;
-  auto_quality_negative_prompt?: string | null;
   positive_segments: PromptSegment[];
   negative_segments: PromptSegment[];
   detail_segments: DetailSegment[];
