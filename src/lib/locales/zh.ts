@@ -1449,6 +1449,10 @@ const zh: Record<string, string> = {
 
   "gallery.meta.prompt": "提示词",
   "gallery.meta.negative_prompt": "负面提示词",
+  "gallery.meta.user_positive_prompt": "用户提示词（正向）",
+  "gallery.meta.user_negative_prompt": "用户提示词（负向）",
+  "gallery.meta.auto_quality_positive_prompt": "自动质量标签（正向）",
+  "gallery.meta.auto_quality_negative_prompt": "自动质量标签（负向）",
   "gallery.meta.model": "模型",
   "gallery.meta.vae": "VAE",
   "gallery.meta.seed": "种子",

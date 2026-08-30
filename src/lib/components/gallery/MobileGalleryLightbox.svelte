@@ -34,10 +34,21 @@
   let metadata = $state<Record<string, string> | null>(null);
   let loadingMetadata = $state(false);
 
-  const promptKeys = ["positive_prompt", "negative_prompt"];
+  const promptKeys = [
+    "positive_prompt",
+    "negative_prompt",
+    "user_positive_prompt",
+    "user_negative_prompt",
+    "auto_quality_positive_prompt",
+    "auto_quality_negative_prompt",
+  ];
   const metadataLabels: Record<string, string> = {
     positive_prompt: "gallery.meta.prompt",
     negative_prompt: "gallery.meta.negative_prompt",
+    user_positive_prompt: "gallery.meta.user_positive_prompt",
+    user_negative_prompt: "gallery.meta.user_negative_prompt",
+    auto_quality_positive_prompt: "gallery.meta.auto_quality_positive_prompt",
+    auto_quality_negative_prompt: "gallery.meta.auto_quality_negative_prompt",
     model: "gallery.meta.model",
     vae: "gallery.meta.vae",
     seed: "gallery.meta.seed",

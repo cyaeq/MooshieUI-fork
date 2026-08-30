@@ -1698,6 +1698,10 @@ const pl: Record<string, string> = {
   // Gallery metadata labels
   "gallery.meta.prompt": "Prompt",
   "gallery.meta.negative_prompt": "Negatywny Prompt",
+  "gallery.meta.user_positive_prompt": "Prompt użytkownika (pozytywny)",
+  "gallery.meta.user_negative_prompt": "Prompt użytkownika (negatywny)",
+  "gallery.meta.auto_quality_positive_prompt": "Automatyczne tagi jakości (pozytywne)",
+  "gallery.meta.auto_quality_negative_prompt": "Automatyczne tagi jakości (negatywne)",
   "gallery.meta.model": "Model",
   "gallery.meta.vae": "VAE",
   "gallery.meta.seed": "Seed",

@@ -1,3 +1,15 @@
+## What's New in v0.0.6
+
+### New features
+- **Prompt breakdown in image metadata**: generated images now record the prompt you actually typed separately from the quality tags MooshieUI injects for the active model family (Anima, Illustrious/NoobAI, Pony, Nanosaur). The gallery details view and the mobile lightbox show four new rows — User Prompt (Positive/Negative) and Auto Quality Tags (Positive/Negative) — so it is clear which tags came from you and which were added automatically.
+
+### Fixes and maintenance
+- **Single generation submission path**: the batch grid in the generate button and the upscale pass in the preview panel now go through the shared submission helper instead of calling the backend directly, so resolved seeds and queue bookkeeping behave identically everywhere.
+- **Frontend-only metadata fields stay frontend-only**: the new prompt breakdown fields are stripped before the workflow request reaches the Rust backend, keeping the ComfyUI payload unchanged.
+- **i18n coverage**: added the four prompt breakdown metadata labels across all 12 supported languages.
+
+---
+
 ## What's New in v0.0.5
 
 ### New features

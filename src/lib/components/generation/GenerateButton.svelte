@@ -4,7 +4,6 @@
   import { canvas } from "../../stores/canvas.svelte.js";
   import { compare } from "../../stores/compare.svelte.js";
   import {
-    generate,
     interruptGeneration,
     deleteQueueItem,
     installPipPackage,
@@ -491,8 +490,7 @@
       }
 
       try {
-        const result = await generate(params);
-        params.seed = result.seed;
+        const result = await requestGeneration(params);
         progress.enqueue(result.prompt_id, params.upscale_enabled, params.mode, params);
         resultsByIndex.set(index, { promptId: result.prompt_id, cell });
       } catch (e) {

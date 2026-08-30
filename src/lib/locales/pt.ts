@@ -1443,6 +1443,10 @@ const pt: Record<string, string> = {
 
   "gallery.meta.prompt": "Prompt",
   "gallery.meta.negative_prompt": "Prompt Negativo",
+  "gallery.meta.user_positive_prompt": "Prompt do usuário (positivo)",
+  "gallery.meta.user_negative_prompt": "Prompt do usuário (negativo)",
+  "gallery.meta.auto_quality_positive_prompt": "Tags de qualidade automáticas (positivas)",
+  "gallery.meta.auto_quality_negative_prompt": "Tags de qualidade automáticas (negativas)",
   "gallery.meta.model": "Modelo",
   "gallery.meta.vae": "VAE",
   "gallery.meta.seed": "Seed",

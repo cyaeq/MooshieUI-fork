@@ -5,7 +5,8 @@
   import { canvas } from "../../stores/canvas.svelte.js";
   import { models } from "../../stores/models.svelte.js";
   import { locale } from "../../stores/locale.svelte.js";
-  import { generate, uploadImageBytes, downloadModel } from "../../utils/api.js";
+  import { uploadImageBytes, downloadModel } from "../../utils/api.js";
+  import { requestGeneration } from "../../utils/generationSubmit.js";
   import { loadOutputImageForGenerationInput, uploadImageUrlForGenerationInput } from "../../utils/galleryActions.js";
   import { formatGenerationTime } from "../../utils/localeFormat.js";
   import {
@@ -222,8 +223,7 @@
       // wants. Disable it for this pass.
       params.controlnet = null;
 
-      const result = await generate(params);
-      params.seed = result.seed;
+      const result = await requestGeneration(params);
       progress.enqueue(result.prompt_id, true, "img2img", params);
 
       // Reflect the upload in the UI so a follow-up Generate also works.

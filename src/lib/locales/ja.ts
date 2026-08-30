@@ -1466,6 +1466,10 @@ const ja: Record<string, string> = {
   // ギャラリーメタデータラベル
   "gallery.meta.prompt": "プロンプト",
   "gallery.meta.negative_prompt": "ネガティブプロンプト",
+  "gallery.meta.user_positive_prompt": "ユーザープロンプト（ポジティブ）",
+  "gallery.meta.user_negative_prompt": "ユーザープロンプト（ネガティブ）",
+  "gallery.meta.auto_quality_positive_prompt": "自動品質タグ（ポジティブ）",
+  "gallery.meta.auto_quality_negative_prompt": "自動品質タグ（ネガティブ）",
   "gallery.meta.model": "モデル",
   "gallery.meta.vae": "VAE",
   "gallery.meta.seed": "シード",

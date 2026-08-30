@@ -1443,6 +1443,10 @@ const ru: Record<string, string> = {
 
   "gallery.meta.prompt": "Промпт",
   "gallery.meta.negative_prompt": "Негативный промпт",
+  "gallery.meta.user_positive_prompt": "Промпт пользователя (позитивный)",
+  "gallery.meta.user_negative_prompt": "Промпт пользователя (негативный)",
+  "gallery.meta.auto_quality_positive_prompt": "Автоматические теги качества (позитивные)",
+  "gallery.meta.auto_quality_negative_prompt": "Автоматические теги качества (негативные)",
   "gallery.meta.model": "Модель",
   "gallery.meta.vae": "VAE",
   "gallery.meta.seed": "Сид",

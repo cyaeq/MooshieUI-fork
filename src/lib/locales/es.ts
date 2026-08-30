@@ -1505,6 +1505,10 @@ const es: Record<string, string> = {
   // Etiquetas de metadatos de galería
   "gallery.meta.prompt": "Prompt",
   "gallery.meta.negative_prompt": "Prompt negativo",
+  "gallery.meta.user_positive_prompt": "Prompt del usuario (positivo)",
+  "gallery.meta.user_negative_prompt": "Prompt del usuario (negativo)",
+  "gallery.meta.auto_quality_positive_prompt": "Etiquetas de calidad automáticas (positivas)",
+  "gallery.meta.auto_quality_negative_prompt": "Etiquetas de calidad automáticas (negativas)",
   "gallery.meta.model": "Modelo",
   "gallery.meta.vae": "VAE",
   "gallery.meta.seed": "Semilla",

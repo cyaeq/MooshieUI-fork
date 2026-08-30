@@ -1443,6 +1443,10 @@ const ko: Record<string, string> = {
 
   "gallery.meta.prompt": "프롬프트",
   "gallery.meta.negative_prompt": "부정 프롬프트",
+  "gallery.meta.user_positive_prompt": "사용자 프롬프트(긍정)",
+  "gallery.meta.user_negative_prompt": "사용자 프롬프트(부정)",
+  "gallery.meta.auto_quality_positive_prompt": "자동 품질 태그(긍정)",
+  "gallery.meta.auto_quality_negative_prompt": "자동 품질 태그(부정)",
   "gallery.meta.model": "모델",
   "gallery.meta.vae": "VAE",
   "gallery.meta.seed": "시드",

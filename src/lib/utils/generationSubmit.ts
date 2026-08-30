@@ -13,7 +13,21 @@ import type { GenerationParams } from "../types/index.js";
  */
 
 export async function requestGeneration(params: GenerationParams): Promise<GenerateResponse> {
-  const result = await generate(params);
+  // Prompt breakdown fields are for frontend metadata only. Keep them on the
+  // params snapshot carried by the progress queue, but never send them to the
+  // backend workflow API.
+  const {
+    user_positive_prompt,
+    user_negative_prompt,
+    auto_quality_positive_prompt,
+    auto_quality_negative_prompt,
+    ...backendParams
+  } = params;
+  void user_positive_prompt;
+  void user_negative_prompt;
+  void auto_quality_positive_prompt;
+  void auto_quality_negative_prompt;
+  const result = await generate(backendParams);
   // The backend resolves seed "-1" to a concrete value; write it back so a
   // caller reusing the same params object keeps the resolved seed.
   params.seed = result.seed;

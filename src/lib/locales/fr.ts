@@ -1466,6 +1466,10 @@ const fr: Record<string, string> = {
   // Labels métadonnées galerie
   "gallery.meta.prompt": "Prompt",
   "gallery.meta.negative_prompt": "Prompt négatif",
+  "gallery.meta.user_positive_prompt": "Prompt utilisateur (positif)",
+  "gallery.meta.user_negative_prompt": "Prompt utilisateur (négatif)",
+  "gallery.meta.auto_quality_positive_prompt": "Tags de qualité automatiques (positifs)",
+  "gallery.meta.auto_quality_negative_prompt": "Tags de qualité automatiques (négatifs)",
   "gallery.meta.model": "Modèle",
   "gallery.meta.vae": "VAE",
   "gallery.meta.seed": "Graine",
