@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { AppConfig, LlmProviderState, QueueInfo } from "../../types/index.js";
-  import { getConfig, updateConfig, stopComfyui, startComfyui, fetchReleaseNotes, importImageDirectory, exportLogs, exportLogsContent, getGalleryPath, setGalleryPath, setStorageLimit, installAttentionBackend, checkAttentionBackend, clearAllQueues, getQueue, getGpuStats, getComfyuiVersion, updateComfyui, getLanInfo } from "../../utils/api.js";
+  import { getConfig, updateConfig, stopComfyui, startComfyui, fetchReleaseNotes, importImageDirectory, exportLogs, exportLogsContent, getGalleryPath, setGalleryPath, setStorageLimit, installAttentionBackend, checkAttentionBackend, clearAllQueues, getQueue, getGpuStats, getComfyuiVersion, updateComfyui, getLanInfo, installComfyuiManager, setComfyuiManagerSecurity } from "../../utils/api.js";
   import type { ReleaseNote, ImportResult, AttentionBackendStatus, BackendSupport, ComfyUiVersionInfo } from "../../utils/api.js";
   import { connection } from "../../stores/connection.svelte.js";
   import { autocomplete } from "../../stores/autocomplete.svelte.js";
@@ -164,6 +164,10 @@
   let comfyuiUpdating = $state(false);
   let comfyuiUpdateError = $state<string | null>(null);
   let comfyuiUpdateProgress = $state<string | null>(null);
+  let advancedModeBusy = $state(false);
+  let advancedModeError = $state<string | null>(null);
+  let managerSecurityBusy = $state(false);
+  let managerSecurityError = $state<string | null>(null);
   let workersDetecting = $state(false);
   let newThemeName = $state("");
   let themeImportError = $state<string | null>(null);
@@ -1309,6 +1313,8 @@
   let originalModelPaths = "";
   let originalUiServerPort = 3201;
   let originalLanEnabled = false;
+  let originalAdvancedMode = false;
+  let originalManagerSecurity = false;
 
   async function loadConfig() {
     config = await getConfig();
@@ -1390,6 +1396,80 @@
     }
   }
 
+  async function toggleAdvancedMode() {
+    if (!config || advancedModeBusy) return;
+    advancedModeBusy = true;
+    advancedModeError = null;
+    const previous = config.comfyui_advanced_mode;
+    const next = !previous;
+    const shouldRestart = config.server_mode === "autolaunch";
+    try {
+      if (next) {
+        // The backend stops managed ComfyUI before installing its matched
+        // Manager or repairing an interrupted native tokenizers install.
+        await installComfyuiManager();
+      } else if (shouldRestart) {
+        await stopComfyui();
+      }
+      config.comfyui_advanced_mode = next;
+      await updateConfig(config);
+      if (shouldRestart) {
+        await startComfyui();
+        snapshotRestartFields();
+        restartNeeded = false;
+      } else {
+        restartNeeded = true;
+      }
+    } catch (e: any) {
+      advancedModeError = typeof e === "string" ? e : e?.message || String(e);
+      config.comfyui_advanced_mode = previous;
+      // Restore the prior mode if installation, persistence, or restart failed.
+      try { await updateConfig(config); } catch { /* preserve the original error */ }
+      if (shouldRestart) {
+        try { await startComfyui(); } catch { /* preserve the original error */ }
+      }
+    } finally {
+      advancedModeBusy = false;
+    }
+  }
+
+  async function toggleManagerSecurity() {
+    if (!config || managerSecurityBusy) return;
+    managerSecurityBusy = true;
+    managerSecurityError = null;
+    const previous = config.comfyui_manager_relaxed_security;
+    const next = !previous;
+    const shouldRestart = config.server_mode === "autolaunch";
+    try {
+      await setComfyuiManagerSecurity(next);
+      config.comfyui_manager_relaxed_security = next;
+      await updateConfig(config);
+      if (shouldRestart) {
+        await startComfyui();
+        snapshotRestartFields();
+        restartNeeded = false;
+      } else {
+        restartNeeded = true;
+      }
+    } catch (e: any) {
+      managerSecurityError = typeof e === "string" ? e : e?.message || String(e);
+      config.comfyui_manager_relaxed_security = previous;
+      try { await setComfyuiManagerSecurity(previous); } catch { /* preserve original error */ }
+      try { await updateConfig(config); } catch { /* preserve original error */ }
+      if (shouldRestart) {
+        try { await startComfyui(); } catch { /* preserve original error */ }
+      }
+    } finally {
+      managerSecurityBusy = false;
+    }
+  }
+
+  function openComfyuiUi() {
+    if (!config) return;
+    const url = config.server_url || `http://127.0.0.1:${config.server_port || 8188}`;
+    void openExternalUrl(url);
+  }
+
   async function initSettings() {
     loading = true;
     settingsLoadError = null;
@@ -1435,6 +1515,8 @@
     originalModelPaths = config.extra_model_paths ?? "";
     originalUiServerPort = config.ui_server_port;
     originalLanEnabled = config.lan_enabled;
+    originalAdvancedMode = config.comfyui_advanced_mode;
+    originalManagerSecurity = config.comfyui_manager_relaxed_security;
   }
 
   function checkRestartNeeded() {
@@ -1448,6 +1530,8 @@
       config.attention_backend !== originalAttentionBackend ||
       config.ui_server_port !== originalUiServerPort ||
       config.lan_enabled !== originalLanEnabled ||
+      config.comfyui_advanced_mode !== originalAdvancedMode ||
+      config.comfyui_manager_relaxed_security !== originalManagerSecurity ||
       config.extra_args.join(" ") !== originalExtraArgs ||
       (config.extra_model_paths ?? "") !== originalModelPaths;
   }
@@ -3486,6 +3570,49 @@
             />
           </div>
 
+          <div class="rounded-lg border border-amber-800/50 bg-amber-950/20 p-3 space-y-2">
+            <div class="flex items-start gap-3">
+              <input type="checkbox" id="comfyui-advanced-mode" checked={config.comfyui_advanced_mode} onchange={toggleAdvancedMode} disabled={advancedModeBusy || isBrowserMode} class="w-4 h-4 mt-0.5 accent-amber-500 rounded" />
+              <div class="min-w-0 flex-1">
+                <label for="comfyui-advanced-mode" class="text-sm text-amber-200">Advanced ComfyUI mode</label>
+                <p class="text-[10px] text-amber-300/70 mt-0.5">Enable ComfyUI Manager, the native ComfyUI interface, and third-party custom nodes in the shared Python environment.</p>
+                <p class="text-[10px] text-neutral-500 mt-1">MooshieUI and ComfyUI continue to share one venv and one PyTorch installation. Disabling this mode keeps third-party nodes on disk but prevents them from loading.</p>
+              </div>
+            </div>
+            {#if advancedModeBusy}
+              <p class="text-[10px] text-indigo-300">Installing the Manager version matched to the installed ComfyUI...</p>
+            {/if}
+            {#if advancedModeError}
+              <p class="text-[10px] text-red-300">{advancedModeError}</p>
+            {/if}
+
+            <div class="border-t border-amber-800/40 pt-2">
+              <div class="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="comfyui-manager-relaxed-security"
+                  checked={config.comfyui_manager_relaxed_security}
+                  onchange={toggleManagerSecurity}
+                  disabled={managerSecurityBusy || advancedModeBusy || isBrowserMode || (!config.comfyui_advanced_mode && !config.comfyui_manager_relaxed_security)}
+                  class="w-4 h-4 mt-0.5 accent-red-500 rounded"
+                />
+                <div class="min-w-0 flex-1">
+                  <label for="comfyui-manager-relaxed-security" class="text-xs text-red-200">Allow full Node Manager installs</label>
+                  <p class="text-[10px] text-red-300/70 mt-0.5">Allows Manager to install executable Git repositories and Python packages. Enable only for a trusted personal ComfyUI instance that is not exposed publicly.</p>
+                </div>
+              </div>
+              {#if managerSecurityBusy}
+                <p class="text-[10px] text-indigo-300 mt-1">Updating Node Manager security policy and restarting ComfyUI...</p>
+              {/if}
+              {#if managerSecurityError}
+                <p class="text-[10px] text-red-300 mt-1">{managerSecurityError}</p>
+              {/if}
+            </div>
+
+            {#if config.comfyui_advanced_mode && !isBrowserMode}
+              <button type="button" onclick={openComfyuiUi} class="w-full px-3 py-2 text-xs rounded bg-amber-600 hover:bg-amber-500 text-white transition-colors">Open ComfyUI</button>
+            {/if}
+          </div>
           <div>
             <div class="flex items-center justify-between mb-1">
               <label class="block text-xs text-neutral-400">{locale.t('settings.paths.shared_model_dirs')}<span class="text-amber-400">*</span></label>

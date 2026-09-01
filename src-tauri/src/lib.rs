@@ -558,6 +558,8 @@ pub fn run() {
             commands::api::is_h3_teacache_installed,
             commands::api::install_h3_teacache,
             commands::api::install_pip_package,
+            commands::api::install_comfyui_manager,
+            commands::api::set_comfyui_manager_security,
             commands::api::check_python_import,
             commands::websocket::connect_ws,
             commands::websocket::disconnect_ws,

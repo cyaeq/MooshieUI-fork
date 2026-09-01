@@ -89,6 +89,13 @@ pub struct AppConfig {
     pub keep_alive: bool,
     /// Automatically start ComfyUI when the app launches (default: true)
     pub auto_start: bool,
+    /// Enable the full ComfyUI ecosystem (Manager and third-party custom nodes).
+    /// When disabled, only MooshieUI's bundled nodes are loaded.
+    #[serde(default)]
+    pub comfyui_advanced_mode: bool,
+    /// Allow Node Manager to install arbitrary Git/Python packages.
+    #[serde(default)]
+    pub comfyui_manager_relaxed_security: bool,
     /// UI theme mode: "dark", "light"
     pub theme: String,
     /// UI color palette shared across dark and light modes.
@@ -234,6 +241,8 @@ impl Default for AppConfig {
             memory_mode: "balanced".to_string(),
             keep_alive: false,
             auto_start: true,
+            comfyui_advanced_mode: false,
+            comfyui_manager_relaxed_security: false,
             theme: "dark".to_string(),
             theme_palette: "mooshie".to_string(),
             font_scale: 1.0,

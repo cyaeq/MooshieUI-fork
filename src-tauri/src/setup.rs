@@ -2585,12 +2585,38 @@ pub async fn update_comfyui(
     let method = update_comfyui_checkout(&app, &comfyui_dir).await?;
 
     // 3. Reinstall ComfyUI's Python deps (a new release may add/upgrade them).
-    let net = {
+    let (net, advanced_mode, venv_path) = {
         let config = state.config.read().await;
-        SetupNetworkOpts::from_options(config.network_proxy.clone(), config.pip_index_url.clone())
+        (
+            SetupNetworkOpts::from_options(
+                config.network_proxy.clone(),
+                config.pip_index_url.clone(),
+            ),
+            config.comfyui_advanced_mode,
+            config.venv_path.clone(),
+        )
     };
     emit(&app, "deps", "Updating ComfyUI dependencies...", 55);
     step_install_deps(&app, &base, &net).await?;
+
+    // Keep Manager on the exact version declared by the newly checked-out
+    // ComfyUI release. The base dependency update above owns ComfyUI dependency
+    // changes; Manager installation does not request blanket upgrades.
+    if advanced_mode {
+        emit(
+            &app,
+            "manager",
+            "Updating the ComfyUI-matched Manager version...",
+            70,
+        );
+        crate::commands::api::install_comfyui_manager_for_environment(
+            &comfyui_dir,
+            &venv_path,
+            net.network_proxy.as_deref(),
+            net.pip_index_url.as_deref(),
+        )
+        .await?;
+    }
 
     // 3b. Re-ensure the quantization kernel backend: a new ComfyUI release can bump
     // comfy-kitchen, and an attention-backend switch may have happened since setup.

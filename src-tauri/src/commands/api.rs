@@ -10,6 +10,8 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::comfyui::process::tokio_command_no_window;
 use crate::comfyui::types::*;
+#[cfg(feature = "desktop")]
+use crate::config::ServerMode;
 use crate::error::AppError;
 use crate::state::AppState;
 
@@ -3121,6 +3123,521 @@ pub async fn install_pip_package(
     Ok(())
 }
 
+/// Probe the transformers/tokenizers import chain.
+/// Returns `None` when healthy, or the captured failure output when broken so
+/// the surfaced error explains *why* the environment is unusable.
+#[cfg(feature = "desktop")]
+async fn transformers_stack_failure(venv_path: &str) -> Result<Option<String>, AppError> {
+    let python_path = resolve_venv_python_bin(venv_path);
+    let mut cmd = tokio_command_no_window(&python_path);
+    cmd.args([
+        "-c",
+        "import transformers, tokenizers; assert tokenizers.__version__",
+    ]);
+    let output = cmd.output().await.map_err(|e| {
+        AppError::Other(format!(
+            "Failed to check transformers/tokenizers in the ComfyUI environment: {}",
+            e
+        ))
+    })?;
+    if output.status.success() {
+        return Ok(None);
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let detail = stderr
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or("unknown import failure")
+        .trim()
+        .to_string();
+    Ok(Some(detail))
+}
+
+#[cfg(feature = "desktop")]
+async fn installed_python_distribution_version(
+    venv_path: &str,
+    package: &str,
+) -> Result<String, AppError> {
+    let python_path = resolve_venv_python_bin(venv_path);
+    let script = format!(
+        "import importlib.metadata as m; print(m.version({:?}))",
+        package
+    );
+    let mut cmd = tokio_command_no_window(&python_path);
+    cmd.args(["-c", &script]);
+    let output = cmd.output().await.map_err(|e| {
+        AppError::Other(format!(
+            "Failed to read the installed {} version: {}",
+            package, e
+        ))
+    })?;
+    if !output.status.success() {
+        return Err(AppError::Other(format!(
+            "Failed to read the installed {} version: {}",
+            package,
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if version.is_empty() || !version.as_bytes().first().is_some_and(u8::is_ascii_digit) {
+        return Err(AppError::Other(format!(
+            "The installed {} package has invalid version metadata: {:?}",
+            package, version
+        )));
+    }
+    Ok(version)
+}
+
+#[cfg(feature = "desktop")]
+async fn installed_transformers_tokenizers_requirement(
+    venv_path: &str,
+) -> Result<String, AppError> {
+    let python_path = resolve_venv_python_bin(venv_path);
+    let script = "import importlib.metadata as m; print(next((r.split(';', 1)[0].strip() for r in (m.requires('transformers') or []) if r.lower().startswith('tokenizers')), ''))";
+    let mut cmd = tokio_command_no_window(&python_path);
+    cmd.args(["-c", script]);
+    let output = cmd.output().await.map_err(|e| {
+        AppError::Other(format!(
+            "Failed to read the tokenizers requirement from transformers metadata: {}",
+            e
+        ))
+    })?;
+    if !output.status.success() {
+        return Err(AppError::Other(format!(
+            "Failed to read the tokenizers requirement from transformers metadata: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    let requirement = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let has_version_constraint = requirement
+        .chars()
+        .any(|c| matches!(c, '<' | '>' | '=' | '~' | '!'));
+    if !requirement.to_ascii_lowercase().starts_with("tokenizers") || !has_version_constraint {
+        return Err(AppError::Other(format!(
+            "The installed transformers package has no usable tokenizers version requirement: {:?}",
+            requirement
+        )));
+    }
+    Ok(requirement)
+}
+
+/// Locate the `site-packages` directory of a venv.
+#[cfg(feature = "desktop")]
+fn resolve_venv_site_packages(venv_path: &str) -> Option<std::path::PathBuf> {
+    let base = std::path::Path::new(venv_path);
+    #[cfg(target_os = "windows")]
+    {
+        let dir = base.join("Lib").join("site-packages");
+        dir.is_dir().then_some(dir)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let lib = base.join("lib");
+        std::fs::read_dir(lib)
+            .ok()?
+            .filter_map(Result::ok)
+            .map(|e| e.path().join("site-packages"))
+            .find(|p| p.is_dir())
+    }
+}
+
+/// Normalize a Python distribution name the way packaging does (PEP 503).
+#[cfg(feature = "desktop")]
+fn normalize_distribution_name(name: &str) -> String {
+    name.chars()
+        .map(|c| match c {
+            '-' | '_' | '.' => '-',
+            other => other.to_ascii_lowercase(),
+        })
+        .collect()
+}
+
+/// Find `*.dist-info` directories for `package` that have no `METADATA` file.
+///
+/// An interrupted install on Windows can leave a `<pkg>-<old>.dist-info` shell
+/// behind. `importlib.metadata` then sees two distributions for one name and
+/// resolves the version to `None`, which makes `transformers` refuse to import
+/// with "Unable to compare versions ... found=None". Reinstalling never clears
+/// this, so the stale directories must be removed explicitly.
+#[cfg(feature = "desktop")]
+fn stale_dist_info_dirs(site_packages: &std::path::Path, package: &str) -> Vec<std::path::PathBuf> {
+    let wanted = normalize_distribution_name(package);
+    let Ok(entries) = std::fs::read_dir(site_packages) else {
+        return Vec::new();
+    };
+    let mut stale = Vec::new();
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let Some(stem) = name.strip_suffix(".dist-info") else {
+            continue;
+        };
+        let Some((dist_name, _version)) = stem.rsplit_once('-') else {
+            continue;
+        };
+        if normalize_distribution_name(dist_name) != wanted {
+            continue;
+        }
+        if !path.join("METADATA").is_file() {
+            stale.push(path);
+        }
+    }
+    stale
+}
+
+/// Remove metadata-less `dist-info` shells for `package`. Returns the removed names.
+#[cfg(feature = "desktop")]
+fn purge_stale_dist_info(venv_path: &str, package: &str) -> Vec<String> {
+    let Some(site_packages) = resolve_venv_site_packages(venv_path) else {
+        return Vec::new();
+    };
+    let mut removed = Vec::new();
+    for dir in stale_dist_info_dirs(&site_packages, package) {
+        let label = dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default()
+            .to_string();
+        match std::fs::remove_dir_all(&dir) {
+            Ok(()) => {
+                log::warn!("Removed stale distribution metadata {}", dir.display());
+                removed.push(label);
+            }
+            Err(e) => log::warn!(
+                "Failed to remove stale distribution metadata {}: {}",
+                dir.display(),
+                e
+            ),
+        }
+    }
+    removed
+}
+
+#[cfg(all(test, feature = "desktop"))]
+mod stale_dist_info_tests {
+    use super::*;
+    use std::fs;
+
+    fn temp_site_packages(name: &str) -> std::path::PathBuf {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time should be after epoch")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "mooshieui-site-packages-{}-{}-{}",
+            name,
+            std::process::id(),
+            unique
+        ));
+        fs::create_dir_all(&dir).expect("create temp site-packages");
+        dir
+    }
+
+    fn make_dist_info(site_packages: &std::path::Path, name: &str, with_metadata: bool) {
+        let dir = site_packages.join(name);
+        fs::create_dir_all(&dir).expect("create dist-info");
+        if with_metadata {
+            fs::write(dir.join("METADATA"), b"Name: tokenizers\n").expect("write METADATA");
+        }
+    }
+
+    #[test]
+    fn detects_only_metadata_less_dist_info_for_the_package() {
+        let dir = temp_site_packages("detect");
+        // The real-world break: an interrupted upgrade leaves the old shell behind.
+        make_dist_info(&dir, "tokenizers-0.22.2.dist-info", false);
+        make_dist_info(&dir, "tokenizers-0.23.1.dist-info", true);
+        make_dist_info(&dir, "transformers-5.16.1.dist-info", false);
+
+        let stale = stale_dist_info_dirs(&dir, "tokenizers");
+
+        assert_eq!(stale.len(), 1);
+        assert!(stale[0].ends_with("tokenizers-0.22.2.dist-info"));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn healthy_layout_reports_nothing_stale() {
+        let dir = temp_site_packages("healthy");
+        make_dist_info(&dir, "tokenizers-0.23.1.dist-info", true);
+
+        assert!(stale_dist_info_dirs(&dir, "tokenizers").is_empty());
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn matches_normalized_distribution_names() {
+        let dir = temp_site_packages("normalized");
+        make_dist_info(&dir, "Tokenizers_Extra-1.0.0.dist-info", false);
+        make_dist_info(&dir, "tokenizers-0.22.2.dist-info", false);
+
+        let stale = stale_dist_info_dirs(&dir, "TOKENIZERS");
+
+        assert_eq!(stale.len(), 1);
+        assert!(stale[0].ends_with("tokenizers-0.22.2.dist-info"));
+        assert_eq!(
+            normalize_distribution_name("Tokenizers_Extra"),
+            "tokenizers-extra"
+        );
+        fs::remove_dir_all(&dir).ok();
+    }
+}
+
+/// Repair tokenizers after an interrupted Windows native-module replacement.
+///
+/// First clear orphaned `dist-info` shells, which alone can break version
+/// resolution. Only if the import still fails do we reinstall: preferring the
+/// exact installed version, else the range declared by installed transformers.
+#[cfg(feature = "desktop")]
+async fn repair_tokenizers_if_needed(
+    venv_path: &str,
+    network_proxy: Option<&str>,
+    pip_index_url: Option<&str>,
+) -> Result<(), AppError> {
+    let Some(failure) = transformers_stack_failure(venv_path).await? else {
+        return Ok(());
+    };
+    log::warn!(
+        "The transformers/tokenizers import check failed: {}",
+        failure
+    );
+
+    let removed = purge_stale_dist_info(venv_path, "tokenizers");
+    let failure = match transformers_stack_failure(venv_path).await? {
+        None => return Ok(()),
+        Some(failure) => failure,
+    };
+
+    let package = match installed_python_distribution_version(venv_path, "tokenizers").await {
+        Ok(version) => format!("tokenizers=={}", version),
+        Err(version_error) => {
+            log::warn!(
+                "Cannot reuse the installed tokenizers version ({}); falling back to the installed transformers requirement",
+                version_error
+            );
+            installed_transformers_tokenizers_requirement(venv_path).await?
+        }
+    };
+    log::warn!("Reinstalling {} without dependencies", package);
+
+    let uv_path = resolve_uv_bin(venv_path);
+    let output = if uv_path.exists() {
+        let mut cmd = tokio_command_no_window(&uv_path);
+        cmd.args([
+            "pip",
+            "install",
+            "--reinstall-package",
+            "tokenizers",
+            "--no-deps",
+            &package,
+        ])
+        .env("VIRTUAL_ENV", venv_path);
+        crate::comfyui::nodes::apply_pip_install_options(
+            &mut cmd,
+            true,
+            network_proxy,
+            pip_index_url,
+        );
+        cmd.output()
+            .await
+            .map_err(|e| AppError::Other(format!("uv failed to start tokenizers repair: {}", e)))?
+    } else {
+        let venv_base = std::path::Path::new(venv_path);
+        #[cfg(target_os = "windows")]
+        let pip_path = venv_base.join("Scripts").join("pip.exe");
+        #[cfg(not(target_os = "windows"))]
+        let pip_path = venv_base.join("bin").join("pip");
+        let mut cmd = tokio_command_no_window(&pip_path);
+        cmd.args(["install", "--force-reinstall", "--no-deps", &package]);
+        crate::comfyui::nodes::apply_pip_install_options(
+            &mut cmd,
+            false,
+            network_proxy,
+            pip_index_url,
+        );
+        cmd.output()
+            .await
+            .map_err(|e| AppError::Other(format!("pip failed to start tokenizers repair: {}", e)))?
+    };
+
+    if !output.status.success() {
+        return Err(AppError::Other(format!(
+            "Failed to repair {} ({}): {}",
+            package,
+            failure,
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+
+    // A fresh install can drop another metadata shell; clear it before re-checking.
+    purge_stale_dist_info(venv_path, "tokenizers");
+    if let Some(failure) = transformers_stack_failure(venv_path).await? {
+        let cleanup = if removed.is_empty() {
+            String::new()
+        } else {
+            format!(" Removed stale metadata: {}.", removed.join(", "))
+        };
+        return Err(AppError::Other(format!(
+            "Reinstalled {}, but transformers/tokenizers still cannot be imported: {}.{} Update ComfyUI through MooshieUI to restore its tested dependencies.",
+            package, failure, cleanup
+        )));
+    }
+    Ok(())
+}
+
+/// Install the Manager version declared by a specific ComfyUI checkout.
+/// Manager dependencies are installed without --upgrade, preserving the
+/// already-installed base packages when they satisfy Manager requirements.
+#[cfg(feature = "desktop")]
+pub(crate) async fn install_comfyui_manager_for_environment(
+    comfyui_dir: &std::path::Path,
+    venv_path: &str,
+    network_proxy: Option<&str>,
+    pip_index_url: Option<&str>,
+) -> Result<String, AppError> {
+    let version_info = crate::comfyui_version::comfyui_version_info(comfyui_dir);
+    let installed_version = version_info.installed.ok_or_else(|| {
+        AppError::Other(
+            "Cannot determine the installed ComfyUI version. Update ComfyUI through MooshieUI before enabling advanced mode."
+                .into(),
+        )
+    })?;
+    let manager_requirements = comfyui_dir.join("manager_requirements.txt");
+    if !manager_requirements.is_file() {
+        return Err(AppError::Other(format!(
+            "ComfyUI {} does not provide manager_requirements.txt. Update ComfyUI through MooshieUI before enabling advanced mode.",
+            installed_version
+        )));
+    }
+
+    repair_tokenizers_if_needed(venv_path, network_proxy, pip_index_url).await?;
+
+    let uv_path = resolve_uv_bin(venv_path);
+    let output = if uv_path.exists() {
+        let mut cmd = tokio_command_no_window(&uv_path);
+        cmd.args(["pip", "install", "-r"])
+            .arg(&manager_requirements)
+            .env("VIRTUAL_ENV", venv_path);
+        crate::comfyui::nodes::apply_pip_install_options(
+            &mut cmd,
+            true,
+            network_proxy,
+            pip_index_url,
+        );
+        cmd.output()
+            .await
+            .map_err(|e| AppError::Other(format!("uv pip install failed to start: {}", e)))?
+    } else {
+        let venv_base = std::path::Path::new(venv_path);
+        #[cfg(target_os = "windows")]
+        let pip_path = venv_base.join("Scripts").join("pip.exe");
+        #[cfg(not(target_os = "windows"))]
+        let pip_path = venv_base.join("bin").join("pip");
+        let mut cmd = tokio_command_no_window(&pip_path);
+        cmd.args(["install", "-r"]).arg(&manager_requirements);
+        crate::comfyui::nodes::apply_pip_install_options(
+            &mut cmd,
+            false,
+            network_proxy,
+            pip_index_url,
+        );
+        cmd.output()
+            .await
+            .map_err(|e| AppError::Other(format!("pip install failed to start: {}", e)))?
+    };
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppError::Other(format!(
+            "Failed to install the Manager requirements for ComfyUI {}: {}",
+            installed_version, stderr
+        )));
+    }
+    log::info!(
+        "Installed Manager requirements declared by ComfyUI {} from {}",
+        installed_version,
+        manager_requirements.display()
+    );
+    Ok(installed_version)
+}
+
+/// Stop the managed process, then install the Manager matched to the installed
+/// ComfyUI checkout and its existing shared Python environment.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn install_comfyui_manager(state: State<'_, Arc<AppState>>) -> Result<(), AppError> {
+    let (comfyui_path, venv_path, network_proxy, pip_index_url, server_mode) = {
+        let config = state.config.read().await;
+        (
+            config.comfyui_path.clone(),
+            config.venv_path.clone(),
+            config.network_proxy.clone(),
+            config.pip_index_url.clone(),
+            config.server_mode.clone(),
+        )
+    };
+
+    // Windows locks native Python modules while ComfyUI runs. Stop the managed
+    // process before repairing an interrupted install or adding Manager.
+    if server_mode == ServerMode::AutoLaunch {
+        crate::comfyui::process::stop_comfyui_process(state.inner()).await?;
+    }
+
+    install_comfyui_manager_for_environment(
+        std::path::Path::new(&comfyui_path),
+        &venv_path,
+        network_proxy.as_deref(),
+        pip_index_url.as_deref(),
+    )
+    .await?;
+    Ok(())
+}
+
+/// Apply or revoke MooshieUI's explicit Node Manager install policy.
+/// The Manager reads this at startup, so managed ComfyUI is stopped first.
+#[cfg(feature = "desktop")]
+#[tauri::command]
+pub async fn set_comfyui_manager_security(
+    state: State<'_, Arc<AppState>>,
+    relaxed: bool,
+) -> Result<String, AppError> {
+    let (comfyui_path, extra_args, advanced_mode, server_mode) = {
+        let config = state.config.read().await;
+        (
+            config.comfyui_path.clone(),
+            config.extra_args.clone(),
+            config.comfyui_advanced_mode,
+            config.server_mode.clone(),
+        )
+    };
+    if relaxed && !advanced_mode {
+        return Err(AppError::Other(
+            "Enable Advanced ComfyUI mode before relaxing Node Manager security.".into(),
+        ));
+    }
+    if server_mode == ServerMode::AutoLaunch {
+        crate::comfyui::process::stop_comfyui_process(state.inner()).await?;
+    }
+
+    let path = crate::comfyui::manager::set_manager_security_policy(
+        &comfyui_path,
+        &extra_args,
+        relaxed,
+    )
+    .map_err(AppError::Other)?;
+    log::warn!(
+        "Applied ComfyUI Manager security policy at '{}': relaxed={}",
+        path.display(),
+        relaxed
+    );
+    Ok(path.to_string_lossy().to_string())
+}
 /// Verify that a Python module can be imported inside the ComfyUI virtual environment.
 #[cfg(feature = "desktop")]
 #[tauri::command]

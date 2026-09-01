@@ -327,6 +327,30 @@ const MEMORY_MODE_CONFLICTING_ARGS: &[&str] = &[
     "--disable-pinned-memory",
 ];
 
+/// Limit ComfyUI custom-node loading to MooshieUI-owned nodes unless advanced mode is enabled.
+fn apply_custom_node_mode_flags(cmd: &mut tokio::process::Command, config: &AppConfig) {
+    if config.comfyui_advanced_mode {
+        // The current Manager is installed as the `comfyui-manager` PyPI
+        // package in the shared venv and is enabled by this ComfyUI flag.
+        cmd.arg("--enable-manager");
+        return;
+    }
+
+    // Keep the default MooshieUI runtime deterministic. These names match the
+    // bundled package directories/files written by comfyui::nodes.
+    cmd.arg("--disable-all-custom-nodes")
+        .arg("--whitelist-custom-nodes")
+        .args([
+            "mooshie-nodes",
+            "nanosaur_support",
+            "minimax_director",
+            "nodes_tiled_diffusion.py",
+            "nodes_guidance.py",
+            "nodes_anima_teacache.py",
+            "nodes_sdxl_flux2vae.py",
+        ]);
+}
+
 /// Add the system-RAM flags for `config.memory_mode`.
 ///
 /// The dominant resident cost on Windows is pinned host memory: ComfyUI sizes
@@ -933,6 +957,25 @@ pub async fn start_comfyui_process(state: &AppState) -> Result<StartResult, AppE
         )));
     }
 
+    if config.comfyui_advanced_mode {
+        let manager_config = crate::comfyui::manager::set_manager_security_policy(
+            &config.comfyui_path,
+            &config.extra_args,
+            config.comfyui_manager_relaxed_security,
+        )
+        .map_err(|error| {
+            AppError::ProcessSpawnFailed(format!(
+                "Failed to configure ComfyUI Manager security policy: {}",
+                error
+            ))
+        })?;
+        log::info!(
+            "Applied ComfyUI Manager security policy at '{}': relaxed={}",
+            manager_config.display(),
+            config.comfyui_manager_relaxed_security
+        );
+    }
+
     log::info!("Spawning ComfyUI: {} {}", python_path, main_path);
 
     let mut cmd = tokio::process::Command::new(&python_path);
@@ -945,6 +988,8 @@ pub async fn start_comfyui_process(state: &AppState) -> Result<StartResult, AppE
 
     // Enable latent previews over WebSocket
     cmd.arg("--preview-method").arg("auto");
+
+    apply_custom_node_mode_flags(&mut cmd, &config);
 
     // VRAM management flag
     match config.vram_mode.as_str() {
@@ -1725,6 +1770,8 @@ pub async fn start_worker_process(
         .arg("--disable-auto-launch"); // MooshieUI is the frontend — no browser needed
 
     cmd.arg("--preview-method").arg("auto");
+
+    apply_custom_node_mode_flags(&mut cmd, &config);
 
     // VRAM mode: worker-specific override > global config
     let vram_mode = worker

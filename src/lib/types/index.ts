@@ -387,6 +387,10 @@ export interface AppConfig {
   memory_mode: string;
   keep_alive: boolean;
   auto_start: boolean;
+  /** Enable ComfyUI Manager and third-party custom nodes. */
+  comfyui_advanced_mode: boolean;
+  /** Allow Node Manager to install arbitrary Git/Python packages. */
+  comfyui_manager_relaxed_security: boolean;
   theme: string;
   theme_palette: string;
   font_scale: number;

@@ -847,6 +847,14 @@ export async function installPipPackage(packageName: string): Promise<void> {
   return ipcInvoke("install_pip_package", { package: packageName });
 }
 
+export async function installComfyuiManager(): Promise<void> {
+  return ipcInvoke("install_comfyui_manager");
+}
+
+export async function setComfyuiManagerSecurity(relaxed: boolean): Promise<string> {
+  return ipcInvoke("set_comfyui_manager_security", { relaxed });
+}
+
 export async function checkPythonImport(module: string): Promise<boolean> {
   return ipcInvoke("check_python_import", { module });
 }
