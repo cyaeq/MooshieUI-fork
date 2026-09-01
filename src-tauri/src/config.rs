@@ -481,6 +481,11 @@ pub fn load_persisted_config() -> AppConfig {
 }
 
 pub(crate) fn normalize_config_fields(config: &mut AppConfig) {
+    // Relaxed Node Manager security is meaningless without advanced mode, and
+    // `update_config` is reachable from LAN moderators — clamp it server-side.
+    if !config.comfyui_advanced_mode {
+        config.comfyui_manager_relaxed_security = false;
+    }
     for field in [
         &mut config.network_proxy,
         &mut config.pip_index_url,

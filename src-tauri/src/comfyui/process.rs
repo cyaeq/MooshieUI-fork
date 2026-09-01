@@ -327,6 +327,32 @@ const MEMORY_MODE_CONFLICTING_ARGS: &[&str] = &[
     "--disable-pinned-memory",
 ];
 
+/// Synchronize MooshieUI's explicit Node Manager policy before process startup.
+fn apply_manager_security_policy(config: &AppConfig) -> Result<(), AppError> {
+    if !config.comfyui_advanced_mode && !config.comfyui_manager_relaxed_security {
+        return Ok(());
+    }
+
+    let relaxed = config.comfyui_advanced_mode && config.comfyui_manager_relaxed_security;
+    let manager_config = crate::comfyui::manager::set_manager_security_policy(
+        &config.comfyui_path,
+        &config.extra_args,
+        relaxed,
+    )
+    .map_err(|error| {
+        AppError::ProcessSpawnFailed(format!(
+            "Failed to configure ComfyUI Manager security policy: {}",
+            error
+        ))
+    })?;
+    log::info!(
+        "Applied ComfyUI Manager security policy at '{}': relaxed={}",
+        manager_config.display(),
+        relaxed
+    );
+    Ok(())
+}
+
 /// Limit ComfyUI custom-node loading to MooshieUI-owned nodes unless advanced mode is enabled.
 fn apply_custom_node_mode_flags(cmd: &mut tokio::process::Command, config: &AppConfig) {
     if config.comfyui_advanced_mode {
@@ -957,24 +983,7 @@ pub async fn start_comfyui_process(state: &AppState) -> Result<StartResult, AppE
         )));
     }
 
-    if config.comfyui_advanced_mode {
-        let manager_config = crate::comfyui::manager::set_manager_security_policy(
-            &config.comfyui_path,
-            &config.extra_args,
-            config.comfyui_manager_relaxed_security,
-        )
-        .map_err(|error| {
-            AppError::ProcessSpawnFailed(format!(
-                "Failed to configure ComfyUI Manager security policy: {}",
-                error
-            ))
-        })?;
-        log::info!(
-            "Applied ComfyUI Manager security policy at '{}': relaxed={}",
-            manager_config.display(),
-            config.comfyui_manager_relaxed_security
-        );
-    }
+    apply_manager_security_policy(&config)?;
 
     log::info!("Spawning ComfyUI: {} {}", python_path, main_path);
 
@@ -1748,6 +1757,8 @@ pub async fn start_worker_process(
             main_path
         )));
     }
+
+    apply_manager_security_policy(&config)?;
 
     log::info!(
         "Worker {} (GPU {}): Spawning ComfyUI on port {}",

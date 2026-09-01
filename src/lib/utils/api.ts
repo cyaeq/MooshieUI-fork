@@ -851,7 +851,7 @@ export async function installComfyuiManager(): Promise<void> {
   return ipcInvoke("install_comfyui_manager");
 }
 
-export async function setComfyuiManagerSecurity(relaxed: boolean): Promise<string> {
+export async function setComfyuiManagerSecurity(relaxed: boolean): Promise<void> {
   return ipcInvoke("set_comfyui_manager_security", { relaxed });
 }
 

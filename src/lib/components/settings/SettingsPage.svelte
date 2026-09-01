@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { AppConfig, LlmProviderState, QueueInfo } from "../../types/index.js";
-  import { getConfig, updateConfig, stopComfyui, startComfyui, fetchReleaseNotes, importImageDirectory, exportLogs, exportLogsContent, getGalleryPath, setGalleryPath, setStorageLimit, installAttentionBackend, checkAttentionBackend, clearAllQueues, getQueue, getGpuStats, getComfyuiVersion, updateComfyui, getLanInfo, installComfyuiManager, setComfyuiManagerSecurity } from "../../utils/api.js";
+  import { getConfig, updateConfig, stopComfyui, startComfyui, fetchReleaseNotes, importImageDirectory, exportLogs, exportLogsContent, getGalleryPath, setGalleryPath, setStorageLimit, installAttentionBackend, checkAttentionBackend, clearAllQueues, getQueue, getGpuStats, getComfyuiVersion, updateComfyui, getLanInfo, installComfyuiManager, setComfyuiManagerSecurity, checkServerHealth } from "../../utils/api.js";
   import type { ReleaseNote, ImportResult, AttentionBackendStatus, BackendSupport, ComfyUiVersionInfo } from "../../utils/api.js";
   import { connection } from "../../stores/connection.svelte.js";
   import { autocomplete } from "../../stores/autocomplete.svelte.js";
@@ -1205,6 +1205,7 @@
       connection: d,
       appearance: d,
       performance: d,
+      comfyui: d,
       quality: d,
       gpu: d,
       models: d,
@@ -1244,11 +1245,12 @@
     { key: "connection", labelKey: "settings.sections.connection", keywords: "server mode url port remote autolaunch" },
     { key: "appearance", labelKey: "settings.sections.appearance", keywords: "theme dark light font scale palette custom create logo background branding import export color" },
     { key: "performance", labelKey: "settings.sections.performance", keywords: "vram mode high low normal keep alive close attention backend sage flash" },
+    { key: "comfyui", labelKey: "settings.sections.comfyui", keywords: "comfyui backend version update manager node manager custom nodes advanced mode security git pip install cli arguments extra args launch" },
     { key: "quality", labelKey: "settings.sections.quality", keywords: "quality tags auto masterpiece best quality anima illustrious noobai pony nanosaur positive negative prompt" },
     { key: "gpu", labelKey: "settings.sections.gpu", keywords: "gpu vram worker backend multi status utilization temperature power nvidia" },
     { key: "models", labelKey: "settings.sections.models", keywords: "models manage delete move lora checkpoint vae upscaler controlnet" },
     { key: "modelRequests", labelKey: "settings.sections.model_requests", keywords: "model requests approve deny pending download civitai hub" },
-    { key: "paths", labelKey: "settings.sections.paths", keywords: "comfyui install venv python cli arguments extra args shared model directory models" },
+    { key: "paths", labelKey: "settings.sections.paths", keywords: "comfyui install venv python shared model directory models move location setup wizard" },
     { key: "gallery", labelKey: "settings.sections.gallery", keywords: "gallery storage location import images output directory swarmui comfyui external folder manual save mode save directory artist cache clear anima preview upscale pre-upscale before base" },
     { key: "autocomplete", labelKey: "settings.sections.autocomplete", keywords: "tags taglist suggestions results url upload csv json danbooru" },
     { key: "interrogator", labelKey: "settings.sections.interrogator", keywords: "interrogate tags tagger threshold confidence onnx model" },
@@ -1265,6 +1267,7 @@
     connection: '<path d="M5 12.55a11 11 0 0 1 14.08 0" /><path d="M1.42 9a16 16 0 0 1 21.16 0" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" />',
     appearance: '<circle cx="13.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="10.5" r="2.5" /><circle cx="8.5" cy="7.5" r="2.5" /><circle cx="6.5" cy="12.5" r="2.5" /><path d="M12 2a10 10 0 0 0 0 20c1.1 0 2-.9 2-2v-1a2 2 0 0 1 2-2h1a4 4 0 0 0 4-4 10 10 0 0 0-9-9z" />',
     performance: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />',
+    comfyui: '<rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><path d="M10 6.5h3a1 1 0 0 1 1 1v3" /><path d="M14 17.5h-3a1 1 0 0 1-1-1v-3" />',
     quality: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />',
     gpu: '<rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" /><line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" /><line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" /><line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />',
     models: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />',
@@ -1291,7 +1294,7 @@
 
   const visibleSections = $derived(sections.filter((section) => {
     if (section.key === "appMode" && (!isAdmin || mobileFriendly)) return false;
-    if (["connection", "performance", "paths"].includes(section.key) && !isAdmin) return false;
+    if (["connection", "performance", "comfyui", "paths"].includes(section.key) && !isAdmin) return false;
     if (["models", "modelRequests", "civitai"].includes(section.key) && !canManageServer) return false;
     return sectionVisible(section.key);
   }));
@@ -1396,11 +1399,25 @@
     }
   }
 
+  /** ComfyUI restarts in the background, so probe it instead of trusting the last known state. */
+  function refreshConnectionIndicator() {
+    connection.connected = false;
+    let attempts = 0;
+    const poll = () => {
+      attempts += 1;
+      void checkServerHealth()
+        .then(() => { connection.connected = true; })
+        .catch(() => { if (attempts < 20) setTimeout(poll, 1000); });
+    };
+    setTimeout(poll, 1000);
+  }
+
   async function toggleAdvancedMode() {
     if (!config || advancedModeBusy) return;
     advancedModeBusy = true;
     advancedModeError = null;
     const previous = config.comfyui_advanced_mode;
+    const previousSecurity = config.comfyui_manager_relaxed_security;
     const next = !previous;
     const shouldRestart = config.server_mode === "autolaunch";
     try {
@@ -1408,13 +1425,17 @@
         // The backend stops managed ComfyUI before installing its matched
         // Manager or repairing an interrupted native tokenizers install.
         await installComfyuiManager();
-      } else if (shouldRestart) {
-        await stopComfyui();
+      } else {
+        // Advanced mode owns the dangerous Manager permission. Revoking the
+        // mode also revokes arbitrary Git/Python installation.
+        await setComfyuiManagerSecurity(false);
       }
       config.comfyui_advanced_mode = next;
+      if (!next) config.comfyui_manager_relaxed_security = false;
       await updateConfig(config);
       if (shouldRestart) {
         await startComfyui();
+        refreshConnectionIndicator();
         snapshotRestartFields();
         restartNeeded = false;
       } else {
@@ -1423,10 +1444,14 @@
     } catch (e: any) {
       advancedModeError = typeof e === "string" ? e : e?.message || String(e);
       config.comfyui_advanced_mode = previous;
-      // Restore the prior mode if installation, persistence, or restart failed.
+      config.comfyui_manager_relaxed_security = previousSecurity;
+      // Restore persisted state before restoring a relaxed Manager policy,
+      // because the backend only permits it while advanced mode is enabled.
       try { await updateConfig(config); } catch { /* preserve the original error */ }
+      try { await setComfyuiManagerSecurity(previousSecurity); } catch { /* preserve original error */ }
       if (shouldRestart) {
         try { await startComfyui(); } catch { /* preserve the original error */ }
+        refreshConnectionIndicator();
       }
     } finally {
       advancedModeBusy = false;
@@ -1446,6 +1471,7 @@
       await updateConfig(config);
       if (shouldRestart) {
         await startComfyui();
+        refreshConnectionIndicator();
         snapshotRestartFields();
         restartNeeded = false;
       } else {
@@ -1458,6 +1484,7 @@
       try { await updateConfig(config); } catch { /* preserve original error */ }
       if (shouldRestart) {
         try { await startComfyui(); } catch { /* preserve original error */ }
+        refreshConnectionIndicator();
       }
     } finally {
       managerSecurityBusy = false;
@@ -3108,6 +3135,25 @@
             </div>
           </div>
 
+          </div>
+          {/if}
+        </section>
+        {/if}
+
+        <!-- ComfyUI Backend -->
+        {#if isAdmin && sectionVisible("comfyui")}
+        <section data-settings-section="comfyui" class="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden break-inside-avoid mb-4">
+          <button
+            class="w-full flex items-center justify-between p-5 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors cursor-pointer"
+            onclick={() => (collapsed.comfyui = !collapsed.comfyui)}
+          >
+            {locale.t('settings.comfyui.title')}
+            <svg class="w-4 h-4 text-neutral-500 transition-transform {collapsed.comfyui ? '-rotate-90' : ''}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+
+          {#if !collapsed.comfyui}
+          <div class="px-5 pb-5 space-y-4">
+
           {#if !isBrowserMode && comfyuiVersion}
           <div>
             <label class="block text-xs text-neutral-400 mb-1">{locale.t('settings.performance.comfyui_version')}</label>
@@ -3151,6 +3197,69 @@
             </div>
           </div>
           {/if}
+
+          <div class="rounded-lg border border-amber-800/50 bg-amber-950/20 p-3 space-y-2">
+            <div class="flex items-start gap-3">
+              <input type="checkbox" id="comfyui-advanced-mode" checked={config.comfyui_advanced_mode} onchange={toggleAdvancedMode} disabled={advancedModeBusy || isBrowserMode} class="w-4 h-4 mt-0.5 accent-amber-500 rounded" />
+              <div class="min-w-0 flex-1">
+                <label for="comfyui-advanced-mode" class="text-sm text-amber-200">{locale.t('settings.comfyui.advanced_mode')}</label>
+                <p class="text-[10px] text-amber-300/70 mt-0.5">{locale.t('settings.comfyui.advanced_mode_desc')}</p>
+                <p class="text-[10px] text-neutral-500 mt-1">{locale.t('settings.comfyui.advanced_mode_note')}</p>
+              </div>
+            </div>
+            {#if advancedModeBusy}
+              <p class="text-[10px] text-indigo-300">{locale.t('settings.comfyui.manager_installing')}</p>
+            {/if}
+            {#if advancedModeError}
+              <p class="text-[10px] text-red-300">{advancedModeError}</p>
+            {/if}
+
+            <div class="border-t border-amber-800/40 pt-2">
+              <div class="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="comfyui-manager-relaxed-security"
+                  checked={config.comfyui_manager_relaxed_security}
+                  onchange={toggleManagerSecurity}
+                  disabled={managerSecurityBusy || advancedModeBusy || isBrowserMode || (!config.comfyui_advanced_mode && !config.comfyui_manager_relaxed_security)}
+                  class="w-4 h-4 mt-0.5 accent-red-500 rounded"
+                />
+                <div class="min-w-0 flex-1">
+                  <label for="comfyui-manager-relaxed-security" class="text-xs text-red-200">{locale.t('settings.comfyui.manager_relaxed')}</label>
+                  <p class="text-[10px] text-red-300/70 mt-0.5">{locale.t('settings.comfyui.manager_relaxed_desc')}</p>
+                  <p class="text-[10px] text-red-300/70 mt-0.5">{locale.t('settings.comfyui.manager_relaxed_lan_warning')}</p>
+                </div>
+              </div>
+              {#if managerSecurityBusy}
+                <p class="text-[10px] text-indigo-300 mt-1">{locale.t('settings.comfyui.manager_relaxed_applying')}</p>
+              {/if}
+              {#if managerSecurityError}
+                <p class="text-[10px] text-red-300 mt-1">{managerSecurityError}</p>
+              {/if}
+            </div>
+
+            {#if config.comfyui_advanced_mode && !isBrowserMode}
+              <button type="button" onclick={openComfyuiUi} class="w-full px-3 py-2 text-xs rounded bg-amber-600 hover:bg-amber-500 text-white transition-colors">{locale.t('settings.comfyui.open_ui')}</button>
+            {/if}
+          </div>
+
+          <div>
+            <label class="block text-xs text-neutral-400 mb-1">{locale.t('settings.paths.extra_args')}<span class="text-amber-400">*</span></label>
+            <input
+              type="text"
+              value={config.extra_args.join(" ")}
+              oninput={(e) => {
+                if (config) {
+                  const val = (e.target as HTMLInputElement).value;
+                  config.extra_args = val ? val.split(/\s+/) : [];
+                  checkRestartNeeded();
+                }
+              }}
+              class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500 transition-colors"
+              placeholder={locale.t('settings.paths.extra_args_placeholder')}
+            />
+            <p class="text-[10px] text-neutral-500 mt-0.5">{locale.t('settings.paths.extra_args_desc')}</p>
+          </div>
 
           <div class="flex items-start gap-3">
             <input
@@ -3570,49 +3679,6 @@
             />
           </div>
 
-          <div class="rounded-lg border border-amber-800/50 bg-amber-950/20 p-3 space-y-2">
-            <div class="flex items-start gap-3">
-              <input type="checkbox" id="comfyui-advanced-mode" checked={config.comfyui_advanced_mode} onchange={toggleAdvancedMode} disabled={advancedModeBusy || isBrowserMode} class="w-4 h-4 mt-0.5 accent-amber-500 rounded" />
-              <div class="min-w-0 flex-1">
-                <label for="comfyui-advanced-mode" class="text-sm text-amber-200">Advanced ComfyUI mode</label>
-                <p class="text-[10px] text-amber-300/70 mt-0.5">Enable ComfyUI Manager, the native ComfyUI interface, and third-party custom nodes in the shared Python environment.</p>
-                <p class="text-[10px] text-neutral-500 mt-1">MooshieUI and ComfyUI continue to share one venv and one PyTorch installation. Disabling this mode keeps third-party nodes on disk but prevents them from loading.</p>
-              </div>
-            </div>
-            {#if advancedModeBusy}
-              <p class="text-[10px] text-indigo-300">Installing the Manager version matched to the installed ComfyUI...</p>
-            {/if}
-            {#if advancedModeError}
-              <p class="text-[10px] text-red-300">{advancedModeError}</p>
-            {/if}
-
-            <div class="border-t border-amber-800/40 pt-2">
-              <div class="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  id="comfyui-manager-relaxed-security"
-                  checked={config.comfyui_manager_relaxed_security}
-                  onchange={toggleManagerSecurity}
-                  disabled={managerSecurityBusy || advancedModeBusy || isBrowserMode || (!config.comfyui_advanced_mode && !config.comfyui_manager_relaxed_security)}
-                  class="w-4 h-4 mt-0.5 accent-red-500 rounded"
-                />
-                <div class="min-w-0 flex-1">
-                  <label for="comfyui-manager-relaxed-security" class="text-xs text-red-200">Allow full Node Manager installs</label>
-                  <p class="text-[10px] text-red-300/70 mt-0.5">Allows Manager to install executable Git repositories and Python packages. Enable only for a trusted personal ComfyUI instance that is not exposed publicly.</p>
-                </div>
-              </div>
-              {#if managerSecurityBusy}
-                <p class="text-[10px] text-indigo-300 mt-1">Updating Node Manager security policy and restarting ComfyUI...</p>
-              {/if}
-              {#if managerSecurityError}
-                <p class="text-[10px] text-red-300 mt-1">{managerSecurityError}</p>
-              {/if}
-            </div>
-
-            {#if config.comfyui_advanced_mode && !isBrowserMode}
-              <button type="button" onclick={openComfyuiUi} class="w-full px-3 py-2 text-xs rounded bg-amber-600 hover:bg-amber-500 text-white transition-colors">Open ComfyUI</button>
-            {/if}
-          </div>
           <div>
             <div class="flex items-center justify-between mb-1">
               <label class="block text-xs text-neutral-400">{locale.t('settings.paths.shared_model_dirs')}<span class="text-amber-400">*</span></label>
@@ -3704,24 +3770,6 @@
                 {/each}
               </div>
             {/if}
-          </div>
-
-          <div>
-            <label class="block text-xs text-neutral-400 mb-1">{locale.t('settings.paths.extra_args')}<span class="text-amber-400">*</span></label>
-            <input
-              type="text"
-              value={config.extra_args.join(" ")}
-              oninput={(e) => {
-                if (config) {
-                  const val = (e.target as HTMLInputElement).value;
-                  config.extra_args = val ? val.split(/\s+/) : [];
-                  checkRestartNeeded();
-                }
-              }}
-              class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500 transition-colors"
-              placeholder={locale.t('settings.paths.extra_args_placeholder')}
-            />
-            <p class="text-[10px] text-neutral-500 mt-0.5">{locale.t('settings.paths.extra_args_desc')}</p>
           </div>
           </div>
           {/if}

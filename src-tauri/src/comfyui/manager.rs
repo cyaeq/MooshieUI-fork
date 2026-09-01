@@ -1,21 +1,33 @@
 use std::path::{Path, PathBuf};
 
-const POLICY_KEYS: [&str; 4] = [
+/// Keys MooshieUI owns inside Manager's `[default]` section. The two install
+/// flags are what the Node Manager permission switch actually controls;
+/// upstream gates them on `flag AND a loopback --listen` at request time.
+const POLICY_KEYS: [&str; 3] = [
     "security_level",
-    "network_mode",
     "allow_git_url_install",
     "allow_pip_install",
 ];
 
-fn policy_values(relaxed: bool) -> [&'static str; 4] {
+/// `security_level` stays `normal` in both modes: upstream decoupled the two
+/// direct install endpoints from it, and going lower would additionally unlock
+/// unregistered non-safetensors model downloads, which this switch is not about.
+fn policy_values(relaxed: bool) -> [&'static str; 3] {
     if relaxed {
-        ["normal", "personal_cloud", "true", "true"]
+        ["normal", "true", "true"]
     } else {
-        ["normal", "public", "false", "false"]
+        ["normal", "false", "false"]
     }
 }
 
-fn assignment_key(line: &str) -> Option<&str> {
+/// `network_mode` is unrelated to install permissions, so MooshieUI leaves any
+/// valid user choice alone and only repairs values Manager cannot interpret
+/// (older MooshieUI builds wrote a bogus `personal_cloud` here).
+const NETWORK_MODE_KEY: &str = "network_mode";
+const VALID_NETWORK_MODES: [&str; 3] = ["public", "private", "offline"];
+const DEFAULT_NETWORK_MODE: &str = "public";
+
+fn split_assignment(line: &str) -> Option<(&str, &str)> {
     let trimmed = line.trim_start();
     if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with(';') {
         return None;
@@ -28,7 +40,7 @@ fn assignment_key(line: &str) -> Option<&str> {
         (None, Some(b)) => b,
         (None, None) => return None,
     };
-    Some(trimmed[..split].trim())
+    Some((trimmed[..split].trim(), trimmed[split + 1..].trim()))
 }
 
 fn section_name(line: &str) -> Option<&str> {
@@ -49,7 +61,11 @@ fn append_missing_policy(
 }
 
 fn update_manager_ini(existing: &str, relaxed: bool) -> String {
-    let newline = if existing.contains("\r\n") { "\r\n" } else { "\n" };
+    let newline = if existing.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
     let normalized = existing.replace("\r\n", "\n").replace('\r', "\n");
     let values = policy_values(relaxed);
     let mut output = Vec::new();
@@ -69,13 +85,21 @@ fn update_manager_ini(existing: &str, relaxed: bool) -> String {
         }
 
         if in_default {
-            if let Some(key) = assignment_key(line) {
+            if let Some((key, value)) = split_assignment(line) {
                 if let Some(index) = POLICY_KEYS
                     .iter()
                     .position(|candidate| key.eq_ignore_ascii_case(candidate))
                 {
                     output.push(format!("{} = {}", POLICY_KEYS[index], values[index]));
                     seen[index] = true;
+                    continue;
+                }
+                if key.eq_ignore_ascii_case(NETWORK_MODE_KEY)
+                    && !VALID_NETWORK_MODES
+                        .iter()
+                        .any(|candidate| value.eq_ignore_ascii_case(candidate))
+                {
+                    output.push(format!("{} = {}", NETWORK_MODE_KEY, DEFAULT_NETWORK_MODE));
                     continue;
                 }
             }
@@ -123,6 +147,8 @@ pub fn manager_config_path(comfyui_path: &str, extra_args: &[String]) -> PathBuf
         .join("config.ini")
 }
 
+/// Manager's own `write_config()` rewrites every key, so this policy is not
+/// authoritative at runtime; callers re-apply it before each ComfyUI spawn.
 pub fn set_manager_security_policy(
     comfyui_path: &str,
     extra_args: &[String],
@@ -176,7 +202,7 @@ mod tests {
 
         assert!(updated.contains("preview_method = auto\r\n"));
         assert!(updated.contains("security_level = normal\r\n"));
-        assert!(updated.contains("network_mode = personal_cloud\r\n"));
+        assert!(updated.contains("network_mode = offline\r\n"));
         assert!(updated.contains("allow_git_url_install = true\r\n"));
         assert!(updated.contains("allow_pip_install = true\r\n"));
         assert!(updated.contains("[other]\r\nsecurity_level = strong\r\n"));
@@ -188,18 +214,23 @@ mod tests {
 
         assert!(updated.contains("[default]\n"));
         assert!(updated.contains("security_level = normal\n"));
-        assert!(updated.contains("network_mode = public\n"));
+        assert!(!updated.contains("network_mode"));
         assert!(updated.contains("allow_git_url_install = false\n"));
         assert!(updated.contains("allow_pip_install = false\n"));
     }
 
     #[test]
+    fn invalid_network_mode_is_repaired_to_public() {
+        let updated = update_manager_ini("[default]\nnetwork_mode = personal_cloud\n", true);
+
+        assert!(updated.contains("network_mode = public\n"));
+        assert!(!updated.contains("personal_cloud"));
+    }
+
+    #[test]
     fn custom_user_directory_supports_split_and_equals_args() {
         let comfyui = Path::new("C:/ComfyUI");
-        let split = vec![
-            "--user-directory".to_string(),
-            "profiles/user".to_string(),
-        ];
+        let split = vec!["--user-directory".to_string(), "profiles/user".to_string()];
         let equals = vec!["--user-directory=D:/ComfyUser".to_string()];
 
         assert_eq!(

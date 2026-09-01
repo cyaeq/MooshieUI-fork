@@ -3606,7 +3606,7 @@ pub async fn install_comfyui_manager(state: State<'_, Arc<AppState>>) -> Result<
 pub async fn set_comfyui_manager_security(
     state: State<'_, Arc<AppState>>,
     relaxed: bool,
-) -> Result<String, AppError> {
+) -> Result<(), AppError> {
     let (comfyui_path, extra_args, advanced_mode, server_mode) = {
         let config = state.config.read().await;
         (
@@ -3625,18 +3625,15 @@ pub async fn set_comfyui_manager_security(
         crate::comfyui::process::stop_comfyui_process(state.inner()).await?;
     }
 
-    let path = crate::comfyui::manager::set_manager_security_policy(
-        &comfyui_path,
-        &extra_args,
-        relaxed,
-    )
-    .map_err(AppError::Other)?;
+    let path =
+        crate::comfyui::manager::set_manager_security_policy(&comfyui_path, &extra_args, relaxed)
+            .map_err(AppError::Other)?;
     log::warn!(
         "Applied ComfyUI Manager security policy at '{}': relaxed={}",
         path.display(),
         relaxed
     );
-    Ok(path.to_string_lossy().to_string())
+    Ok(())
 }
 /// Verify that a Python module can be imported inside the ComfyUI virtual environment.
 #[cfg(feature = "desktop")]

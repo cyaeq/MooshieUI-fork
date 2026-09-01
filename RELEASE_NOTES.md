@@ -1,3 +1,18 @@
+## What's New in v0.0.7
+
+### New features
+- **ComfyUI Manager integration**: enabling the new **Advanced ComfyUI mode** installs the ComfyUI Manager release matched to the installed ComfyUI version into the shared virtual environment, unlocking the native ComfyUI interface and third-party custom nodes. MooshieUI and ComfyUI still share a single venv and PyTorch install; disabling the mode leaves third-party nodes on disk but stops them from loading.
+- **Dedicated "ComfyUI Backend" settings section**: the ComfyUI version display, update action, advanced mode toggle, Node Manager permission switch, "Open ComfyUI" shortcut, and the extra launch-arguments field moved out of Performance and Paths into their own collapsible section with its own sidebar icon and search keywords. The section is admin-only.
+- **Node Manager install permission switch**: a separate, explicitly dangerous opt-in allows Node Manager to install executable Git repositories and Python packages into the shared environment. It is only reachable while advanced mode is on, and carries a warning that anyone able to reach the instance (including LAN users) could trigger arbitrary Git and pip installs.
+
+### Fixes and maintenance
+- **Manager policy re-applied on every spawn**: ComfyUI Manager rewrites its whole `config.ini` at runtime, so MooshieUI now re-applies its security policy before each ComfyUI start, including multi-GPU worker processes, instead of only on the primary launch.
+- **Narrower Manager policy surface**: MooshieUI now only owns `security_level`, `allow_git_url_install`, and `allow_pip_install`. `network_mode` is left to the user's own choice and is repaired only when the stored value is one Manager cannot interpret (older builds wrote an invalid `personal_cloud`). `security_level` stays `normal` in both modes so lowering it cannot silently unlock unregistered model downloads.
+- **Server-side clamp on relaxed security**: `update_config` is reachable from LAN moderators, so the backend now forces the relaxed Node Manager flag off whenever advanced mode is disabled. Turning advanced mode off in the UI also revokes the relaxed policy, and a failed toggle restores the previous persisted state before restoring the previous policy.
+- **i18n coverage**: added the ComfyUI Backend section title, advanced mode labels, Manager progress messages, and the LAN security warning across all 12 supported languages.
+
+---
+
 ## What's New in v0.0.6
 
 ### New features
