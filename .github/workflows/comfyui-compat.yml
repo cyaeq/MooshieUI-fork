@@ -16,9 +16,9 @@ name: ComfyUI Compatibility Check
 # maintainer reviews and merges the PR (optionally with their own Claude Code).
 
 on:
-  schedule:
+#  schedule:
     # Mondays 06:00 UTC.
-    - cron: "0 6 * * 1"
+#    - cron: "0 6 * * 1"
   workflow_dispatch:
     inputs:
       target_ref:
